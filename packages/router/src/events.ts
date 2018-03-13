@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {Route} from './config';
+import {NavigationExtras, Route} from './config';
 import {ActivatedRouteSnapshot, RouterStateSnapshot} from './router_state';
 
 /**
@@ -113,7 +113,9 @@ export class NavigationEnd extends RouterEvent {
       /** @docsNotRequired */
       url: string,
       /** @docsNotRequired */
-      public urlAfterRedirects: string) {
+      public urlAfterRedirects: string,
+      /** @docsNotRequired */
+      public extras?: Partial<NavigationExtras>) {
     super(id, url);
   }
 
