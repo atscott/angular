@@ -117,6 +117,9 @@
     "name": "SANITIZER"
   },
   {
+    "name": "TRANSPLANTED_VIEWS_TO_REFRESH"
+  },
+  {
     "name": "TVIEW"
   },
   {
@@ -324,6 +327,9 @@
     "name": "getFactoryDef"
   },
   {
+    "name": "getFirstLContainer"
+  },
+  {
     "name": "getFirstNativeNode"
   },
   {
@@ -352,6 +358,9 @@
   },
   {
     "name": "getNativeByTNode"
+  },
+  {
+    "name": "getNextLContainer"
   },
   {
     "name": "getNodeInjectable"
@@ -483,6 +492,9 @@
     "name": "isProceduralRenderer"
   },
   {
+    "name": "isViewAttached"
+  },
+  {
     "name": "leaveDI"
   },
   {
@@ -496,6 +508,9 @@
   },
   {
     "name": "markAsComponentHost"
+  },
+  {
+    "name": "markTransplantedViewsForRefresh"
   },
   {
     "name": "matchTemplateAttribute"
@@ -531,13 +546,13 @@
     "name": "refreshComponent"
   },
   {
+    "name": "refreshContainsDirtyView"
+  },
+  {
     "name": "refreshContentQueries"
   },
   {
     "name": "refreshDynamicEmbeddedViews"
-  },
-  {
-    "name": "refreshTransplantedViews"
   },
   {
     "name": "refreshView"
@@ -630,7 +645,7 @@
     "name": "unwrapRNode"
   },
   {
-    "name": "viewAttachedToChangeDetector"
+    "name": "updateTransplantedViewCount"
   },
   {
     "name": "writeDirectClass"

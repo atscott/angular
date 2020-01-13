@@ -207,6 +207,9 @@
     "name": "TNODE"
   },
   {
+    "name": "TRANSPLANTED_VIEWS_TO_REFRESH"
+  },
+  {
     "name": "TVIEW"
   },
   {
@@ -612,6 +615,9 @@
     "name": "getFactoryDef"
   },
   {
+    "name": "getFirstLContainer"
+  },
+  {
     "name": "getFirstNativeNode"
   },
   {
@@ -652,6 +658,9 @@
   },
   {
     "name": "getNativeByTNode"
+  },
+  {
+    "name": "getNextLContainer"
   },
   {
     "name": "getNodeInjectable"
@@ -897,6 +906,9 @@
     "name": "isStylingValuePresent"
   },
   {
+    "name": "isViewAttached"
+  },
+  {
     "name": "iterateListLike"
   },
   {
@@ -955,6 +967,9 @@
   },
   {
     "name": "markDuplicates"
+  },
+  {
+    "name": "markTransplantedViewsForRefresh"
   },
   {
     "name": "markViewDirty"
@@ -1017,13 +1032,13 @@
     "name": "refreshComponent"
   },
   {
+    "name": "refreshContainsDirtyView"
+  },
+  {
     "name": "refreshContentQueries"
   },
   {
     "name": "refreshDynamicEmbeddedViews"
-  },
-  {
-    "name": "refreshTransplantedViews"
   },
   {
     "name": "refreshView"
@@ -1197,7 +1212,7 @@
     "name": "updateStyling"
   },
   {
-    "name": "viewAttachedToChangeDetector"
+    "name": "updateTransplantedViewCount"
   },
   {
     "name": "viewAttachedToContainer"
