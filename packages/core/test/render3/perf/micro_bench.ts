@@ -73,6 +73,12 @@ export function createBenchmark(benchmarkName: string, testSetup?: Function): Be
         timestamp = performance.now();
         return runAgain;
       } else {
+        if(testSetup) {
+          const start = performance.now();
+          testSetup();
+          const testSetupTime = performance.now() - start;
+          timestamp += testSetupTime; // add time to run test setup to timestamp so it's not included in calclations 
+        }
         // this is the common path and it needs te be quick!
         iterationCounter--;
         return true;

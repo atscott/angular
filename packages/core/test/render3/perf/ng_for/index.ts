@@ -39,7 +39,7 @@ class FakeContainerRef extends ViewContainerRef {
   clear(): void {
   }
   get(index: number): ViewRef | null {
-    return null
+    return {context: {}} as any;
   }
   get length(): number {
     return 0;
@@ -136,7 +136,8 @@ function benchmark2() {
 function benchmark3() {
   const ngFor = makeNgForList();
   const arr1 = makeArray();
-  const arr2 = makeArray();
+  const arr2 = makeArray().map(v => v + 'x');
+
   const wc = makeWatchCollection();
 
   function testSetup() {
@@ -192,13 +193,41 @@ function benchmark5() {
 
   const benchmark = createBenchmark(SUITE_3, testSetup);
   benchmarks.push(benchmark);
-  const profile = benchmark('add / remove items in an array');
+  const profile = benchmark('push and pop');
   console.profile(`${SUITE_3}:${profile.profileName}:patchedNgFor:${USE_NG_FOR_PATCHED}:watchCollection:${USE_WATCH_COLLECTION}`);
   while (profile()) {
     arrayForTest.push('a', 'b', 'c');
     update(ngFor, wc, arrayForTest);
     arrayForTest.pop();
     arrayForTest.pop();
+    update(ngFor, wc, arrayForTest);
+  }
+  console.profileEnd();
+}
+
+/**
+ * Test adding/removing entries in a list. Equivalent to benchmark5, but what users could do instead of
+ * .push() and .pop() and without using watchCollection.
+ */
+function benchmark5dot1() {
+  const ngFor = makeNgForList();
+  const original = makeArray();
+  const wc = makeWatchCollection();
+
+  let arrayForTest: any[] = [];
+  function testSetup() {
+    arrayForTest = [...original];
+    update(ngFor, wc, arrayForTest);
+  }
+
+  const benchmark = createBenchmark(SUITE_3, testSetup);
+  benchmarks.push(benchmark);
+  const profile = benchmark('concat and slice');
+  console.profile(`${SUITE_3}:${profile.profileName}:patchedNgFor:${USE_NG_FOR_PATCHED}:watchCollection:${USE_WATCH_COLLECTION}`);
+  while (profile()) {
+    arrayForTest = [...arrayForTest, 'a', 'b', 'c'];
+    update(ngFor, wc, arrayForTest);
+    arrayForTest = arrayForTest.slice(0, arrayForTest.length -2);
     update(ngFor, wc, arrayForTest);
   }
   console.profileEnd();
@@ -214,8 +243,9 @@ function benchmark6() {
 
   let arrayForTest: number[] = [];
   function testSetup() {
-    const array = [...original];
-    update(ngFor, wc, array);
+    arrayForTest = [...original];
+    update(ngFor, wc, arrayForTest);
+    reOrder(arrayForTest);
   }
 
   const benchmark = createBenchmark(SUITE_3, testSetup);
@@ -223,7 +253,6 @@ function benchmark6() {
   const profile = benchmark('sorting an array');
   console.profile(`${SUITE_3}:${profile.profileName}:patchedNgFor:${USE_NG_FOR_PATCHED}:watchCollection:${USE_WATCH_COLLECTION}`);
   while (profile()) {
-    reOrder(arrayForTest);
     update(ngFor, wc, arrayForTest);
   }
   console.profileEnd();
@@ -239,8 +268,9 @@ function benchmark7() {
 
   let arrayForTest: number[] = [];
   function testSetup() {
-    const array = [...original];
-    update(ngFor, wc, array);
+    arrayForTest = [...original];
+    update(ngFor, wc, arrayForTest);
+    arrayForTest.length = 0;
   }
 
   const benchmark = createBenchmark(SUITE_3, testSetup);
@@ -248,7 +278,6 @@ function benchmark7() {
   const profile = benchmark('emptying an array');
   console.profile(`${SUITE_3}:${profile.profileName}:patchedNgFor:${USE_NG_FOR_PATCHED}:watchCollection:${USE_WATCH_COLLECTION}`);
   while (profile()) {
-    arrayForTest.length = 0;
     update(ngFor, wc, arrayForTest);
   }
   console.profileEnd();
@@ -260,13 +289,13 @@ function benchmark7() {
 // <div *ngFor="let item of items">
 //
 console.log('\nngFor master\n-----');
-benchmark1();
-benchmark2();
-benchmark3();
-benchmark4();
-benchmark5();
+// benchmark1();
+// benchmark2();
+// benchmark3();
+// benchmark4();
+// benchmark5();
 benchmark6();
-benchmark7();
+// benchmark7();
 
 //
 // Target 2: Use reference-only checking version of NgFor
@@ -275,13 +304,14 @@ benchmark7();
 //
 console.log('\nngFor patched no WatchCollection\n-----');
 USE_NG_FOR_PATCHED = true;
-benchmark1();
-benchmark2();
-benchmark3();
-benchmark4();
-benchmark5();
-benchmark6();
-benchmark7();
+// benchmark1();
+// benchmark2();
+// benchmark3();
+// benchmark4();
+// benchmark5();
+// benchmark5dot1(); // important to compare this one to benchmark5 at master
+// benchmark6();
+// benchmark7();
 
 //
 // Target 3: Use reference-check ngFor with WatchCollection (ngFor will shallow-watch)
@@ -290,13 +320,13 @@ benchmark7();
 //
 console.log('\nngFor patched WatchCollection\n-----');
 USE_WATCH_COLLECTION = true;
-benchmark1();
-benchmark2();
-benchmark3();
-benchmark4();
-benchmark5();
+// benchmark1();
+// benchmark2();
+// benchmark3();
+// benchmark4();
+// benchmark5();
 benchmark6();
-benchmark7();
+// benchmark7();
 
 benchmarks.forEach(b => b.report());
 
@@ -330,7 +360,7 @@ function makeWatchCollection() {
 
 function reOrder(array: any[]) {
   const limit = array.length - 1;
-  for (let i = 0, j = limit; i <= limit; i++, j--) {
+  for (let i = 0, j = limit; i <= j; i++, j--) {
     const tmp = array[i];
     array[i] = array[j];
     array[j] = tmp;
