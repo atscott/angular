@@ -28,7 +28,7 @@ export interface Profile {
   noImprovementCount: number;
 }
 
-export function createBenchmark(benchmarkName: string): Benchmark {
+export function createBenchmark(benchmarkName: string, testSetup?: Function): Benchmark {
   const profiles: Profile[] = [];
 
   const benchmark = function Benchmark(profileName: string): Profile {
@@ -69,6 +69,7 @@ export function createBenchmark(benchmarkName: string): Benchmark {
           }
         }
         iterationCounter = profile.iterationCount;
+        if (testSetup) testSetup();
         timestamp = performance.now();
         return runAgain;
       } else {

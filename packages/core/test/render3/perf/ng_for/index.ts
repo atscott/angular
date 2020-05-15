@@ -90,10 +90,14 @@ function benchmark1() {
   const array = makeArray();
   const wc = makeWatchCollection();
 
-  const benchmark = createBenchmark(SUITE_1);
+  function testSetup() {
+    update(ngFor, wc, array);
+  }
+
+  const benchmark = createBenchmark(SUITE_1, testSetup);
   benchmarks.push(benchmark);
   const profile = benchmark('single list');
-  console.profile(benchmark.name + ':' + profile.name);
+  console.profile(`${SUITE_1}:${profile.profileName}:patchedNgFor:${USE_NG_FOR_PATCHED}:watchCollection:${USE_WATCH_COLLECTION}`);
   while (profile()) {
     update(ngFor, wc, array);
   }
@@ -117,7 +121,7 @@ function benchmark2() {
   const benchmark = createBenchmark(SUITE_1);
   benchmarks.push(benchmark);
   const profile = benchmark('multiple lists as once');
-  console.profile(benchmark.name + ':' + profile.name);
+  console.profile(`${SUITE_1}:${profile.profileName}:patchedNgFor:${USE_NG_FOR_PATCHED}:watchCollection:${USE_WATCH_COLLECTION}`);
   while (profile()) {
     update(ngFor1, wc1, arr1);
     update(ngFor2, wc2, arr2);
@@ -135,12 +139,15 @@ function benchmark3() {
   const arr2 = makeArray();
   const wc = makeWatchCollection();
 
-  const benchmark = createBenchmark(SUITE_2);
+  function testSetup() {
+    update(ngFor, wc, arr1);
+  }
+
+  const benchmark = createBenchmark(SUITE_2, testSetup);
   benchmarks.push(benchmark);
   const profile = benchmark('change to a new array');
-  console.profile(benchmark.name + ':' + profile.name);
+  console.profile(`${SUITE_2}:${profile.profileName}:patchedNgFor:${USE_NG_FOR_PATCHED}:watchCollection:${USE_WATCH_COLLECTION}`);
   while (profile()) {
-    update(ngFor, wc, arr1);
     update(ngFor, wc, arr2);
   }
   console.profileEnd();
@@ -155,12 +162,15 @@ function benchmark4() {
   const arr2: any[] = [];
   const wc = makeWatchCollection();
 
-  const benchmark = createBenchmark(SUITE_2);
+  function testSetup() {
+    update(ngFor, wc, arr1);
+  }
+
+  const benchmark = createBenchmark(SUITE_2, testSetup);
   benchmarks.push(benchmark);
   const profile = benchmark('change to a new empty array');
-  console.profile(benchmark.name + ':' + profile.name);
+  console.profile(`${SUITE_2}:${profile.profileName}:patchedNgFor:${USE_NG_FOR_PATCHED}:watchCollection:${USE_WATCH_COLLECTION}`);
   while (profile()) {
-    update(ngFor, wc, arr1);
     update(ngFor, wc, arr2);
   }
   console.profileEnd();
@@ -174,18 +184,22 @@ function benchmark5() {
   const original = makeArray();
   const wc = makeWatchCollection();
 
-  const benchmark = createBenchmark(SUITE_3);
+  let arrayForTest = [];
+  function testSetup() {
+    arrayForTest = [...original];
+    update(ngFor, wc, arrayForTest);
+  }
+
+  const benchmark = createBenchmark(SUITE_3, testSetup);
   benchmarks.push(benchmark);
   const profile = benchmark('add / remove items in an array');
-  console.profile(benchmark.name + ':' + profile.name);
+  console.profile(`${SUITE_3}:${profile.profileName}:patchedNgFor:${USE_NG_FOR_PATCHED}:watchCollection:${USE_WATCH_COLLECTION}`);
   while (profile()) {
-    const array = [...original];
-    update(ngFor, wc, array);
-    array.push('a', 'b', 'c');
-    update(ngFor, wc, array);
-    array.pop();
-    array.pop();
-    update(ngFor, wc, array);
+    arrayForTest.push('a', 'b', 'c');
+    update(ngFor, wc, arrayForTest);
+    arrayForTest.pop();
+    arrayForTest.pop();
+    update(ngFor, wc, arrayForTest);
   }
   console.profileEnd();
 }
@@ -198,15 +212,19 @@ function benchmark6() {
   const original = makeArray().reverse();
   const wc = makeWatchCollection();
 
-  const benchmark = createBenchmark(SUITE_3);
+  let arrayForTest: number[] = [];
+  function testSetup() {
+    const array = [...original];
+    update(ngFor, wc, array);
+  }
+
+  const benchmark = createBenchmark(SUITE_3, testSetup);
   benchmarks.push(benchmark);
   const profile = benchmark('sorting an array');
-  console.profile(benchmark.name + ':' + profile.name);
+  console.profile(`${SUITE_3}:${profile.profileName}:patchedNgFor:${USE_NG_FOR_PATCHED}:watchCollection:${USE_WATCH_COLLECTION}`);
   while (profile()) {
-    let array = [...original];
-    update(ngFor, wc, array);
-    reOrder(array);
-    update(ngFor, wc, array);
+    reOrder(arrayForTest);
+    update(ngFor, wc, arrayForTest);
   }
   console.profileEnd();
 }
@@ -219,15 +237,19 @@ function benchmark7() {
   const original = makeArray().reverse();
   const wc = makeWatchCollection();
 
-  const benchmark = createBenchmark(SUITE_3);
-  benchmarks.push(benchmark);
-  const profile = benchmark('emptying an array');
-  console.profile(benchmark.name + ':' + profile.name);
-  while (profile()) {
+  let arrayForTest: number[] = [];
+  function testSetup() {
     const array = [...original];
     update(ngFor, wc, array);
-    array.length = 0;
-    update(ngFor, wc, array);
+  }
+
+  const benchmark = createBenchmark(SUITE_3, testSetup);
+  benchmarks.push(benchmark);
+  const profile = benchmark('emptying an array');
+  console.profile(`${SUITE_3}:${profile.profileName}:patchedNgFor:${USE_NG_FOR_PATCHED}:watchCollection:${USE_WATCH_COLLECTION}`);
+  while (profile()) {
+    arrayForTest.length = 0;
+    update(ngFor, wc, arrayForTest);
   }
   console.profileEnd();
 }
@@ -316,7 +338,7 @@ function reOrder(array: any[]) {
 }
 
 function update(ngFor: NgForOf<unknown>|NgForOfPatched<unknown>, wc: WatchCollectionPipe|null, array: any[]) {
-  const oldValue = ngFor.ngForOf;
+  const oldValue = (ngFor as any)._ngForOf;
   const newValue = wc !== null ? wc.transform(array) : array;
   if (oldValue !== newValue) {
     ngFor.ngForOf = newValue;
