@@ -14,7 +14,7 @@ import {By} from '@angular/platform-browser/src/dom/debug/by';
 import {expect} from '@angular/platform-browser/testing/src/matchers';
 import {ActivatedRoute, ActivatedRouteSnapshot, ActivationEnd, ActivationStart, CanActivate, CanDeactivate, ChildActivationEnd, ChildActivationStart, DefaultUrlSerializer, DetachedRouteHandle, Event, GuardsCheckEnd, GuardsCheckStart, Navigation, NavigationCancel, NavigationEnd, NavigationError, NavigationStart, ParamMap, Params, PreloadAllModules, PreloadingStrategy, PRIMARY_OUTLET, Resolve, ResolveEnd, ResolveStart, RouteConfigLoadEnd, RouteConfigLoadStart, Router, RouteReuseStrategy, RouterEvent, RouterModule, RouterPreloader, RouterStateSnapshot, RoutesRecognized, RunGuardsAndResolvers, UrlHandlingStrategy, UrlSegmentGroup, UrlSerializer, UrlTree} from '@angular/router';
 import {EMPTY, Observable, Observer, of, Subscription} from 'rxjs';
-import {filter, first, map, tap} from 'rxjs/operators';
+import {delay, filter, first, map, tap} from 'rxjs/operators';
 
 import {forEach} from '../src/utils/collection';
 import {RouterTestingModule, SpyNgModuleFactoryLoader} from '../testing';
@@ -3166,13 +3166,6 @@ describe('Integration', () => {
           });
         });
 
-        function delayPromise(delay: number): Promise<boolean> {
-          let resolve: (val: boolean) => void;
-          const promise = new Promise<boolean>(res => resolve = res);
-          setTimeout(() => resolve(true), delay);
-          return promise;
-        }
-
         it('works', fakeAsync(inject([Router], (router: Router) => {
              const fixture = createRoot(router, RootCmp);
 
@@ -3944,6 +3937,106 @@ describe('Integration', () => {
                expect(location.path()).toEqual('/lazy/loaded');
                expect(canLoadRunCount).toEqual(1);
              })));
+    });
+
+    fdescribe('should run CanLoad guards concurrently', () => {
+      @NgModule()
+      class LoadedModule {
+      }
+
+      let log: string[];
+
+      beforeEach(() => {
+        log = [];
+        TestBed.configureTestingModule({
+          providers: [
+            {
+              provide: 'guard1',
+              useValue: () => {
+                return of(true).pipe(delay(5), tap({next: () => log.push('guard1')}));
+              }
+            },
+            {
+              provide: 'guard2',
+              useValue: () => {
+                return of(true).pipe(tap({next: () => log.push('guard2')}));
+              }
+            },
+            {
+              provide: 'returnFalse',
+              useValue: () => {
+                log.push('returnFalse');
+                return false;
+              }
+            },
+            {
+              provide: 'returnUrlTree',
+              useFactory: (router: Router) => () => {
+                return of(router.parseUrl('/redirected'))
+                    .pipe(delay(15), tap({next: () => log.push('returnUrlTree')}));
+              },
+              deps: [Router]
+            },
+          ]
+        });
+      });
+
+      it('should wait for higher priority guards to be resolved', fakeAsync(() => {
+           const router = TestBed.inject(Router);
+           const loader = TestBed.inject(NgModuleFactoryLoader) as SpyNgModuleFactoryLoader;
+           loader.stubbedModules = {expected: LoadedModule};
+
+           router.resetConfig(
+               [{path: 'lazy', canLoad: ['guard1', 'guard2'], loadChildren: 'expected'}]);
+
+           router.navigateByUrl('/lazy');
+           tick(5);
+
+           expect(log.length).toEqual(2);
+           expect(log).toEqual(['guard2', 'guard1']);
+         }));
+
+      it('should redirect with UrlTree if higher priority guards have resolved', fakeAsync(() => {
+           const router = TestBed.inject(Router);
+           const loader = TestBed.inject(NgModuleFactoryLoader) as SpyNgModuleFactoryLoader;
+           const location = TestBed.inject(Location);
+           loader.stubbedModules = {expected: LoadedModule};
+
+           router.resetConfig([
+             {
+               path: 'lazy',
+               canLoad: ['returnUrlTree', 'guard1', 'guard2'],
+               loadChildren: 'expected'
+             },
+             {path: 'redirected', component: SimpleCmp}
+           ]);
+
+           router.navigateByUrl('/lazy');
+           tick(15);
+
+           expect(log.length).toEqual(3);
+           expect(log).toEqual(['guard2', 'guard1', 'returnUrlTree']);
+           expect(location.path()).toEqual('/redirected');
+         }));
+
+      it('should redirect with UrlTree if UrlTree is lower priority', fakeAsync(() => {
+           const router = TestBed.inject(Router);
+           const loader = TestBed.inject(NgModuleFactoryLoader) as SpyNgModuleFactoryLoader;
+           const location = TestBed.inject(Location);
+           loader.stubbedModules = {expected: LoadedModule};
+
+           router.resetConfig([
+             {path: 'lazy', canLoad: ['guard1', 'returnUrlTree'], loadChildren: 'expected'},
+             {path: 'redirected', component: SimpleCmp}
+           ]);
+
+           router.navigateByUrl('/lazy');
+           tick(15);
+
+           expect(log.length).toEqual(2);
+           expect(log).toEqual(['guard1', 'returnUrlTree']);
+           expect(location.path()).toEqual('/redirected');
+         }));
     });
 
     describe('order', () => {
@@ -5597,6 +5690,13 @@ function createRoot(router: Router, type: any): ComponentFixture<any> {
   router.initialNavigation();
   advance(f);
   return f;
+}
+
+function delayPromise(delay: number): Promise<boolean> {
+  let resolve: (val: boolean) => void;
+  const promise = new Promise<boolean>(res => resolve = res);
+  setTimeout(() => resolve(true), delay);
+  return promise;
 }
 
 @Component({selector: 'lazy', template: 'lazy-loaded'})
