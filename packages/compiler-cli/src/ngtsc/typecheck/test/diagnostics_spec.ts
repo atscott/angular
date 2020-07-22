@@ -226,7 +226,8 @@ runInEachFileSystem(() => {
             name: 'GuardDir',
             selector: '[guard]',
             inputs: {'guard': 'guard'},
-            ngTemplateGuards: [{inputName: 'guard', type: 'binding'}]
+            ngTemplateGuards: [{inputName: 'guard', type: 'binding'}],
+            undeclaredInputFields: ['guard'],
           }]);
 
       expect(messages).toEqual([
