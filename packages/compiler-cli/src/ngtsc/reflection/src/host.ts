@@ -158,7 +158,7 @@ export interface ClassMember {
    * The `nameNode` is useful in writing references to this member that will be correctly source-
    * mapped back to the original file.
    */
-  nameNode: ts.Identifier|null;
+  nameNode: ts.Identifier|ts.StringLiteral|null;
 
   /**
    * TypeScript `ts.Expression` which represents the value of the member.
