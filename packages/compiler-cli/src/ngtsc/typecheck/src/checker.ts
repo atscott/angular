@@ -327,7 +327,22 @@ export class TemplateTypeCheckerImpl implements TemplateTypeChecker {
     return this.state.get(path)!;
   }
 
+  getTypeOfTemplateExpression(ast: AST, component: ts.ClassDeclaration): ts.Type|null {
+    const node = this.getTsNodeForExpression(ast, component);
+    if (node === null) {
+      return null;
+    }
+    const typeChecker = this.typeCheckingStrategy.getProgram().getTypeChecker();
+    return typeChecker.getTypeAtLocation(node) ?? null;
+  }
+
   getSymbolOfTemplateExpression(expression: AST, component: ts.ClassDeclaration): ts.Symbol|null {
+    // let node = this.getTsNodeForExpression(expression, component);
+    // if (node === null) {
+    //   return null;
+    // }
+    //
+    // node = ts.isParenthesizedExpression(node) ? node.expression : node;
     if (expression instanceof ASTWithSource) {
       return this.getSymbolOfTemplateExpression(expression.ast, component);
     }
@@ -388,6 +403,24 @@ export class TemplateTypeCheckerImpl implements TemplateTypeChecker {
     }
 
     return result;
+  }
+
+  private getTsNodeForExpression(expression: AST, component: ts.ClassDeclaration): ts.Node|null {
+    if (expression instanceof ASTWithSource) {
+      return this.getTsNodeForExpression(expression.ast, component);
+    }
+    const tcb = this.getTypeCheckBlock(component);
+    if (tcb === null) {
+      return null;
+    }
+
+    const node = findNodeWithAbsoluteSourceSpan(
+        expression.sourceSpan, tcb, (n: ts.Node): n is ts.Node => true);
+    if (node === null) {
+      return null;
+    }
+
+    return ts.isParenthesizedExpression(node) ? node.expression : node;
   }
 }
 

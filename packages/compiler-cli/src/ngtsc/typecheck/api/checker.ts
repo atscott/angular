@@ -82,6 +82,8 @@ export interface TemplateTypeChecker {
    * reference rather than the intermediate variable.
    */
   getSymbolOfTemplateExpression(expression: AST, component: ts.ClassDeclaration): ts.Symbol|null;
+
+  getTypeOfTemplateExpression(expression: AST, component: ts.ClassDeclaration): ts.Type|null;
 }
 
 /**
