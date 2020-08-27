@@ -6,6 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
+import {AbsoluteSourceSpan, PropertyRead, TmplAstNode} from '@angular/compiler';
 import {CompilerOptions, createNgCompilerOptions} from '@angular/compiler-cli';
 import {NgCompiler} from '@angular/compiler-cli/src/ngtsc/core';
 import {NgCompilerAdapter} from '@angular/compiler-cli/src/ngtsc/core/api';
@@ -13,7 +14,8 @@ import {absoluteFrom, absoluteFromSourceFile, AbsoluteFsPath} from '@angular/com
 import {PatchedProgramIncrementalBuildStrategy} from '@angular/compiler-cli/src/ngtsc/incremental';
 import {isShim} from '@angular/compiler-cli/src/ngtsc/shims';
 import {TypeCheckShimGenerator} from '@angular/compiler-cli/src/ngtsc/typecheck';
-import {OptimizeFor, TypeCheckingProgramStrategy} from '@angular/compiler-cli/src/ngtsc/typecheck/api';
+import {OptimizeFor, SymbolKind, TypeCheckingProgramStrategy} from '@angular/compiler-cli/src/ngtsc/typecheck/api';
+import {findNodeAtPosition, isTemplateNode} from '@angular/language-service/ivy/hybrid_visitor';
 import * as ts from 'typescript/lib/tsserverlibrary';
 
 export class LanguageService {
@@ -53,6 +55,8 @@ export class LanguageService {
         this.strategy,
         new PatchedProgramIncrementalBuildStrategy(),
         this.lastKnownProgram,
+        /** perfRecorder (use default) */ undefined,
+        /** enableTemplateTypeChecker */ true,
     );
   }
 

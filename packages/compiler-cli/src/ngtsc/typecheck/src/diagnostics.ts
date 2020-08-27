@@ -63,7 +63,28 @@ export function wrapForDiagnostics(expr: ts.Expression): ts.Expression {
   return ts.createParen(expr);
 }
 
-const IGNORE_MARKER = 'ignore';
+/**
+ * Wraps the node in parenthesis such that inserted span comments become attached to the proper
+ * node. This is an alias for `ts.createParen` with the benefit that it signifies that the
+ * inserted parenthesis are for use by the type checker, not for correctness of the rendered TCB
+ * code.
+ */
+export function wrapForTypeChecker(expr: ts.Expression): ts.Expression {
+  return ts.createParen(expr);
+}
+
+/** Used to identify what type the comment is. */
+export enum CommentTriviaType {
+  DIAGNOSTIC = 'D',
+  EXPRESSION_TYPE_IDENTIFIER = 'T',
+}
+
+/** Identifies what the TCB expression is for (for example, a directive declaration). */
+export enum ExpressionIdentifiers {
+  DIRECTIVE = 'DIR',
+}
+
+const IGNORE_MARKER = `${CommentTriviaType.DIAGNOSTIC}:ignore`;
 
 /**
  * Adds a marker to the node that signifies that any errors within the node should not be reported.
@@ -314,7 +335,11 @@ function getTemplateId(node: ts.Node, sourceFile: ts.SourceFile): TemplateId|nul
 
 const parseSpanComment = /^(\d+),(\d+)$/;
 
-function readSpanComment(sourceFile: ts.SourceFile, node: ts.Node): AbsoluteSourceSpan|null {
+/**
+ * Reads the trailing comments and finds the first match which is a span comment (i.e. 4,10) on a
+ * node and returns it as an `AbsoluteSourceSpan`.
+ */
+export function readSpanComment(sourceFile: ts.SourceFile, node: ts.Node): AbsoluteSourceSpan|null {
   return ts.forEachTrailingCommentRange(sourceFile.text, node.getEnd(), (pos, end, kind) => {
     if (kind !== ts.SyntaxKind.MultiLineCommentTrivia) {
       return null;

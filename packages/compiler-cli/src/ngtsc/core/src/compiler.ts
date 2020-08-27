@@ -98,11 +98,15 @@ export class NgCompiler {
   readonly ignoreForEmit: Set<ts.SourceFile>;
 
   constructor(
-      private adapter: NgCompilerAdapter, private options: NgCompilerOptions,
+      private adapter: NgCompilerAdapter,
+      private options: NgCompilerOptions,
       private tsProgram: ts.Program,
       private typeCheckingProgramStrategy: TypeCheckingProgramStrategy,
-      private incrementalStrategy: IncrementalBuildStrategy, oldProgram: ts.Program|null = null,
-      private perfRecorder: PerfRecorder = NOOP_PERF_RECORDER) {
+      private incrementalStrategy: IncrementalBuildStrategy,
+      oldProgram: ts.Program|null = null,
+      private perfRecorder: PerfRecorder = NOOP_PERF_RECORDER,
+      private enableTemplateTypeChecker = false,
+  ) {
     this.constructionDiagnostics.push(...this.adapter.constructionDiagnostics);
     const incompatibleTypeCheckOptionsDiagnostic = verifyCompatibleTypeCheckOptions(this.options);
     if (incompatibleTypeCheckOptionsDiagnostic !== null) {
@@ -211,6 +215,10 @@ export class NgCompiler {
   }
 
   getTemplateTypeChecker(): TemplateTypeChecker {
+    if (!this.enableTemplateTypeChecker) {
+      throw new Error(
+          'The `TemplateTypeChecker` does not work without `enableTemplateTypeChecker`.');
+    }
     return this.ensureAnalyzed().templateTypeChecker;
   }
 
@@ -435,6 +443,7 @@ export class NgCompiler {
         strictSafeNavigationTypes: strictTemplates,
         useContextGenericType: strictTemplates,
         strictLiteralTypes: true,
+        enableTemplateTypeChecker: this.enableTemplateTypeChecker,
       };
     } else {
       typeCheckingConfig = {
@@ -455,6 +464,7 @@ export class NgCompiler {
         strictSafeNavigationTypes: false,
         useContextGenericType: false,
         strictLiteralTypes: false,
+        enableTemplateTypeChecker: this.enableTemplateTypeChecker,
       };
     }
 
