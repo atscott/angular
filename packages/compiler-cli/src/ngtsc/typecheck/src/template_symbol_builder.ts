@@ -6,11 +6,11 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {AbsoluteSourceSpan, AST, ASTWithSource, BindingPipe, ParseSourceSpan, SafeMethodCall, SafePropertyRead, TmplAstBoundAttribute, TmplAstBoundEvent, TmplAstElement, TmplAstNode, TmplAstTemplate} from '@angular/compiler';
+import {AbsoluteSourceSpan, AST, ASTWithSource, BindingPipe, ParseSourceSpan, SafeMethodCall, SafePropertyRead, TmplAstBoundAttribute, TmplAstBoundEvent, TmplAstElement, TmplAstNode, TmplAstReference, TmplAstTemplate, TmplAstVariable} from '@angular/compiler';
 import * as ts from 'typescript';
 
 import {AbsoluteFsPath} from '../../file_system';
-import {DirectiveSymbol, ElementSymbol, ExpressionSymbol, InputBindingSymbol, OutputBindingSymbol, Symbol, SymbolKind, TemplateSymbol} from '../api';
+import {DirectiveSymbol, ElementSymbol, ExpressionSymbol, InputBindingSymbol, OutputBindingSymbol, ReferenceSymbol, Symbol, SymbolKind, TemplateSymbol, VariableSymbol} from '../api';
 
 import {TemplateData} from './context';
 import {ExpressionIdentifiers, hasExpressionIdentifier, readSpanComment} from './diagnostics';
@@ -77,6 +77,8 @@ export class SymbolBuilder {
       readonly typeChecker: ts.TypeChecker, readonly shimPath: AbsoluteFsPath,
       readonly typeCheckBlock: ts.Node, readonly templateData: TemplateData) {}
 
+  getSymbol(node: TmplAstReference|TmplAstVariable): ReferenceSymbol|VariableSymbol|null;
+  getSymbol(node: AST|TmplAstNode): Symbol|null;
   getSymbol(node: AST|TmplAstNode): Symbol|null {
     if (node instanceof TmplAstBoundAttribute || node instanceof TmplAstBoundEvent) {
       return this.getSymbolOfBinding(node);
@@ -84,6 +86,10 @@ export class SymbolBuilder {
       return this.getSymbolOfElement(node);
     } else if (node instanceof TmplAstTemplate) {
       return this.getSymbolOfAstTemplate(node);
+    } else if (node instanceof TmplAstVariable) {
+      return this.getSymbolOfVariable(node);
+    } else if (node instanceof TmplAstReference) {
+      return this.getSymbolOfReference(node);
     } else if (node instanceof AST) {
       return this.getSymbolOfTemplateExpression(node);
     }
@@ -238,9 +244,60 @@ export class SymbolBuilder {
     return {...templateSymbol, kind: SymbolKind.Directive, tsSymbol: templateSymbol.tsSymbol};
   }
 
-  private getSymbolOfTemplateExpression(expression: AST): ExpressionSymbol|null {
+  private getSymbolOfVariable(variable: TmplAstVariable): VariableSymbol|null {
+    const node = findFirstNodeWithAbsoluteSourceSpan(
+        this.typeCheckBlock, toAbsoluteSourceSpan(variable.sourceSpan), ts.isVariableDeclaration);
+    if (node === null) {
+      return null;
+    }
+
+    const expressionSymbol = this.getSymbolOfVariableDeclaration(node);
+    if (expressionSymbol === null) {
+      return null;
+    }
+
+    return {...expressionSymbol, kind: SymbolKind.Variable, declaration: variable};
+  }
+
+  private getSymbolOfReference(ref: TmplAstReference): ReferenceSymbol|null {
+    const target = this.templateData.boundTarget.getReferenceTarget(ref);
+    // Find the node for the reference declaration, i.e. `var _t2 = _t1;`
+    const node = findFirstNodeWithAbsoluteSourceSpan(
+        this.typeCheckBlock, toAbsoluteSourceSpan(ref.sourceSpan), ts.isVariableDeclaration);
+    if (node === null || target === null) {
+      return null;
+    }
+
+    const symbol = this.getSymbolOfVariableDeclaration(node);
+    if (symbol === null) {
+      return null;
+    }
+
+    if (target instanceof TmplAstTemplate || target instanceof TmplAstElement) {
+      return {...symbol, kind: SymbolKind.Reference, target, declaration: ref};
+    }
+
+    if (!ts.isClassDeclaration(target.directive.ref.node)) {
+      return null;
+    }
+
+    return {
+      ...symbol,
+      kind: SymbolKind.Reference,
+      declaration: ref,
+      target: target.directive.ref.node
+    };
+  }
+
+  private getSymbolOfTemplateExpression(expression: AST): VariableSymbol|ReferenceSymbol
+      |ExpressionSymbol|null {
     if (expression instanceof ASTWithSource) {
       return this.getSymbolOfTemplateExpression(expression.ast);
+    }
+
+    const expressionTarget = this.templateData.boundTarget.getExpressionTarget(expression);
+    if (expressionTarget !== null) {
+      return this.getSymbol(expressionTarget);
     }
 
     const node = this.getTsNodeWithSourceSpan(expression.sourceSpan);
@@ -271,7 +328,7 @@ export class SymbolBuilder {
     }
   }
 
-  private getSymbolOfTsNode(node: ts.Node): ExpressionSymbol|null {
+  private getSymbolOfTsNode(node: ts.Node): ExpressionSymbol|VariableSymbol|ReferenceSymbol|null {
     if (ts.isParenthesizedExpression(node)) {
       return this.getSymbolOfTsNode(node.expression);
     }
@@ -308,7 +365,7 @@ export class SymbolBuilder {
   }
 
   private getSymbolOfVariableDeclaration(declaration: ts.VariableDeclaration): ExpressionSymbol
-      |null {
+      |ReferenceSymbol|VariableSymbol|null {
     // Instead of returning the Symbol for the temporary variable, we want to get the `ts.Symbol`
     // for:
     // - The type reference for `var _t2: MyDir = xyz` (prioritize/trust the declared type)

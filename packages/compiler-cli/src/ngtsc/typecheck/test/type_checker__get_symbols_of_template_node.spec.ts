@@ -6,13 +6,13 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {ASTWithSource, Binary, BindingPipe, Conditional, Interpolation, PropertyRead, TmplAstBoundAttribute, TmplAstBoundText, TmplAstElement, TmplAstNode, TmplAstTemplate} from '@angular/compiler';
+import {ASTWithSource, Binary, BindingPipe, Conditional, Interpolation, PropertyRead, TmplAstBoundAttribute, TmplAstBoundText, TmplAstElement, TmplAstNode, TmplAstReference, TmplAstTemplate} from '@angular/compiler';
 import * as ts from 'typescript';
 
 import {absoluteFrom, getSourceFileOrError} from '../../file_system';
 import {runInEachFileSystem} from '../../file_system/testing';
 import {ClassDeclaration} from '../../reflection';
-import {DirectiveSymbol, ElementSymbol, ExpressionSymbol, InputBindingSymbol, OutputBindingSymbol, Symbol, SymbolKind, TemplateSymbol, TemplateTypeChecker, TypeCheckingConfig} from '../api';
+import {DirectiveSymbol, ElementSymbol, ExpressionSymbol, InputBindingSymbol, OutputBindingSymbol, ReferenceSymbol, Symbol, SymbolKind, TemplateSymbol, TemplateTypeChecker, TypeCheckingConfig, VariableSymbol} from '../api';
 
 import {getClass, ngForDeclaration, ngForDts, setup as baseTestSetup, TypeCheckingTarget} from './test_utils';
 
@@ -77,6 +77,46 @@ runInEachFileSystem(() => {
           const sf = getSourceFileOrError(testValues.program, fileName);
           cmp = getClass(sf, 'Cmp');
           templateNode = getAstTemplates(templateTypeChecker, cmp)[0];
+        });
+
+        it('should get symbol for variables at the declaration', () => {
+          const symbol = templateTypeChecker.getSymbolOfNodeInComponentTemplate(
+              templateNode.variables[0], cmp)!;
+          assertVariableSymbol(symbol);
+          expect(program.getTypeChecker().typeToString(symbol.tsType)).toEqual('any');
+          expect(symbol.declaration.name).toEqual('contextFoo');
+        });
+
+        it('should get symbol for variables when used', () => {
+          const symbol = templateTypeChecker.getSymbolOfNodeInComponentTemplate(
+              (templateNode.children[0] as TmplAstTemplate).inputs[0].value, cmp)!;
+          assertVariableSymbol(symbol);
+          expect(program.getTypeChecker().typeToString(symbol.tsType)).toEqual('any');
+          expect(symbol.declaration.name).toEqual('contextFoo');
+        });
+
+        it('should get a symbol for local ref which refers to a directive', () => {
+          const symbol = templateTypeChecker.getSymbolOfNodeInComponentTemplate(
+              templateNode.references[1], cmp)!;
+          assertReferenceSymbol(symbol);
+        });
+
+        it('should get a symbol for usage local ref which refers to a directive', () => {
+          const symbol = templateTypeChecker.getSymbolOfNodeInComponentTemplate(
+              (templateNode.children[0] as TmplAstTemplate).inputs[2].value, cmp)!;
+          assertReferenceSymbol(symbol);
+        });
+
+        it('should get a symbol for local ref which refers to the template', () => {
+          const symbol = templateTypeChecker.getSymbolOfNodeInComponentTemplate(
+              templateNode.references[0], cmp)!;
+          assertReferenceSymbol(symbol);
+        });
+
+        it('should get a symbol for usage local ref which refers to a template', () => {
+          const symbol = templateTypeChecker.getSymbolOfNodeInComponentTemplate(
+              (templateNode.children[0] as TmplAstTemplate).inputs[1].value, cmp)!;
+          assertReferenceSymbol(symbol);
         });
 
         it('should get symbol for the template itself', () => {
@@ -152,7 +192,47 @@ runInEachFileSystem(() => {
              assertExpressionSymbol(streetSymbol);
              expect(streetSymbol.tsSymbol!.escapedName.toString()).toEqual('streetNumber');
              expect(program.getTypeChecker().typeToString(streetSymbol.tsType)).toEqual('number');
+
+             const userSymbol = templateTypeChecker.getSymbolOfNodeInComponentTemplate(
+                 namePropRead.receiver, cmp)!;
+             expectUserSymbol(userSymbol);
            });
+
+        it('finds symbols for variables', () => {
+          const userVar = templateNode.variables.find(v => v.name === 'user')!;
+          const userSymbol = templateTypeChecker.getSymbolOfNodeInComponentTemplate(userVar, cmp)!;
+          expectUserSymbol(userSymbol);
+
+          const iVar = templateNode.variables.find(v => v.name === 'i')!;
+          const iSymbol = templateTypeChecker.getSymbolOfNodeInComponentTemplate(iVar, cmp)!;
+          expectIndexSymbol(iSymbol);
+        });
+
+        it('finds symbol when using a template variable', () => {
+          const innerElementNodes =
+              onlyAstElements((templateNode.children[0] as TmplAstElement).children);
+          const indexSymbol = templateTypeChecker.getSymbolOfNodeInComponentTemplate(
+              innerElementNodes[0].inputs[0].value, cmp)!;
+          expectIndexSymbol(indexSymbol);
+        });
+
+        function expectUserSymbol(userSymbol: Symbol) {
+          assertVariableSymbol(userSymbol);
+          expect(userSymbol.tsSymbol!.escapedName).toContain('$implicit');
+          expect(userSymbol.tsSymbol!.declarations[0].parent!.getText())
+              .toContain('NgForOfContext');
+          expect(program.getTypeChecker().typeToString(userSymbol.tsType)).toEqual('User');
+          expect((userSymbol).declaration).toEqual(templateNode.variables[0]);
+        }
+
+        function expectIndexSymbol(indexSymbol: Symbol) {
+          assertVariableSymbol(indexSymbol);
+          expect(indexSymbol.tsSymbol!.escapedName).toContain('index');
+          expect(indexSymbol.tsSymbol!.declarations[0].parent!.getText())
+              .toContain('NgForOfContext');
+          expect(program.getTypeChecker().typeToString(indexSymbol.tsType)).toEqual('number');
+          expect((indexSymbol).declaration).toEqual(templateNode.variables[1]);
+        }
       });
     });
 
@@ -361,6 +441,96 @@ runInEachFileSystem(() => {
         assertExpressionSymbol(bSymbol);
         expect(bSymbol.tsSymbol!.escapedName.toString()).toBe('b');
         expect(program.getTypeChecker().typeToString(bSymbol.tsType)).toEqual('number');
+      });
+
+      it('should get symbol for local reference of an Element', () => {
+        const fileName = absoluteFrom('/main.ts');
+        const {templateTypeChecker, program} = setup([
+          {
+            fileName,
+            templates: {
+              'Cmp': `
+                  <input #myRef>
+                  <div [input]="myRef"></div>`
+            },
+          },
+        ]);
+        const sf = getSourceFileOrError(program, fileName);
+        const cmp = getClass(sf, 'Cmp');
+        const nodes = getAstElements(templateTypeChecker, cmp);
+
+        const refSymbol =
+            templateTypeChecker.getSymbolOfNodeInComponentTemplate(nodes[0].references[0], cmp)!;
+        assertReferenceSymbol(refSymbol);
+        expect((refSymbol.target as TmplAstElement).name).toEqual('input');
+        expect((refSymbol.declaration as TmplAstReference).name).toEqual('myRef');
+
+        const myRefUsage =
+            templateTypeChecker.getSymbolOfNodeInComponentTemplate(nodes[1].inputs[0].value, cmp)!;
+        assertReferenceSymbol(myRefUsage);
+        expect((myRefUsage.target as TmplAstElement).name).toEqual('input');
+        expect((myRefUsage.declaration as TmplAstReference).name).toEqual('myRef');
+      });
+
+      it('should get symbols for references which refer to directives', () => {
+        const fileName = absoluteFrom('/main.ts');
+        const dirFile = absoluteFrom('/dir.ts');
+        const templateString = `
+        <div dir #myDir1="dir"></div>
+        <div dir #myDir2="dir"></div>
+        <div [inputA]="myDir1.dirValue" [inputB]="myDir1"></div>
+        <div [inputA]="myDir2.dirValue" [inputB]="myDir2"></div>`;
+        const {templateTypeChecker, program} = setup([
+          {
+            fileName,
+            templates: {'Cmp': templateString},
+            declarations: [{
+              name: 'TestDir',
+              selector: '[dir]',
+              file: dirFile,
+              type: 'directive',
+              exportAs: ['dir'],
+            }]
+          },
+          {
+            fileName: dirFile,
+            source: `export class TestDir { dirValue = 'helloWorld' }`,
+            templates: {}
+          }
+        ]);
+        const sf = getSourceFileOrError(program, fileName);
+        const cmp = getClass(sf, 'Cmp');
+        const nodes = getAstElements(templateTypeChecker, cmp);
+
+        const ref1Declaration =
+            templateTypeChecker.getSymbolOfNodeInComponentTemplate(nodes[0].references[0], cmp)!;
+        assertReferenceSymbol(ref1Declaration);
+        expect((ref1Declaration.target as ts.ClassDeclaration).name!.getText()).toEqual('TestDir');
+        expect((ref1Declaration.declaration as TmplAstReference).name).toEqual('myDir1');
+
+        const ref2Declaration =
+            templateTypeChecker.getSymbolOfNodeInComponentTemplate(nodes[1].references[0], cmp)!;
+        assertReferenceSymbol(ref2Declaration);
+        expect((ref2Declaration.target as ts.ClassDeclaration).name!.getText()).toEqual('TestDir');
+        expect((ref2Declaration.declaration as TmplAstReference).name).toEqual('myDir2');
+
+        const dirValueSymbol =
+            templateTypeChecker.getSymbolOfNodeInComponentTemplate(nodes[2].inputs[0].value, cmp)!;
+        assertExpressionSymbol(dirValueSymbol);
+        expect(dirValueSymbol.tsSymbol!.escapedName.toString()).toBe('dirValue');
+        expect(program.getTypeChecker().typeToString(dirValueSymbol.tsType)).toEqual('string');
+
+        const dir1Symbol =
+            templateTypeChecker.getSymbolOfNodeInComponentTemplate(nodes[2].inputs[1].value, cmp)!;
+        assertReferenceSymbol(dir1Symbol);
+        expect((dir1Symbol.target as ts.ClassDeclaration).name!.getText()).toEqual('TestDir');
+        expect((dir1Symbol.declaration as TmplAstReference).name).toEqual('myDir1');
+
+        const dir2Symbol =
+            templateTypeChecker.getSymbolOfNodeInComponentTemplate(nodes[3].inputs[1].value, cmp)!;
+        assertReferenceSymbol(dir2Symbol);
+        expect((dir2Symbol.target as ts.ClassDeclaration).name!.getText()).toEqual('TestDir');
+        expect((dir2Symbol.declaration as TmplAstReference).name).toEqual('myDir2');
       });
 
       describe('literals', () => {
@@ -1018,8 +1188,16 @@ function assertOutputBindingSymbol(tSymbol: Symbol): asserts tSymbol is OutputBi
   expect(tSymbol.kind).toEqual(SymbolKind.Output);
 }
 
+function assertVariableSymbol(tSymbol: Symbol): asserts tSymbol is VariableSymbol {
+  expect(tSymbol.kind).toEqual(SymbolKind.Variable);
+}
+
 function assertTemplateSymbol(tSymbol: Symbol): asserts tSymbol is TemplateSymbol {
   expect(tSymbol.kind).toEqual(SymbolKind.Template);
+}
+
+function assertReferenceSymbol(tSymbol: Symbol): asserts tSymbol is ReferenceSymbol {
+  expect(tSymbol.kind).toEqual(SymbolKind.Reference);
 }
 
 function assertExpressionSymbol(tSymbol: Symbol): asserts tSymbol is ExpressionSymbol {
