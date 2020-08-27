@@ -6,14 +6,14 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {AbsoluteSourceSpan, AST, ParseSourceSpan, TmplAstBoundAttribute, TmplAstBoundEvent, TmplAstNode} from '@angular/compiler';
+import {AbsoluteSourceSpan, AST, ParseSourceSpan, TmplAstBoundAttribute, TmplAstBoundEvent, TmplAstElement, TmplAstNode, TmplAstTemplate} from '@angular/compiler';
 import * as ts from 'typescript';
 
 import {AbsoluteFsPath} from '../../file_system';
-import {DirectiveSymbol, ExpressionSymbol, InputBindingSymbol, OutputBindingSymbol, ReferenceSymbol, Symbol, SymbolKind, VariableSymbol} from '../api';
+import {DirectiveSymbol, ElementSymbol, ExpressionSymbol, InputBindingSymbol, OutputBindingSymbol, ReferenceSymbol, Symbol, SymbolKind, TemplateSymbol, VariableSymbol} from '../api';
 
 import {TemplateData} from './context';
-import {readSpanComment} from './diagnostics';
+import {ExpressionIdentifiers, hasExpressionIdentifier, readSpanComment} from './diagnostics';
 import {TcbDirectiveOutputsOp} from './type_check_block';
 
 /**
@@ -36,6 +36,33 @@ function findFirstNodeWithAbsoluteSourceSpan<T extends ts.Node>(
   return tcb.forEachChild(visitor) ?? null;
 }
 
+/**
+ * Given a `ts.Node` with source span comments, finds the first node whose source span comment
+ * matches the given `sourceSpan`. Additionally, the `filter` function allows matching only
+ * `ts.Nodes` of a given type, which provides the ability to select only matches of a given type
+ * when there may be more than one.
+ *
+ * Returns `null` when no `ts.Node` matches the given conditions.
+ */
+function findAllNodesWithAbsoluteSourceSpan<T extends ts.Node>(
+    tcb: ts.Node, sourceSpan: AbsoluteSourceSpan, filter: (node: ts.Node) => node is T): T[] {
+  const results: T[] = [];
+  function visitor(node: ts.Node|undefined, unprocessedNodes: ts.Node[]): T[] {
+    if (node === undefined) {
+      return results;
+    }
+
+    const comment = readSpanComment(tcb.getSourceFile(), node);
+    if (sourceSpan.start === comment?.start && sourceSpan.end === comment?.end && filter(node)) {
+      results.push(node);
+    }
+
+    unprocessedNodes.push(...node.getChildren());
+    return visitor(unprocessedNodes.pop(), unprocessedNodes);
+  }
+  return visitor(tcb, []);
+}
+
 /** Converts a `ParseSourceSpan` to an `AbsoluteSourceSpan`. */
 function toAbsoluteSourceSpan(sourceSpan: ParseSourceSpan): AbsoluteSourceSpan {
   return new AbsoluteSourceSpan(sourceSpan.start.offset, sourceSpan.end.offset);
@@ -53,8 +80,60 @@ export class SymbolBuilder {
   getSymbol(node: AST|TmplAstNode): Symbol|null {
     if (node instanceof TmplAstBoundAttribute || node instanceof TmplAstBoundEvent) {
       return this.getSymbolOfBinding(node);
+    } else if (node instanceof TmplAstElement) {
+      return this.getSymbolOfElement(node);
+    } else if (node instanceof TmplAstTemplate) {
+      return this.getSymbolOfAstTemplate(node);
     }
     return null;
+  }
+
+  private getSymbolOfAstTemplate(template: TmplAstTemplate): TemplateSymbol|null {
+    const directives = this.getDirectivesOfNode(template);
+    return {kind: SymbolKind.Template, directives};
+  }
+
+  private getSymbolOfElement(element: TmplAstElement): ElementSymbol|null {
+    const elementSourceSpan = element.startSourceSpan ?? element.sourceSpan;
+
+    const node = findFirstNodeWithAbsoluteSourceSpan(
+        this.typeCheckBlock, toAbsoluteSourceSpan(elementSourceSpan), ts.isVariableDeclaration);
+    if (node === null) {
+      return null;
+    }
+
+    const symbolFromDeclaration = this.getSymbolOfVariableDeclaration(node);
+    if (symbolFromDeclaration === null || symbolFromDeclaration.tsSymbol === null) {
+      return null;
+    }
+
+    const directives = this.getDirectivesOfNode(element);
+    return {
+      ...symbolFromDeclaration,
+      tsSymbol: symbolFromDeclaration.tsSymbol!,
+      kind: SymbolKind.Element,
+      directives
+    };
+  }
+
+  private getDirectivesOfNode(element: TmplAstElement|TmplAstTemplate): DirectiveSymbol[] {
+    const elementSourceSpan = element.startSourceSpan ?? element.sourceSpan;
+    const isDirectiveDeclaration = (node: ts.Node): node is ts.TypeNode => ts.isTypeNode(node) &&
+        hasExpressionIdentifier(this.typeCheckBlock.getSourceFile(), node,
+                                ExpressionIdentifiers.DIRECTIVE);
+
+    return findAllNodesWithAbsoluteSourceSpan(
+               this.typeCheckBlock, toAbsoluteSourceSpan(elementSourceSpan), isDirectiveDeclaration)
+        .map(
+            (node):
+                DirectiveSymbol|null => {
+                  const symbol = this.getSymbolOfTsNode(node);
+                  if (symbol === null || symbol.tsSymbol === null) {
+                    return null;
+                  }
+                  return {...symbol, tsSymbol: symbol.tsSymbol, kind: SymbolKind.Directive};
+                })
+        .filter((d): d is DirectiveSymbol => d !== null);
   }
 
   /**

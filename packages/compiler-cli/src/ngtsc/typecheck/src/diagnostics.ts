@@ -354,6 +354,17 @@ export function readSpanComment(sourceFile: ts.SourceFile, node: ts.Node): Absol
   }) || null;
 }
 
+export function hasExpressionIdentifier(
+    sourceFile: ts.SourceFile, node: ts.Node, identifier: ExpressionIdentifiers): boolean {
+  return ts.forEachTrailingCommentRange(sourceFile.text, node.getEnd(), (pos, end, kind) => {
+    if (kind !== ts.SyntaxKind.MultiLineCommentTrivia) {
+      return false;
+    }
+    const commentText = sourceFile.text.substring(pos + 2, end - 2);
+    return !!commentText.match(`${CommentTriviaType.EXPRESSION_TYPE_IDENTIFIER}:${identifier}`);
+  }) || false;
+}
+
 function hasIgnoreMarker(node: ts.Node, sourceFile: ts.SourceFile): boolean {
   return ts.forEachTrailingCommentRange(sourceFile.text, node.getEnd(), (pos, end, kind) => {
     if (kind !== ts.SyntaxKind.MultiLineCommentTrivia) {
