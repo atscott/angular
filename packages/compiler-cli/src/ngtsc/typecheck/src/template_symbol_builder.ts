@@ -6,11 +6,11 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {AbsoluteSourceSpan, AST, ParseSourceSpan, TmplAstBoundAttribute, TmplAstBoundEvent, TmplAstElement, TmplAstNode, TmplAstTemplate} from '@angular/compiler';
+import {AbsoluteSourceSpan, AST, ASTWithSource, BindingPipe, ParseSourceSpan, SafeMethodCall, SafePropertyRead, TmplAstBoundAttribute, TmplAstBoundEvent, TmplAstElement, TmplAstNode, TmplAstTemplate} from '@angular/compiler';
 import * as ts from 'typescript';
 
 import {AbsoluteFsPath} from '../../file_system';
-import {DirectiveSymbol, ElementSymbol, ExpressionSymbol, InputBindingSymbol, OutputBindingSymbol, ReferenceSymbol, Symbol, SymbolKind, TemplateSymbol, VariableSymbol} from '../api';
+import {DirectiveSymbol, ElementSymbol, ExpressionSymbol, InputBindingSymbol, OutputBindingSymbol, Symbol, SymbolKind, TemplateSymbol} from '../api';
 
 import {TemplateData} from './context';
 import {ExpressionIdentifiers, hasExpressionIdentifier, readSpanComment} from './diagnostics';
@@ -84,7 +84,10 @@ export class SymbolBuilder {
       return this.getSymbolOfElement(node);
     } else if (node instanceof TmplAstTemplate) {
       return this.getSymbolOfAstTemplate(node);
+    } else if (node instanceof AST) {
+      return this.getSymbolOfTemplateExpression(node);
     }
+    // TODO(atscott): TmplAstContent, TmplAstIcu
     return null;
   }
 
@@ -235,7 +238,40 @@ export class SymbolBuilder {
     return {...templateSymbol, kind: SymbolKind.Directive, tsSymbol: templateSymbol.tsSymbol};
   }
 
-  private getSymbolOfTsNode(node: ts.Node): ExpressionSymbol|VariableSymbol|ReferenceSymbol|null {
+  private getSymbolOfTemplateExpression(expression: AST): ExpressionSymbol|null {
+    if (expression instanceof ASTWithSource) {
+      return this.getSymbolOfTemplateExpression(expression.ast);
+    }
+
+    const node = this.getTsNodeWithSourceSpan(expression.sourceSpan);
+    if (node === null) {
+      return null;
+    }
+
+    // - If we have safe property read ("a?.b") we want to get the Symbol for b, the `whenTrue`
+    // expression.
+    // - If our expression is a pipe binding ("a | test:b:c"), we want the Symbol for the
+    // `transform` on the pipe.
+    // - Otherwise, we retrieve the symbol for the node itself with no special considerations
+    if ((expression instanceof SafePropertyRead || expression instanceof SafeMethodCall) &&
+        ts.isConditionalExpression(node)) {
+      const whenTrueSymbol =
+          (expression instanceof SafeMethodCall && ts.isCallExpression(node.whenTrue)) ?
+          this.getSymbolOfTsNode(node.whenTrue.expression) :
+          this.getSymbolOfTsNode(node.whenTrue);
+      return whenTrueSymbol !== null ?
+          // Rather than using the type of only the `whenTrue` part of the expression, we should
+          // still get the type of the whole conditional expression.
+          {...whenTrueSymbol, tsType: this.typeChecker.getTypeAtLocation(node)} :
+          null;
+    } else if (expression instanceof BindingPipe && ts.isCallExpression(node)) {
+      return this.getSymbolOfTsNode(node.expression);
+    } else {
+      return this.getSymbolOfTsNode(node);
+    }
+  }
+
+  private getSymbolOfTsNode(node: ts.Node): ExpressionSymbol|null {
     if (ts.isParenthesizedExpression(node)) {
       return this.getSymbolOfTsNode(node.expression);
     }
@@ -272,7 +308,7 @@ export class SymbolBuilder {
   }
 
   private getSymbolOfVariableDeclaration(declaration: ts.VariableDeclaration): ExpressionSymbol
-      |ReferenceSymbol|VariableSymbol|null {
+      |null {
     // Instead of returning the Symbol for the temporary variable, we want to get the `ts.Symbol`
     // for:
     // - The type reference for `var _t2: MyDir = xyz` (prioritize/trust the declared type)
@@ -297,5 +333,15 @@ export class SymbolBuilder {
     }
 
     return null;
+  }
+
+  private getTsNodeWithSourceSpan(sourceSpan: AbsoluteSourceSpan): ts.Node|null {
+    let node = findFirstNodeWithAbsoluteSourceSpan(
+        this.typeCheckBlock, sourceSpan, (n: ts.Node): n is ts.Node => true);
+    if (node === null) {
+      return null;
+    }
+
+    return ts.isParenthesizedExpression(node) ? node.expression : node;
   }
 }
