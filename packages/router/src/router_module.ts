@@ -7,7 +7,7 @@
  */
 
 import {APP_BASE_HREF, HashLocationStrategy, Location, LOCATION_INITIALIZED, LocationStrategy, PathLocationStrategy, PlatformLocation, ViewportScroller, ɵgetDOM as getDOM} from '@angular/common';
-import {ANALYZE_FOR_ENTRY_COMPONENTS, APP_BOOTSTRAP_LISTENER, APP_INITIALIZER, ApplicationRef, Compiler, ComponentRef, Inject, Injectable, InjectionToken, Injector, ModuleWithProviders, NgModule, NgModuleFactoryLoader, NgProbeToken, Optional, Provider, SkipSelf, SystemJsNgModuleLoader} from '@angular/core';
+import {ANALYZE_FOR_ENTRY_COMPONENTS, APP_BOOTSTRAP_LISTENER, APP_INITIALIZER, ApplicationRef, Compiler, ComponentRef, Inject, Injectable, InjectionToken, Injector, ModuleWithProviders, NgModule, NgModuleFactoryLoader, NgProbeToken, Optional, Provider, Self, SkipSelf, SystemJsNgModuleLoader} from '@angular/core';
 import {of, Subject} from 'rxjs';
 
 import {EmptyOutletComponent} from './components/empty_outlet';
@@ -44,6 +44,12 @@ export const ROUTER_CONFIGURATION = new InjectionToken<ExtraOptions>('ROUTER_CON
  * @docsNotRequired
  */
 export const ROUTER_FORROOT_GUARD = new InjectionToken<void>('ROUTER_FORROOT_GUARD');
+
+/**
+ * @docsNotRequired
+ */
+export const ROUTER_FOR_CHILD_IN_ROOT_GUARD =
+    new InjectionToken<void>('ROUTER_FOR_CHILD_IN_ROOT_GUARD');
 
 export const ROUTER_PROVIDERS: Provider[] = [
   Location,
@@ -98,7 +104,10 @@ export function routerNgProbeToken() {
 })
 export class RouterModule {
   // Note: We are injecting the Router so it gets created eagerly...
-  constructor(@Optional() @Inject(ROUTER_FORROOT_GUARD) guard: any, @Optional() router: Router) {}
+  constructor(
+      @Optional() @Inject(ROUTER_FORROOT_GUARD) guard: any,
+      @Optional() @Inject(ROUTER_FOR_CHILD_IN_ROOT_GUARD) childguard: any,
+      @Optional() router: Router) {}
 
   /**
    * Creates and configures a module with all the router providers and directives.
@@ -169,7 +178,17 @@ export class RouterModule {
    *
    */
   static forChild(routes: Routes): ModuleWithProviders<RouterModule> {
-    return {ngModule: RouterModule, providers: [provideRoutes(routes)]};
+    return {
+      ngModule: RouterModule,
+      providers: [
+        provideRoutes(routes),
+        {
+          provide: ROUTER_FOR_CHILD_IN_ROOT_GUARD,
+          useFactory: provideForChildInRootRootGuard,
+          deps: [[ROUTER_FORROOT_GUARD, new Optional(), new Self()]]
+        },
+      ]
+    };
   }
 }
 
@@ -185,6 +204,16 @@ export function provideLocationStrategy(
     platformLocationStrategy: PlatformLocation, baseHref: string, options: ExtraOptions = {}) {
   return options.useHash ? new HashLocationStrategy(platformLocationStrategy, baseHref) :
                            new PathLocationStrategy(platformLocationStrategy, baseHref);
+}
+
+export function provideForChildInRootRootGuard(forRootGuard: any): any {
+  if ((typeof ngDevMode === 'undefined' || ngDevMode) && forRootGuard) {
+    throw new Error(
+        'RouterModule.forChild() called in same module as RouterModule.forRoot().' +
+        ' Lazy loaded modules should be loaded through the router config. ' +
+        'If simply want to provide extra routes, use [provideRoutes](https://angular.io/api/router/provideRoutes) instead.');
+  }
+  return 'guarded';
 }
 
 export function provideForRootGuard(router: Router): any {

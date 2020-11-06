@@ -19,6 +19,18 @@ import {delay, filter, first, map, mapTo, tap} from 'rxjs/operators';
 import {forEach} from '../src/utils/collection';
 import {RouterTestingModule, SpyNgModuleFactoryLoader} from '../testing';
 
+describe('test1', () => {
+  it('testsomething', () => {
+    expect(() => {
+      TestBed.configureTestingModule({
+        imports: [RouterModule.forRoot([]), RouterModule.forChild([])],
+        declarations: [SimpleCmp]
+      });
+      const x = TestBed.createComponent(SimpleCmp);
+    }).toThrow();
+  });
+});
+
 describe('Integration', () => {
   const noopConsole: Console = {log() {}, warn() {}};
 
