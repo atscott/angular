@@ -1094,6 +1094,9 @@ export class Router {
    *
    * // navigate to /team/44/user/22
    * router.createUrlTree(['../../team/44/user/22'], {relativeTo: route});
+   *
+   * Note that a value of `null` or `undefined` for `relativeTo` indicates that the
+   * tree should be created relative to the root.
    * ```
    */
   createUrlTree(commands: any[], navigationExtras: UrlCreationOptions = {}): UrlTree {
