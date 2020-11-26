@@ -571,6 +571,80 @@ fdescribe('recognize', () => {
         checkActivatedRoute(c[1].firstChild!, 'e', {}, ComponentE);
       });
     });
+
+    describe('with outlets', () => {
+      it('should work when outlet is a child of empty path parent', () => {
+        const s = checkRecognize(
+            [{
+              path: '',
+              component: ComponentA,
+              children: [{path: 'b', outlet: 'b', component: ComponentB}]
+            }],
+            '(b:b)')!;
+        checkActivatedRoute(s.root.children[0], '', {}, ComponentA);
+        checkActivatedRoute(s.root.children[0].children[0], 'b', {}, ComponentB, 'b');
+      });
+
+      it('c-c-c-c-combo: should work with children outlets and adjacent', () => {
+        const s = checkRecognize(
+            [
+              {
+                path: '',
+                component: ComponentA,
+                children: [{path: 'b', outlet: 'b', component: ComponentB}]
+              },
+              {path: 'c', outlet: 'c', component: ComponentC}
+            ],
+            '(b:b//c:c)')!;
+        checkActivatedRoute(s.root.children[0], '', {}, ComponentA);
+        checkActivatedRoute(s.root.children[1], 'c', {}, ComponentC, 'c');
+        checkActivatedRoute(s.root.children[0].children[0], 'b', {}, ComponentB, 'b');
+      });
+
+      it('should work with children outlets within two levels of empty parents', () => {
+        const s = checkRecognize(
+            [{
+              path: '',
+              component: ComponentA,
+              children: [{
+                path: '',
+                component: ComponentB,
+                children: [{path: 'c', outlet: 'c', component: ComponentC}]
+              }]
+            }],
+            '(c:c)')!;
+        checkActivatedRoute(s.root.children[0], '', {}, ComponentA);
+        checkActivatedRoute(s.root.children[0].children[0], '', {}, ComponentB);
+        checkActivatedRoute(s.root.children[0].children[0].children[0], 'c', {}, ComponentC, 'c');
+      });
+
+      it('should work for outlets adjacent to empty path', () => {
+        const s = checkRecognize(
+            [
+              {path: '', component: ComponentA, children: [{path: '', component: ComponentC}]},
+              {path: 'b', outlet: 'b', component: ComponentB}
+            ],
+            '(b:b)')!;
+        const [primaryChild, outletChild] = s.root.children;
+        checkActivatedRoute(primaryChild, '', {}, ComponentA);
+        checkActivatedRoute(outletChild, 'b', {}, ComponentB, 'b');
+        checkActivatedRoute(primaryChild.children[0], '', {}, ComponentC);
+      });
+
+      it('does not persist a primary segment beyond the boundary of a named outlet match', () => {
+        const s = checkRecognize(
+            [
+              {
+                path: '',
+                component: ComponentA,
+                outlet: 'a',
+                children: [{path: 'b', component: ComponentB}]
+              },
+            ],
+            '/b');
+        expect(s).toBeNull();
+      });
+    });
   });
 
   describe('wildcards', () => {
