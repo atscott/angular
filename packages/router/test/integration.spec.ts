@@ -1687,13 +1687,14 @@ describe('Integration', () => {
            data: {one: 1},
            resolve: {two: 'resolveTwo'},
            children: [
-             {path: '', data: {three: 3}, resolve: {four: 'resolveFour'}, component: RouteCmp}, {
+             {path: '', data: {three: 3}, resolve: {four: 'resolveFour'}, component: RouteCmp},
+             {
                path: '',
                data: {five: 5},
                resolve: {six: 'resolveSix'},
                component: RouteCmp,
                outlet: 'right'
-             }
+             },
            ]
          }]);
 
