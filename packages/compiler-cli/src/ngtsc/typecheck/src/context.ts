@@ -6,7 +6,8 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {BoundTarget, ParseSourceFile, R3TargetBinder, SchemaMetadata, TmplAstNode} from '@angular/compiler';
+import {BoundTarget, ParseError, ParseSourceFile, R3TargetBinder, SchemaMetadata, TmplAstNode} from '@angular/compiler';
+import {ErrorCode, ngErrorCode} from '@angular/compiler-cli/src/ngtsc/diagnostics';
 import * as ts from 'typescript';
 
 import {absoluteFromSourceFile, AbsoluteFsPath} from '../../file_system';
@@ -14,7 +15,7 @@ import {NoopImportRewriter, Reference, ReferenceEmitter} from '../../imports';
 import {ClassDeclaration, ReflectionHost} from '../../reflection';
 import {ImportManager} from '../../translator';
 import {ComponentToShimMappingStrategy, TemplateId, TemplateSourceMapping, TypeCheckableDirectiveMeta, TypeCheckBlockMetadata, TypeCheckContext, TypeCheckingConfig, TypeCtorMetadata} from '../api';
-import {TemplateDiagnostic} from '../diagnostics';
+import {getTemplateId, makeTemplateDiagnostic, TemplateDiagnostic} from '../diagnostics';
 
 import {DomSchemaChecker, RegistryDomSchemaChecker} from './dom';
 import {Environment} from './environment';
@@ -108,6 +109,8 @@ export interface PendingShimData {
    * Map of `TemplateId` to information collected about the template as it's ingested.
    */
   templates: Map<TemplateId, TemplateData>;
+
+  templateParseDiagnostics: TemplateDiagnostic[];
 }
 
 /**
@@ -135,6 +138,7 @@ export interface TypeCheckingHost {
   /**
    * Check if the given component has had its template overridden, and retrieve the new template
    * nodes if so.
+   * TODO(Ayaz): store parse errors from overridden template
    */
   getTemplateOverride(sfPath: AbsoluteFsPath, node: ts.ClassDeclaration): TmplAstNode[]|null;
 
@@ -173,6 +177,7 @@ export enum InliningMode {
  */
 export class TypeCheckContextImpl implements TypeCheckContext {
   private fileMap = new Map<AbsoluteFsPath, PendingFileTypeCheckingData>();
+  private parseDiagnosticsFileMap = new Map<AbsoluteFsPath, ts.Diagnostic[]>();
 
   constructor(
       private config: TypeCheckingConfig,
@@ -205,8 +210,8 @@ export class TypeCheckContextImpl implements TypeCheckContext {
       ref: Reference<ClassDeclaration<ts.ClassDeclaration>>,
       binder: R3TargetBinder<TypeCheckableDirectiveMeta>, template: TmplAstNode[],
       pipes: Map<string, Reference<ClassDeclaration<ts.ClassDeclaration>>>,
-      schemas: SchemaMetadata[], sourceMapping: TemplateSourceMapping,
-      file: ParseSourceFile): void {
+      schemas: SchemaMetadata[], sourceMapping: TemplateSourceMapping, file: ParseSourceFile,
+      parseErrors: ParseError[]|null): void {
     if (!this.host.shouldCheckComponent(ref.node)) {
       return;
     }
@@ -224,6 +229,26 @@ export class TypeCheckContextImpl implements TypeCheckContext {
     const fileData = this.dataForFile(ref.node.getSourceFile());
     const shimData = this.pendingShimForComponent(ref.node);
     const boundTarget = binder.bind({template});
+
+    if (parseErrors !== null) {
+      // If there are any template parsing errors, convert them to `ts.Diagnostic`s for display.
+      const id = getTemplateId(ref.node);
+      shimData.templateParseDiagnostics = parseErrors.map(error => {
+        const span = error.span;
+
+        if (span.start.offset === span.end.offset) {
+          // Template errors can contain zero-length spans, if the error occurs at a single point.
+          // However, TypeScript does not handle displaying a zero-length diagnostic very well, so
+          // increase the ending offset by 1 for such errors, to ensure the position is shown in the
+          // diagnostic.
+          span.end.offset++;
+        }
+
+        return makeTemplateDiagnostic(
+            id, sourceMapping, span, ts.DiagnosticCategory.Error,
+            ngErrorCode(ErrorCode.TEMPLATE_PARSE_ERROR), error.msg);
+      });
+    }
 
     // Get all of the directives used in the template and record type constructors for all of them.
     for (const dir of boundTarget.getUsedDirectives()) {
@@ -379,6 +404,7 @@ export class TypeCheckContextImpl implements TypeCheckContext {
           genesisDiagnostics: [
             ...pendingShimData.domSchemaChecker.diagnostics,
             ...pendingShimData.oobRecorder.diagnostics,
+            ...pendingShimData.templateParseDiagnostics,
           ],
           hasInlines: pendingFileData.hasInlines,
           path: pendingShimData.file.fileName,
@@ -413,6 +439,7 @@ export class TypeCheckContextImpl implements TypeCheckContext {
       fileData.shimData.set(shimPath, {
         domSchemaChecker: new RegistryDomSchemaChecker(fileData.sourceManager),
         oobRecorder: new OutOfBandDiagnosticRecorderImpl(fileData.sourceManager),
+        templateParseDiagnostics: [],
         file: new TypeCheckFile(
             shimPath, this.config, this.refEmitter, this.reflector, this.compilerHost),
         templates: new Map<TemplateId, TemplateData>(),

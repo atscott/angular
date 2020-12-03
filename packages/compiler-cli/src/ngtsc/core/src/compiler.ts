@@ -179,6 +179,36 @@ export class NgCompiler {
    *
    * If a `ts.SourceFile` is passed, only diagnostics related to that file are returned.
    */
+  getNonTemplateDiagnostics(file?: ts.SourceFile): ts.Diagnostic[] {
+    // TODO(zarend,atscott): what about getting diagnostics for just the file, not the entire
+    // program
+    if (this.diagnostics === null) {
+      const compilation = this.ensureAnalyzed();
+      this.diagnostics = [...compilation.traitCompiler.diagnostics];
+      if (this.entryPoint !== null && compilation.exportReferenceGraph !== null) {
+        this.diagnostics.push(...checkForPrivateExports(
+            this.entryPoint, this.tsProgram.getTypeChecker(), compilation.exportReferenceGraph));
+      }
+    }
+
+    if (file === undefined) {
+      return this.diagnostics;
+    } else {
+      return this.diagnostics.filter(diag => {
+        if (diag.file === file) {
+          return true;
+        }
+        return !isTemplateDiagnostic(diag);
+      });
+    }
+  }
+
+
+  /**
+   * Get all Angular-related diagnostics for this compilation.
+   *
+   * If a `ts.SourceFile` is passed, only diagnostics related to that file are returned.
+   */
   getDiagnostics(file?: ts.SourceFile): ts.Diagnostic[] {
     if (this.diagnostics === null) {
       const compilation = this.ensureAnalyzed();
@@ -561,6 +591,8 @@ export class NgCompiler {
   private getTemplateDiagnostics(): ReadonlyArray<ts.Diagnostic> {
     // Skip template type-checking if it's disabled.
     if (this.options.ivyTemplateTypeCheck === false && !this.fullTemplateTypeCheck) {
+      // TODO(atscott,zarend): even if template type checking is disabled, we still need the
+      // template parse errors from the analyze phase of the ComponentDecoratorHandler
       return [];
     }
 
