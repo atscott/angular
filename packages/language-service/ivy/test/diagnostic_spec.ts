@@ -104,26 +104,7 @@ describe('getSemanticDiagnostics', () => {
     expect(messageText).toBe(`Property 'nope' does not exist on type 'AppComponent'.`);
   });
 
-  it('should report diagnostics for the component', () => {
-    const appFile = {
-      name: absoluteFrom('/app.ts'),
-      contents: `
-      import {Component} from '@angular/core';
-
-      @Component({})
-      export class AppComponent {}
-    `
-    };
-    const env = createModuleWithDeclarations([appFile]);
-    const diags = env.ngLS.getSemanticDiagnostics(absoluteFrom('/app.ts'));
-    expect(diags.length).toBe(1);
-    const {category, file, messageText} = diags[0];
-    expect(category).toBe(ts.DiagnosticCategory.Error);
-    expect(file?.fileName).toBe('/app.ts');
-    expect(messageText).toBe(`component is missing a template`);
-  });
-
-  fit('should report a parse error in external template', () => {
+  it('should report a parse error in external template', () => {
     const appFile = {
       name: absoluteFrom('/app.ts'),
       contents: `
@@ -143,9 +124,11 @@ describe('getSemanticDiagnostics', () => {
     const diags = env.ngLS.getSemanticDiagnostics(absoluteFrom('/app.html'));
     expect(diags.length).toBe(1);
 
-    const {category, file, start, length, messageText} = diags[0];
+    const {category, file, messageText} = diags[0];
     expect(category).toBe(ts.DiagnosticCategory.Error);
     expect(file?.fileName).toBe('/app.html');
-    expect(messageText).toBe(`foo`);
+    expect(messageText)
+        .toBe(
+            `Parser Error: Bindings cannot contain assignments at column 8 in [{{nope = true}}] in /app.html@0:0`);
   });
 });

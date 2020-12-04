@@ -48,11 +48,7 @@ export class LanguageService {
       const program = compiler.getNextProgram();
       const sourceFile = program.getSourceFile(fileName);
       if (sourceFile) {
-        debugger;
-        const nonTemplateDiagnostics = compiler.getNonTemplateDiagnostics(sourceFile);
-        diagnostics.push(
-            ...nonTemplateDiagnostics,
-            ...ttc.getDiagnosticsForFile(sourceFile, OptimizeFor.SingleFile));
+        diagnostics.push(...ttc.getDiagnosticsForFile(sourceFile, OptimizeFor.SingleFile));
       }
     } else {
       const components = compiler.getComponentsWithTemplateFile(fileName);

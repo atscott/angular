@@ -267,10 +267,6 @@ export class ComponentDecoratorHandler implements
         {path: null, expression: component.get('template')!} :
         {path: absoluteFrom(template.templateUrl), expression: template.sourceMapping.node};
 
-    /* TODO(atscott,zarend): move to template type checker
-      // created diagnostics
-     */
-
     // Figure out the set of styles. The ordering here is important: external resources (styleUrls)
     // precede inline styles, and styles defined in the template override styles defined in the
     // component.
@@ -434,7 +430,6 @@ export class ComponentDecoratorHandler implements
       // Don't type-check components that had errors in their scopes, unless requested.
       return;
     }
-    // TODO(atscott, zarend): Do we still type check a template with errors?
 
     const binder = new R3TargetBinder(scope.matcher);
     ctx.addTemplate(
