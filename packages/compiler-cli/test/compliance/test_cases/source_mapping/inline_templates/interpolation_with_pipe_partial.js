@@ -3,4 +3,4 @@
 // TODO: Work out how to fix the broken segment for the last item in a template
 .ɵɵelem // SOURCE: "/interpolation_with_pipe.ts" </div>'
 …
-.ɵɵpipeBind2(2, 1, 200.3, 2)) // SOURCE: "/interpolation_with_pipe.ts" {{200.3 | percent : 2 }}
+.ɵɵpipeBind2(2, 1, 200.3, 2)) // SOURCE: "/interpolation_with_pipe.ts" {{20

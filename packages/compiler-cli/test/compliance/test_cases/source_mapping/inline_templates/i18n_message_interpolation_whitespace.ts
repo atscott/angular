@@ -6,4 +6,6 @@ import {Component} from '@angular/core';
       '<div i18n title="  pre-title {{title_value}}  post-title" i18n-title>  pre-body {{body_value}}  post-body</div>',
 })
 export class TestCmp {
+  title_value = '';
+  body_value = '';
 }
