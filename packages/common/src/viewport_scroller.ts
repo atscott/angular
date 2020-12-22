@@ -110,12 +110,10 @@ export class BrowserViewportScroller implements ViewportScroller {
    * @param anchor The ID of the anchor element.
    */
   scrollToAnchor(anchor: string): void {
-    if (this.supportsScrolling()) {
-      const elSelected =
-          this.document.getElementById(anchor) || this.document.getElementsByName(anchor)[0];
-      if (elSelected) {
-        this.scrollToElement(elSelected);
-      }
+    const elSelected =
+        this.document.getElementById(anchor) || this.document.getElementsByName(anchor)[0];
+    if (elSelected !== undefined) {
+      this.scrollToElement(elSelected);
     }
   }
 
@@ -131,12 +129,12 @@ export class BrowserViewportScroller implements ViewportScroller {
     }
   }
 
-  private scrollToElement(el: any): void {
-    const rect = el.getBoundingClientRect();
-    const left = rect.left + this.window.pageXOffset;
-    const top = rect.top + this.window.pageYOffset;
-    const offset = this.offset();
-    this.window.scrollTo(left - offset[0], top - offset[1]);
+  /**
+   * @see https://html.spec.whatwg.org/#scroll-to-fragid
+   * @see https://developer.mozilla.org/en-US/docs/Web/API/Element/scrollIntoView for browser compatibility
+   */
+  private scrollToElement(el: HTMLElement): void {
+    el.scrollIntoView({behavior: 'auto', block: 'start', inline: 'nearest'});
   }
 
   /**

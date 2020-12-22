@@ -360,12 +360,14 @@ describe('bootstrap', () => {
     expect(window.pageYOffset).toEqual(0);
 
     await router.navigateByUrl('/aa#marker2');
-    expect(window.pageYOffset).toBeGreaterThanOrEqual(5900);
-    expect(window.pageYOffset).toBeLessThan(6000);  // offset
+    const marker2 = document.getElementById('marker2')!;
+    expect(window.pageYOffset).toBeGreaterThan(marker2.offsetTop - 100);
+    expect(window.pageYOffset).toBeLessThan(marker2.offsetTop + 100);
 
     await router.navigateByUrl('/aa#marker3');
-    expect(window.pageYOffset).toBeGreaterThanOrEqual(8900);
-    expect(window.pageYOffset).toBeLessThan(9000);
+    const marker3 = document.getElementsByName('marker3')[0];
+    expect(window.pageYOffset).toBeGreaterThan(marker3.offsetTop - 100);
+    expect(window.pageYOffset).toBeLessThan(marker3.offsetTop + 100);
     done();
   });
 
