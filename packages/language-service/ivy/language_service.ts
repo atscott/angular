@@ -18,7 +18,7 @@ import {CompilerFactory} from './compiler_factory';
 import {CompletionBuilder, CompletionNodeContext} from './completions';
 import {DefinitionBuilder} from './definitions';
 import {QuickInfoBuilder} from './quick_info';
-import {ReferencesAndRenameBuilder} from './references_and_rename';
+import {ReferencesBuilder, RenameBuilder} from './references_and_rename';
 import {getTargetAtPosition, TargetContext, TargetNodeKind} from './template_target';
 import {getTemplateInfoAtPosition, isTypeScriptFile} from './utils';
 
@@ -107,7 +107,7 @@ export class LanguageService {
 
   getReferencesAtPosition(fileName: string, position: number): ts.ReferenceEntry[]|undefined {
     const compiler = this.compilerFactory.getOrCreateWithChangedFile(fileName);
-    const results = new ReferencesAndRenameBuilder(this.strategy, this.tsLS, compiler)
+    const results = new ReferencesBuilder(this.strategy, this.tsLS, compiler)
                         .getReferencesAtPosition(fileName, position);
     this.compilerFactory.registerLastKnownProgram();
     return results;
@@ -115,7 +115,7 @@ export class LanguageService {
 
   getRenameInfo(fileName: string, position: number): ts.RenameInfo {
     const compiler = this.compilerFactory.getOrCreateWithChangedFile(fileName);
-    const renameInfo = new ReferencesAndRenameBuilder(this.strategy, this.tsLS, compiler)
+    const renameInfo = new RenameBuilder(this.strategy, this.tsLS, compiler)
                            .getRenameInfo(absoluteFrom(fileName), position);
     if (!renameInfo.canRename) {
       return renameInfo;
@@ -130,7 +130,7 @@ export class LanguageService {
 
   findRenameLocations(fileName: string, position: number): readonly ts.RenameLocation[]|undefined {
     const compiler = this.compilerFactory.getOrCreateWithChangedFile(fileName);
-    const results = new ReferencesAndRenameBuilder(this.strategy, this.tsLS, compiler)
+    const results = new RenameBuilder(this.strategy, this.tsLS, compiler)
                         .findRenameLocations(fileName, position);
     this.compilerFactory.registerLastKnownProgram();
     return results;
