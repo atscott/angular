@@ -42,7 +42,7 @@ export function checkGuards(moduleInjector: Injector, forwardEvent?: (evt: Event
   });
 }
 
-function runCanDeactivateChecks(
+export function runCanDeactivateChecks(
     checks: CanDeactivate[], futureRSS: RouterStateSnapshot, currRSS: RouterStateSnapshot,
     moduleInjector: Injector) {
   return from(checks).pipe(
@@ -54,7 +54,7 @@ function runCanDeactivateChecks(
       }, true as boolean | UrlTree));
 }
 
-function runCanActivateChecks(
+export function runCanActivateChecks(
     futureSnapshot: RouterStateSnapshot, checks: CanActivate[], moduleInjector: Injector,
     forwardEvent?: (evt: Event) => void) {
   return from(checks).pipe(

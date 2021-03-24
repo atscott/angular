@@ -9,18 +9,21 @@
 import {Location, PopStateEvent} from '@angular/common';
 import {Compiler, Injectable, Injector, NgModuleFactoryLoader, NgModuleRef, NgZone, Type, ɵConsole as Console} from '@angular/core';
 import {BehaviorSubject, EMPTY, Observable, of, Subject, SubscriptionLike} from 'rxjs';
-import {catchError, filter, finalize, map, switchMap, tap} from 'rxjs/operators';
+import {catchError, filter, finalize, map, mergeMap, switchMap, tap} from 'rxjs/operators';
 
+import {AppHistory, AppHistoryNavigationEvent, AppHistoryOverride} from './app_history_api';
+import {applyRedirects as applyRedirectsFn} from './apply_redirects';
 import {QueryParamsHandling, Route, Routes} from './config';
 import {createRouterState} from './create_router_state';
 import {createUrlTree} from './create_url_tree';
 import {Event, GuardsCheckEnd, GuardsCheckStart, NavigationCancel, NavigationEnd, NavigationError, NavigationStart, NavigationTrigger, ResolveEnd, ResolveStart, RouteConfigLoadEnd, RouteConfigLoadStart, RoutesRecognized} from './events';
-import {activateRoutes} from './operators/activate_routes';
+import {ActivateRoutes, activateRoutes} from './operators/activate_routes';
 import {applyRedirects} from './operators/apply_redirects';
-import {checkGuards} from './operators/check_guards';
+import {checkGuards, runCanActivateChecks, runCanDeactivateChecks} from './operators/check_guards';
 import {recognize} from './operators/recognize';
 import {resolveData} from './operators/resolve_data';
 import {switchTap} from './operators/switch_tap';
+import {recognize as recognizeFn} from './recognize';
 import {DefaultRouteReuseStrategy, RouteReuseStrategy} from './route_reuse_strategy';
 import {RouterConfigLoader} from './router_config_loader';
 import {ChildrenOutletContexts} from './router_outlet_context';
@@ -30,7 +33,7 @@ import {DefaultUrlHandlingStrategy, UrlHandlingStrategy} from './url_handling_st
 import {containsTree, createEmptyUrlTree, IsActiveMatchOptions, UrlSerializer, UrlTree} from './url_tree';
 import {standardizeConfig, validateConfig} from './utils/config';
 import {Checks, getAllRouteGuards} from './utils/preactivation';
-import {isUrlTree} from './utils/type_guards';
+import {isBoolean, isUrlTree} from './utils/type_guards';
 
 
 
@@ -378,6 +381,7 @@ export const subsetMatchOptions: IsActiveMatchOptions = {
   queryParams: 'subset'
 };
 
+const appHistory = (window as any as {appHistory: AppHistory}).appHistory;
 
 /**
  * @description
@@ -501,6 +505,8 @@ export class Router {
    */
   relativeLinkResolution: 'legacy'|'corrected' = 'corrected';
 
+  useAppHistoryApi = true;
+
   /**
    * Creates the router service.
    */
@@ -548,6 +554,207 @@ export class Router {
     this.navigations = this.setupNavigations(this.transitions);
 
     this.processNavigations();
+  }
+
+  private setUpAppHistoryNavigationListener() {
+    new AppHistoryOverride();
+    appHistory.addEventListener('navigate', async (e: AppHistoryNavigationEvent) => {
+      // here because the navigation info is not available and state restorations from a rejected
+      // navigation trigger a new 'navigate' event that we need to skip
+      if (this.nextNavigateIsAStateRestore) {
+        this.nextNavigateIsAStateRestore = false;
+        return;
+      }
+      // There is some logic in the current router code that still sometimes handles the navigation
+      // if the router should process the previous URL. I think this may actually be because we need
+      // to still handle the canDeactivate guards of the previous URL (but not sure).
+      if (e.canRespond) {
+        e.respondWith((async () => {
+          const currentAppUrl = appHistory.current.url;
+          // e.destination not implemented so this is done to allow the browser URL to update
+          await new Promise(r => setTimeout(r));
+          (e as any).destination = {url: window.location.href};
+
+          //////////////
+          // this block should be synchronous and outside the respondWith but cannot be because
+          // e.destination.url is not implemented
+          /////////////
+          const urlTransition = !this.navigated || currentAppUrl !== e.destination.url;
+          const processCurrentUrl =
+              (this.onSameUrlNavigation === 'reload' ? true : urlTransition) &&
+              this.urlHandlingStrategy.shouldProcessUrl(this.parseUrl(e.destination.url));
+
+          const destination = this.parseUrl(e.destination.url);
+          const current = this.parseUrl(appHistory.current.url);
+          const rawUrl = this.urlHandlingStrategy.merge(destination, current);
+          const extractedUrl = this.urlHandlingStrategy.extract(rawUrl);
+          const currentSnapshot = this.routerState.snapshot;
+          const {canDeactivateChecks} = getAllRouteGuards(
+              createEmptyState(extractedUrl, null).snapshot, currentSnapshot, this.rootContexts);
+          if (!processCurrentUrl && canDeactivateChecks.length === 0) {
+            // The router should not process this URL (i.e. handle it and determine a destination)
+            // _and_ there are no deactivate guards (meaning the previous URL was not handled by the
+            // Angular router either) so there's nothing for the router to do here. This navigation
+            // is configured to be handled completely outside Angular.
+            return;
+          }
+          //////
+          // end block
+          //////
+
+          const destinationURL = new URL(e.destination.url);
+          const appDestinationUrl = this.location.normalize(
+              destinationURL.pathname + destinationURL.search + destinationURL.hash);
+          return this.respondWithFor(appDestinationUrl) as any as Promise<undefined>;
+        })());
+      } else if (e.cancelable) {
+        // Cancel any navigation that cannot be used with `respondWith` and immediately trigger a
+        // new navigation to the same place so that we can handle it using the async `respondWith`
+        // and the router guards.
+        // e.preventDefault();
+        /* TODO(atscott): not supported by history API yet because e.destination is not implemented
+         if (appHistory.entries().includes(e.destination)) {
+           appHistory.navigateTo(e.destination.key, {navigateInfo: e.info});  // #58
+         } else {
+           appHistory.push(e.destination.url, {state: e.destination.state, navigateInfo: e.info});
+         }
+         */
+      }
+    });
+
+    appHistory.addEventListener('navigateerror', (e) => {
+      return this.handleNavigateError();
+    });
+  }
+
+  private nextNavigateIsAStateRestore = false;
+
+  private handleNavigateError() {
+    // We don't want to restore if the navigation was aborted because a new one was triggered
+    // Used in the absence of a rollback function / support for navigation info on the navigate
+    // event
+    this.nextNavigateIsAStateRestore = true;
+    if (appHistory.previous) {
+      return appHistory.navigateTo(appHistory.previous.key, {});
+    } else {
+      window.history.back();
+      return Promise.resolve(undefined);
+    }
+  }
+
+  /**
+   * Alternative use-case that would be a theoretical implementation of a new router if we made
+   * Angular's core routing functions public API to allow devs to create custom router
+   * implementations.
+   *
+   * current status: Not updated in a while. Getting this to work would require a bit more
+   * investigation because it's more of a roll-your-own router while the other one hooks into the
+   * existing router implementation with some minor tweaks.
+   */
+  private setupAlternativeRoutingWithAppHistoryListeners() {
+    new AppHistoryOverride();
+    appHistory.addEventListener('navigateerror', (e) => {
+      return this.handleNavigateError();
+    });
+    appHistory.addEventListener('navigate', async (e: AppHistoryNavigationEvent) => {
+      // here because the navigation info is not available and state restorations from a rejected
+      // navigation trigger a new 'navigate' event that we need to skip
+      if (this.nextNavigateIsAStateRestore) {
+        this.nextNavigateIsAStateRestore = false;
+        return;
+      }
+      const currentSnapshot = this.routerState.snapshot;
+      /*
+      const urlTransition = !this.navigated || appHistory.current.url !== e.destination.url;
+      const processCurrentUrl = (this.onSameUrlNavigation === 'reload' ? true : urlTransition) &&
+          this.urlHandlingStrategy.shouldProcessUrl(this.parseUrl(e.destination.url));
+
+      const destination = this.parseUrl(e.destination.url);
+      const current = this.parseUrl(appHistory.current.url);
+      const rawUrl = this.urlHandlingStrategy.merge(destination, current);
+      const extractedUrl = this.urlHandlingStrategy.extract(rawUrl);
+      const {canDeactivateChecks} = getAllRouteGuards(
+          createEmptyState(extractedUrl, null).snapshot, currentSnapshot, this.rootContexts);
+      // There is some logic in the current router code that still sometimes handles the navigation
+      // if the router should process the previous URL. I think this may actually be because we need
+      // to still handle the canDeactivate guards of the previous URL (but not sure).
+      if (!processCurrentUrl && canDeactivateChecks.length === 0) {
+        return;
+      } else if (e.cancelable && !e.canRespond) {
+        // Cancel any navigation that cannot be used with `respondWith` and immediately trigger a
+        // new navigation to the same place so that we can handle it using the async `respondWith`
+        // and the router guards.
+        e.preventDefault();
+        if (appHistory.entries.includes(e.destination)) {
+          appHistory.navigateTo(e.destination.key, {navigateInfo: e.info});  // #58
+        } else {
+          appHistory.push(e.destination.url, {state: e.destination.state, navigateInfo: e.info});
+        }
+        return;
+      } else if (!e.canRespond) {
+        return;
+      }*/
+
+      e.respondWith((async () => {
+        await new Promise(r => setTimeout(r));
+        const url = this.location.path(true);
+        const urlTree = this.parseUrl(url);
+        const mergedTree = this.urlHandlingStrategy.merge(urlTree, this.rawUrlTree);
+        const extractedUrl = this.urlHandlingStrategy.extract(mergedTree);
+        const urlAfterRedirects = await applyRedirectsFn(
+                                      this.ngModule.injector, this.configLoader, this.urlSerializer,
+                                      extractedUrl, this.config)
+                                      .toPromise();
+        const targetSnapshot = await recognizeFn(
+                                   this.rootComponentType, this.config, urlAfterRedirects,
+                                   this.serializeUrl(urlAfterRedirects),
+                                   this.paramsInheritanceStrategy, this.relativeLinkResolution)
+                                   .toPromise();
+        // update url if eager
+
+        // guards
+        const {canActivateChecks, canDeactivateChecks} =
+            getAllRouteGuards(targetSnapshot, currentSnapshot, this.rootContexts)
+        let guardsResult: boolean|UrlTree = true;
+        if (canDeactivateChecks.length > 0 || canActivateChecks.length > 0) {
+          guardsResult =
+              await runCanDeactivateChecks(
+                  canDeactivateChecks, targetSnapshot!, currentSnapshot, this.ngModule.injector)
+                  .pipe(
+                      mergeMap(canDeactivate => {
+                        return canDeactivate && isBoolean(canDeactivate) ?
+                            runCanActivateChecks(
+                                targetSnapshot!, canActivateChecks, this.ngModule.injector) :
+                            of(canDeactivate);
+                      }),
+                      )
+                  .toPromise();
+        }
+        if (isUrlTree(guardsResult)) {
+          // trigger new navigation
+          this.navigateByUrl(guardsResult, {replaceUrl: true});
+          return;
+        }
+
+        if (!guardsResult) {
+          throw new Error('guards reject');
+        }
+
+        // resolvers assign data to the target snapshot on the transition
+        await of ({} as any)
+            .pipe(resolveData(this.paramsInheritanceStrategy, this.ngModule.injector))
+            .toPromise();
+        const targetRouterState =
+            createRouterState(this.routeReuseStrategy, targetSnapshot, this.routerState);
+        (this as {routerState: RouterState}).routerState = targetRouterState;
+        // update url if deferred
+
+        new ActivateRoutes(this.routeReuseStrategy, targetRouterState, this.routerState, () => {})
+            .activate(this.rootContexts);
+
+        return undefined;
+      })());
+    });
   }
 
   private setupNavigations(transitions: Observable<NavigationTransition>):
@@ -602,11 +809,17 @@ export class Router {
                                // navigation to always be async
                                return Promise.resolve(t);
                              }),
-
-                             // ApplyRedirects
-                             applyRedirects(
-                                 this.ngModule.injector, this.configLoader, this.urlSerializer,
-                                 this.config),
+                             switchMap(t => {
+                               // ApplyRedirects
+                               if (!this.useAppHistoryApi) {
+                                 return applyRedirects(
+                                     this.ngModule.injector, this.configLoader, this.urlSerializer,
+                                     this.config);
+                               } else {
+                                 // Redirects have to happen before this point for the history API
+                                 return of({...t, urlAfterRedirects: t.rawUrl});
+                               }
+                             }),
 
                              // Update the currentNavigation
                              tap(t => {
@@ -625,7 +838,7 @@ export class Router {
                              // Update URL if in `eager` update mode
                              tap(t => {
                                if (this.urlUpdateStrategy === 'eager') {
-                                 if (!t.extras.skipLocationChange) {
+                                 if (!t.extras.skipLocationChange && !this.useAppHistoryApi) {
                                    this.setBrowserUrl(
                                        t.urlAfterRedirects, !!t.extras.replaceUrl, t.id,
                                        t.extras.state);
@@ -723,11 +936,17 @@ export class Router {
 
                      filter(t => {
                        if (!t.guardsResult) {
-                         this.resetUrlToCurrentUrlTree();
+                         if (!this.useAppHistoryApi) {
+                           this.resetUrlToCurrentUrlTree();
+                         }
                          const navCancel =
                              new NavigationCancel(t.id, this.serializeUrl(t.extractedUrl), '');
                          eventsSubject.next(navCancel);
-                         t.resolve(false);
+                         if (this.useAppHistoryApi) {
+                           t.reject('guards rejected');
+                         } else {
+                           t.resolve(false);
+                         }
                          return false;
                        }
                        return true;
@@ -756,7 +975,11 @@ export class Router {
                                              t.id, this.serializeUrl(t.extractedUrl),
                                              `At least one route resolver didn't emit any value.`);
                                          eventsSubject.next(navCancel);
-                                         t.resolve(false);
+                                         if (this.useAppHistoryApi) {
+                                           t.reject('empty resolver');
+                                         } else {
+                                           t.resolve(false);
+                                         }
                                        }
                                      }
                                    }),
@@ -809,7 +1032,7 @@ export class Router {
                        (this as {routerState: RouterState}).routerState = t.targetRouterState!;
 
                        if (this.urlUpdateStrategy === 'deferred') {
-                         if (!t.extras.skipLocationChange) {
+                         if (!t.extras.skipLocationChange && !this.useAppHistoryApi) {
                            this.setBrowserUrl(
                                this.rawUrlTree, !!t.extras.replaceUrl, t.id, t.extras.state);
                          }
@@ -845,13 +1068,20 @@ export class Router {
                          // sync code which looks for a value here in order to determine whether or
                          // not to handle a given popstate event or to leave it to the Angular
                          // router.
-                         this.resetUrlToCurrentUrlTree();
+                         if (!this.useAppHistoryApi) {
+                           this.resetUrlToCurrentUrlTree();
+                         }
+
                          const navCancel = new NavigationCancel(
                              t.id, this.serializeUrl(t.extractedUrl),
                              `Navigation ID ${t.id} is not equal to the current navigation id ${
                                  this.navigationId}`);
                          eventsSubject.next(navCancel);
-                         t.resolve(false);
+                         if (this.useAppHistoryApi) {
+                           t.reject('!completed && !errored');
+                         } else {
+                           t.resolve(false);
+                         }
                        }
                        // currentNavigation should always be reset to null here. If navigation was
                        // successful, lastSuccessfulTransition will have already been set. Therefore
@@ -880,7 +1110,11 @@ export class Router {
                          // When redirecting, we need to delay resolving the navigation
                          // promise and push it to the redirect navigation
                          if (!redirecting) {
-                           t.resolve(false);
+                           if (this.useAppHistoryApi) {
+                             t.reject('navigation cancel error && !redirecting');
+                           } else {
+                             t.resolve(false);
+                           }
                          } else {
                            // setTimeout is required so this navigation finishes with
                            // the return EMPTY below. If it isn't allowed to finish
@@ -908,7 +1142,14 @@ export class Router {
                              new NavigationError(t.id, this.serializeUrl(t.extractedUrl), e);
                          eventsSubject.next(navError);
                          try {
-                           t.resolve(this.errorHandler(e));
+                           if (this.useAppHistoryApi) {
+                             // TOOD(atscott): what do we do with the error handler here? We always
+                             // need to reject the promise for app history API so this seems
+                             // somewhat incompatible.
+                             t.reject(this.errorHandler(e));
+                           } else {
+                             t.resolve(this.errorHandler(e));
+                           }
                          } catch (ee) {
                            t.reject(ee);
                          }
@@ -947,9 +1188,16 @@ export class Router {
    * Sets up the location change listener and performs the initial navigation.
    */
   initialNavigation(): void {
-    this.setUpLocationChangeListener();
-    if (this.navigationId === 0) {
-      this.navigateByUrl(this.location.path(true), {replaceUrl: true});
+    if (!this.useAppHistoryApi) {
+      this.setUpLocationChangeListener();
+      if (this.navigationId === 0) {
+        this.navigateByUrl(this.location.path(true), {replaceUrl: true});
+      }
+    } else {
+      this.setUpAppHistoryNavigationListener();
+      // this.setupAlternativeRoutingWithAppHistoryListeners();
+      // Still navigate so we can pipe the navigation through the router?
+      window.history.replaceState({}, '', this.location.path(true));
     }
   }
 
@@ -1145,7 +1393,7 @@ export class Router {
     if (q !== null) {
       q = this.removeEmptyProps(q);
     }
-    return createUrlTree(a, this.currentUrlTree, commands, q, f ?? null);
+    return createUrlTree(a, this.currentUrlTree, commands, q!, f!);
   }
 
   /**
@@ -1184,7 +1432,38 @@ export class Router {
     const urlTree = isUrlTree(url) ? url : this.parseUrl(url);
     const mergedTree = this.urlHandlingStrategy.merge(urlTree, this.rawUrlTree);
 
-    return this.scheduleNavigation(mergedTree, 'imperative', null, extras);
+    if (extras.replaceUrl) {
+      return appHistory.update(mergedTree.toString(), extras as any).then(() => true);
+    } else {
+      return appHistory.push(mergedTree.toString(), extras as any).then(() => true);
+    }
+    // return this.scheduleNavigation(mergedTree, 'imperative', null, extras);
+    // history.pushState(extras, '', mergedTree.toString());
+    // return Promise.resolve(true);
+  }
+
+  async respondWithFor(url: string|UrlTree, extras: NavigationBehaviorOptions = {
+    skipLocationChange: false
+  }): Promise<boolean> {
+    if (typeof ngDevMode === 'undefined' ||
+        ngDevMode && this.isNgZoneEnabled && !NgZone.isInAngularZone()) {
+      this.console.warn(
+          `Navigation triggered outside Angular zone, did you forget to call 'ngZone.run()'?`);
+    }
+
+    const urlTree = isUrlTree(url) ? url : this.parseUrl(url);
+    const mergedTree = this.urlHandlingStrategy.merge(urlTree, this.rawUrlTree);
+    const extractedUrl = this.urlHandlingStrategy.extract(mergedTree);
+    const redirectUrl = await applyRedirectsFn(
+                            this.ngModule.injector, this.configLoader, this.urlSerializer,
+                            extractedUrl, this.config)
+                            .toPromise();
+    // Apply redirects changed the result
+    if (redirectUrl.toString() !== extractedUrl.toString()) {
+      throw new Error('redirect to ' + redirectUrl.toString());
+    }
+
+    return this.scheduleNavigation(extractedUrl, 'imperative', null, extras);
   }
 
   /**
@@ -1370,6 +1649,7 @@ export class Router {
     });
   }
 
+  // This should be done by the app history API
   private setBrowserUrl(
       url: UrlTree, replaceUrl: boolean, id: number, state?: {[key: string]: any}) {
     const path = this.urlSerializer.serialize(url);
@@ -1386,7 +1666,9 @@ export class Router {
     (this as {routerState: RouterState}).routerState = storedState;
     this.currentUrlTree = storedUrl;
     this.rawUrlTree = this.urlHandlingStrategy.merge(this.currentUrlTree, rawUrl);
-    this.resetUrlToCurrentUrlTree();
+    if (!this.useAppHistoryApi) {
+      this.resetUrlToCurrentUrlTree();
+    }
   }
 
   private resetUrlToCurrentUrlTree(): void {
