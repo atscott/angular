@@ -115,7 +115,10 @@ import {UrlTree} from '../url_tree';
  *
  * @publicApi
  */
-@Directive({selector: ':not(a):not(area)[routerLink]'})
+@Directive({
+  selector: ':not(a):not(area)[routerLink]',
+  // host: {'[attr.disabled]': 'disabled || null'}
+})
 export class RouterLink implements OnChanges {
   /**
    * Passed to {@link Router#createUrlTree Router#createUrlTree} as part of the
@@ -180,17 +183,35 @@ export class RouterLink implements OnChanges {
    */
   @Input() relativeTo?: ActivatedRoute|null;
 
-  private commands: any[] = [];
-  private preserve!: boolean;
+  private commands: any[]|null = [];
 
   /** @internal */
   onChanges = new Subject<RouterLink>();
 
   constructor(
       private router: Router, private route: ActivatedRoute,
-      @Attribute('tabindex') tabIndex: string, renderer: Renderer2, el: ElementRef) {
-    if (tabIndex == null) {
-      renderer.setAttribute(el.nativeElement, 'tabindex', '0');
+      @Attribute('tabindex') private readonly tabIndex: string|null|undefined,
+      private readonly renderer: Renderer2, private readonly el: ElementRef) {
+    this.maybeUpdateTabIndex('0');
+  }
+
+  /** @internal */
+  get disabled() {
+    return this.commands === null;
+  }
+
+  /**
+   * Modifies the tab index if there was not a tabindex attribute on the element during
+   * instantiation.
+   */
+  private maybeUpdateTabIndex(v: string|null) {
+    if (this.tabIndex != null) {
+      return;
+    }
+    if (v !== null) {
+      this.renderer.setAttribute(this.el.nativeElement, 'tabindex', v);
+    } else {
+      this.renderer.removeAttribute(this.el.nativeElement, 'tabindex');
     }
   }
 
@@ -205,21 +226,27 @@ export class RouterLink implements OnChanges {
    * Commands to pass to {@link Router#createUrlTree Router#createUrlTree}.
    *   - **array**: commands to pass to {@link Router#createUrlTree Router#createUrlTree}.
    *   - **string**: shorthand for array of commands with just the string, i.e. `['/route']`
-   *   - **null|undefined**: shorthand for an empty array of commands, i.e. `[]`
+   *   - **null|undefined**: effectively disables the `routerLink`
    * @see {@link Router#createUrlTree Router#createUrlTree}
    */
   @Input()
   set routerLink(commands: any[]|string|null|undefined) {
     if (commands != null) {
       this.commands = Array.isArray(commands) ? commands : [commands];
+      this.maybeUpdateTabIndex('0');
     } else {
-      this.commands = [];
+      this.commands = null;
+      this.maybeUpdateTabIndex(null);
     }
   }
 
   /** @nodoc */
   @HostListener('click')
   onClick(): boolean {
+    if (this.urlTree === null) {
+      return true;
+    }
+
     const extras = {
       skipLocationChange: attrBoolValue(this.skipLocationChange),
       replaceUrl: attrBoolValue(this.replaceUrl),
@@ -229,7 +256,10 @@ export class RouterLink implements OnChanges {
     return true;
   }
 
-  get urlTree(): UrlTree {
+  get urlTree(): UrlTree|null {
+    if (this.commands === null) {
+      return null;
+    }
     return this.router.createUrlTree(this.commands, {
       // If the `relativeTo` input is not defined, we want to use `this.route` by default.
       // Otherwise, we should use the value provided by the user in the input.
@@ -320,14 +350,11 @@ export class RouterLinkWithHref implements OnChanges, OnDestroy {
    */
   @Input() relativeTo?: ActivatedRoute|null;
 
-  private commands: any[] = [];
+  private commands: any[]|null = [];
   private subscription: Subscription;
-  // TODO(issue/24571): remove '!'.
-  private preserve!: boolean;
 
   // the url displayed on the anchor element.
-  // TODO(issue/24571): remove '!'.
-  @HostBinding() href!: string;
+  @HostBinding('attr.href') href: string|null = null;
 
   /** @internal */
   onChanges = new Subject<RouterLinkWithHref>();
@@ -346,7 +373,7 @@ export class RouterLinkWithHref implements OnChanges, OnDestroy {
    * Commands to pass to {@link Router#createUrlTree Router#createUrlTree}.
    *   - **array**: commands to pass to {@link Router#createUrlTree Router#createUrlTree}.
    *   - **string**: shorthand for array of commands with just the string, i.e. `['/route']`
-   *   - **null|undefined**: shorthand for an empty array of commands, i.e. `[]`
+   *   - **null|undefined**: Disables the link by removing the `href`
    * @see {@link Router#createUrlTree Router#createUrlTree}
    */
   @Input()
@@ -354,7 +381,7 @@ export class RouterLinkWithHref implements OnChanges, OnDestroy {
     if (commands != null) {
       this.commands = Array.isArray(commands) ? commands : [commands];
     } else {
-      this.commands = [];
+      this.commands = null;
     }
   }
 
@@ -378,7 +405,7 @@ export class RouterLinkWithHref implements OnChanges, OnDestroy {
       return true;
     }
 
-    if (typeof this.target === 'string' && this.target != '_self') {
+    if (typeof this.target === 'string' && this.target != '_self' || this.urlTree === null) {
       return true;
     }
 
@@ -392,10 +419,17 @@ export class RouterLinkWithHref implements OnChanges, OnDestroy {
   }
 
   private updateTargetUrlAndHref(): void {
-    this.href = this.locationStrategy.prepareExternalUrl(this.router.serializeUrl(this.urlTree));
+    if (this.urlTree === null) {
+      this.href = null;
+    } else {
+      this.href = this.locationStrategy.prepareExternalUrl(this.router.serializeUrl(this.urlTree));
+    }
   }
 
-  get urlTree(): UrlTree {
+  get urlTree(): UrlTree|null {
+    if (this.commands === null) {
+      return null;
+    }
     return this.router.createUrlTree(this.commands, {
       // If the `relativeTo` input is not defined, we want to use `this.route` by default.
       // Otherwise, we should use the value provided by the user in the input.
