@@ -6,8 +6,8 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {Location, PopStateEvent} from '@angular/common';
-import {Compiler, Injectable, Injector, NgModuleFactoryLoader, NgModuleRef, NgZone, Type, ɵConsole as Console} from '@angular/core';
+import {DOCUMENT, Location, PopStateEvent} from '@angular/common';
+import {Compiler, Inject, Injectable, Injector, NgModuleFactoryLoader, NgModuleRef, NgZone, Type, ɵConsole as Console} from '@angular/core';
 import {BehaviorSubject, EMPTY, Observable, of, Subject, SubscriptionLike} from 'rxjs';
 import {catchError, filter, finalize, map, switchMap, tap} from 'rxjs/operators';
 
@@ -21,6 +21,7 @@ import {checkGuards} from './operators/check_guards';
 import {recognize} from './operators/recognize';
 import {resolveData} from './operators/resolve_data';
 import {switchTap} from './operators/switch_tap';
+import {NoopPageTitleStrategy, PageTitleStrategy} from './page_title_strategy';
 import {DefaultRouteReuseStrategy, RouteReuseStrategy} from './route_reuse_strategy';
 import {RouterConfigLoader} from './router_config_loader';
 import {ChildrenOutletContexts} from './router_outlet_context';
@@ -479,6 +480,8 @@ export class Router {
    * A strategy for re-using routes.
    */
   routeReuseStrategy: RouteReuseStrategy = new DefaultRouteReuseStrategy();
+
+  pageTitleStrategy: PageTitleStrategy = new NoopPageTitleStrategy();
 
   /**
    * How to handle a navigation request to the current URL. One of:
@@ -1327,6 +1330,7 @@ export class Router {
           this.navigated = true;
           this.lastSuccessfulId = t.id;
           this.currentPageId = t.targetPageId;
+          this.pageTitleStrategy.setTitle(this.routerState.snapshot);
           (this.events as Subject<Event>)
               .next(new NavigationEnd(
                   t.id, this.serializeUrl(t.extractedUrl), this.serializeUrl(this.currentUrlTree)));
@@ -1431,6 +1435,10 @@ export class Router {
     } else {
       this.location.go(path, '', state);
     }
+
+    if (t.targetSnapshot !== null) {
+      this.pageTitleStrategy.setTitle(t.targetSnapshot!);
+    }
   }
 
   private resetStateAndUrl(storedState: RouterState, storedUrl: UrlTree, rawUrl: UrlTree): void {
@@ -1438,6 +1446,7 @@ export class Router {
     this.currentUrlTree = storedUrl;
     this.rawUrlTree = this.urlHandlingStrategy.merge(this.currentUrlTree, rawUrl);
     this.resetUrlToCurrentUrlTree();
+    this.pageTitleStrategy.setTitle(storedState.snapshot);
   }
 
   private resetUrlToCurrentUrlTree(): void {
