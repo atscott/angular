@@ -25,6 +25,7 @@ import { OnInit } from '@angular/core';
 import { QueryList } from '@angular/core';
 import { Renderer2 } from '@angular/core';
 import { SimpleChanges } from '@angular/core';
+import { Title } from '@angular/platform-browser';
 import { Type } from '@angular/core';
 import { Version } from '@angular/core';
 import { ViewContainerRef } from '@angular/core';
@@ -92,6 +93,19 @@ export class ActivationStart {
     snapshot: ActivatedRouteSnapshot;
     // (undocumented)
     toString(): string;
+}
+
+// @public
+export abstract class BasePageTitleStrategy implements OnDestroy {
+    constructor(router: Router);
+    // (undocumented)
+    protected getPageTitle(snapshot: RouterStateSnapshot): string | undefined;
+    // (undocumented)
+    ngOnDestroy(): void;
+    protected onNavigationEnd(): void;
+    // (undocumented)
+    protected readonly router: Router;
+    abstract setTitle(title: string): void;
 }
 
 // @public
@@ -176,6 +190,12 @@ export class DefaultUrlSerializer implements UrlSerializer {
 
 // @public
 export type DetachedRouteHandle = {};
+
+// @public
+export class DocumentPageTitleStrategy extends BasePageTitleStrategy {
+    constructor(titleService: Title, router: Router);
+    setTitle(title: string): void;
+}
 
 // @public
 type Event_2 = RouterEvent | RouteConfigLoadStart | RouteConfigLoadEnd | ChildActivationStart | ChildActivationEnd | ActivationStart | ActivationEnd | Scroll;
