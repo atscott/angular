@@ -25,7 +25,6 @@ import { OnInit } from '@angular/core';
 import { QueryList } from '@angular/core';
 import { Renderer2 } from '@angular/core';
 import { SimpleChanges } from '@angular/core';
-import { Title } from '@angular/platform-browser';
 import { Type } from '@angular/core';
 import { Version } from '@angular/core';
 import { ViewContainerRef } from '@angular/core';
@@ -106,6 +105,10 @@ export abstract class BasePageTitleStrategy implements OnDestroy {
     // (undocumented)
     protected readonly router: Router;
     abstract setTitle(title: string): void;
+    // (undocumented)
+    static ɵfac: i0.ɵɵFactoryDeclaration<BasePageTitleStrategy, never>;
+    // (undocumented)
+    static ɵprov: i0.ɵɵInjectableDeclaration<BasePageTitleStrategy>;
 }
 
 // @public
@@ -193,8 +196,12 @@ export type DetachedRouteHandle = {};
 
 // @public
 export class DocumentPageTitleStrategy extends BasePageTitleStrategy {
-    constructor(titleService: Title, router: Router);
+    constructor(document: Document, router: Router);
     setTitle(title: string): void;
+    // (undocumented)
+    static ɵfac: i0.ɵɵFactoryDeclaration<DocumentPageTitleStrategy, never>;
+    // (undocumented)
+    static ɵprov: i0.ɵɵInjectableDeclaration<DocumentPageTitleStrategy>;
 }
 
 // @public

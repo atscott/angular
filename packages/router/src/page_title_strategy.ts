@@ -6,8 +6,8 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {Injectable, OnDestroy} from '@angular/core';
-import {Title} from '@angular/platform-browser';
+import {DOCUMENT} from '@angular/common';
+import {Inject, Injectable, OnDestroy} from '@angular/core';
 import {filter} from 'rxjs/operators';
 
 import {NavigationEnd} from './events';
@@ -93,7 +93,7 @@ export abstract class BasePageTitleStrategy implements OnDestroy {
  */
 @Injectable({providedIn: 'root'})
 export class DocumentPageTitleStrategy extends BasePageTitleStrategy {
-  constructor(private readonly titleService: Title, router: Router) {
+  constructor(@Inject(DOCUMENT) private readonly document: Document, router: Router) {
     super(router);
   }
 
@@ -103,6 +103,6 @@ export class DocumentPageTitleStrategy extends BasePageTitleStrategy {
    * @param title The `pageTitle` from the deepest primary route.
    */
   override setTitle(title: string): void {
-    this.titleService.setTitle(title);
+    this.document.title = title;
   }
 }
