@@ -871,6 +871,32 @@ describe('Integration', () => {
       });
     });
 
+    it('should reset the URL to last known successful URL when navigation fails',
+       fakeAsync(inject([Router, Location], (router: Router, location: Location) => {
+         const fixture = TestBed.createComponent(RootCmp);
+         advance(fixture);
+
+         router.resetConfig([{path: 'team/:id', component: TeamCmp, canActivate: [AuthGuard]}]);
+
+         router.navigateByUrl('/team/22');
+         advance(fixture);
+         expect(location.path()).toEqual('/team/22');
+
+         expect(fixture.nativeElement).toHaveText('team 22 [ , right:  ]');
+
+         router.navigateByUrl('/team/33', {skipLocationChange: true});
+
+         advance(fixture);
+         expect(fixture.nativeElement).toHaveText('team 33 [ , right:  ]');
+         expect(location.path()).toEqual('/team/22');
+
+         TestBed.inject(AuthGuard).canActivateResult = false;
+
+         router.navigateByUrl('/team/44');
+         advance(fixture);
+         expect(fixture.nativeElement).toHaveText('team 33 [ , right:  ]');
+         expect(location.path()).toEqual('/team/22');
+       })));
 
     it('should eagerly update the URL with urlUpdateStrategy="eagar"',
        fakeAsync(inject([Router, Location], (router: Router, location: Location) => {

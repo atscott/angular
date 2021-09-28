@@ -397,15 +397,7 @@ export class Router {
    */
   private currentUrlTree: UrlTree;
   /**
-   * Meant to represent the entire browser url after a successful navigation. In the life of a
-   * navigation transition:
-   * 1. The rawUrl represents the full URL that's being navigated to
-   * 2. We apply redirects, which might only apply to _part_ of the URL (due to
-   * `UrlHandlingStrategy`).
-   * 3. Right before activation (because we assume activation will succeed), we update the
-   * rawUrlTree to be a combination of the urlAfterRedirects (again, this might only apply to part
-   * of the initial url) and the rawUrl of the transition (which was the original navigation url in
-   * its full form).
+   * Meant to represent the entire browser url after a successful navigation.
    */
   private rawUrlTree: UrlTree;
   /**
@@ -592,7 +584,7 @@ export class Router {
 
     this.resetConfig(config);
     this.currentUrlTree = createEmptyUrlTree();
-    this.rawUrlTree = this.currentUrlTree;
+    this.rawUrlTree = this.parseUrl(this.location.path(true));
     this.browserUrlTree = this.currentUrlTree;
 
     this.configLoader = new RouterConfigLoader(loader, compiler, onLoadStart, onLoadEnd);
@@ -602,7 +594,7 @@ export class Router {
       id: 0,
       targetPageId: 0,
       currentUrlTree: this.currentUrlTree,
-      currentRawUrl: this.currentUrlTree,
+      currentRawUrl: this.rawUrlTree,
       extractedUrl: this.urlHandlingStrategy.extract(this.currentUrlTree),
       urlAfterRedirects: this.urlHandlingStrategy.extract(this.currentUrlTree),
       rawUrl: this.currentUrlTree,
@@ -727,7 +719,7 @@ export class Router {
                                eventsSubject.next(routesRecognized);
                              }));
                        } else {
-                         const processPreviousUrl = urlTransition && this.rawUrlTree &&
+                         const processPreviousUrl = urlTransition &&
                              this.urlHandlingStrategy.shouldProcessUrl(this.rawUrlTree);
                          /* When the current URL shouldn't be processed, but the previous one was,
                           * we handle this "error condition" by navigating to the previously
@@ -749,10 +741,11 @@ export class Router {
                          } else {
                            /* When neither the current or previous URL can be processed, do nothing
                             * other than update router's internal reference to the current "settled"
-                            * URL. This way the next navigation will be coming from the current URL
-                            * in the browser.
+                            * URL (this is done in `finalize` when completed is `true`). This way
+                            * the next navigation will be coming from the current URL in the
+                            * browser.
                             */
-                           this.rawUrlTree = t.rawUrl;
+                           completed = true;
                            t.resolve(null);
                            return EMPTY;
                          }
@@ -885,14 +878,13 @@ export class Router {
                         happen *before* activating. */
                      tap((t: NavigationTransition) => {
                        this.currentUrlTree = t.urlAfterRedirects!;
-                       this.rawUrlTree =
-                           this.urlHandlingStrategy.merge(t.urlAfterRedirects!, t.rawUrl);
 
                        (this as {routerState: RouterState}).routerState = t.targetRouterState!;
 
                        if (this.urlUpdateStrategy === 'deferred') {
                          if (!t.extras.skipLocationChange) {
-                           this.setBrowserUrl(this.rawUrlTree, t);
+                           this.setBrowserUrl(
+                               this.urlHandlingStrategy.merge(t.urlAfterRedirects!, t.rawUrl), t);
                          }
                          this.browserUrlTree = t.urlAfterRedirects!;
                        }
@@ -922,6 +914,8 @@ export class Router {
                          const cancelationReason = `Navigation ID ${
                              t.id} is not equal to the current navigation id ${this.navigationId}`;
                          this.cancelNavigationTransition(t, cancelationReason);
+                       } else if (completed) {
+                         this.rawUrlTree = this.parseUrl(this.location.path(true));
                        }
                        // currentNavigation should always be reset to null here. If navigation was
                        // successful, lastSuccessfulTransition will have already been set. Therefore
@@ -1476,7 +1470,7 @@ export class Router {
         // TODO(atscott): resetting the `browserUrlTree` should really be done in `resetState`.
         // Investigate if this can be done by running TGP.
         this.browserUrlTree = t.currentUrlTree;
-        this.resetUrlToCurrentUrlTree();
+        this.resetUrlTo(t.currentRawUrl);
       } else {
         // The browser URL and router state was not updated before the navigation cancelled so
         // there's no restoration needed.
@@ -1489,24 +1483,18 @@ export class Router {
       if (restoringFromCaughtError) {
         this.resetState(t);
       }
-      this.resetUrlToCurrentUrlTree();
+      this.resetUrlTo(t.currentRawUrl);
     }
   }
 
   private resetState(t: NavigationTransition): void {
     (this as {routerState: RouterState}).routerState = t.currentRouterState;
     this.currentUrlTree = t.currentUrlTree;
-    // Note here that we use the urlHandlingStrategy to get the reset `rawUrlTree` because it may be
-    // configured to handle only part of the navigation URL. This means we would only want to reset
-    // the part of the navigation handled by the Angular router rather than the whole URL. In
-    // addition, the URLHandlingStrategy may be configured to specifically preserve parts of the URL
-    // when merging, such as the query params so they are not lost on a refresh.
-    this.rawUrlTree = this.urlHandlingStrategy.merge(this.currentUrlTree, t.rawUrl);
   }
 
-  private resetUrlToCurrentUrlTree(): void {
+  private resetUrlTo(rawUrlTree: UrlTree): void {
     this.location.replaceState(
-        this.urlSerializer.serialize(this.rawUrlTree), '',
+        this.urlSerializer.serialize(rawUrlTree), '',
         this.generateNgRouterState(this.lastSuccessfulId, this.currentPageId));
   }
 
