@@ -26,11 +26,10 @@ function isUrlHandlingStrategy(opts: ExtraOptions|
  */
 export function setupTestingRouter(
     urlSerializer: UrlSerializer, contexts: ChildrenOutletContexts, location: Location,
-    compiler: Compiler, injector: Injector, routes: Route[][],
-    opts?: ExtraOptions|UrlHandlingStrategy, urlHandlingStrategy?: UrlHandlingStrategy,
-    routeReuseStrategy?: RouteReuseStrategy) {
-  const router =
-      new Router(null!, urlSerializer, contexts, location, injector, compiler, flatten(routes));
+    compiler: Compiler, injector: Injector, routes: Route[][], opts: ExtraOptions,
+    urlHandlingStrategy?: UrlHandlingStrategy, routeReuseStrategy?: RouteReuseStrategy) {
+  const router = new Router(
+      null!, urlSerializer, contexts, location, injector, compiler, flatten(routes), opts);
   if (opts) {
     // Handle deprecated argument ordering.
     if (isUrlHandlingStrategy(opts)) {

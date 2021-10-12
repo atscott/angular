@@ -446,6 +446,8 @@ export class Scroll {
   }
 }
 
+export class OutletActivationStart {}
+
 /**
  * Router events that allow you to track the lifecycle of the router.
  *
@@ -480,4 +482,4 @@ export class Scroll {
  * @publicApi
  */
 export type Event = RouterEvent|RouteConfigLoadStart|RouteConfigLoadEnd|ChildActivationStart|
-    ChildActivationEnd|ActivationStart|ActivationEnd|Scroll;
+    ChildActivationEnd|ActivationStart|ActivationEnd|Scroll|OutletActivationStart;

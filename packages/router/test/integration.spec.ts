@@ -12,7 +12,7 @@ import {ChangeDetectionStrategy, Component, EventEmitter, Injectable, NgModule, 
 import {ComponentFixture, fakeAsync, inject, TestBed, tick} from '@angular/core/testing';
 import {By} from '@angular/platform-browser/src/dom/debug/by';
 import {expect} from '@angular/platform-browser/testing/src/matchers';
-import {ActivatedRoute, ActivatedRouteSnapshot, ActivationEnd, ActivationStart, CanActivate, CanDeactivate, ChildActivationEnd, ChildActivationStart, DefaultUrlSerializer, DetachedRouteHandle, Event, GuardsCheckEnd, GuardsCheckStart, Navigation, NavigationCancel, NavigationEnd, NavigationError, NavigationStart, ParamMap, Params, PreloadAllModules, PreloadingStrategy, PRIMARY_OUTLET, Resolve, ResolveEnd, ResolveStart, RouteConfigLoadEnd, RouteConfigLoadStart, Router, RouteReuseStrategy, RouterEvent, RouterLink, RouterLinkWithHref, RouterModule, RouterPreloader, RouterStateSnapshot, RoutesRecognized, RunGuardsAndResolvers, UrlHandlingStrategy, UrlSegmentGroup, UrlSerializer, UrlTree} from '@angular/router';
+import {ActivatedRoute, ActivatedRouteSnapshot, ActivationEnd, ActivationStart, CanActivate, CanDeactivate, ChildActivationEnd, ChildActivationStart, DefaultUrlSerializer, DetachedRouteHandle, Event, GuardsCheckEnd, GuardsCheckStart, Navigation, NavigationCancel, NavigationEnd, NavigationError, NavigationStart, OutletActivationStart, ParamMap, Params, PreloadAllModules, PreloadingStrategy, PRIMARY_OUTLET, Resolve, ResolveEnd, ResolveStart, RouteConfigLoadEnd, RouteConfigLoadStart, Router, RouteReuseStrategy, RouterEvent, RouterLink, RouterLinkWithHref, RouterModule, RouterPreloader, RouterStateSnapshot, RoutesRecognized, RunGuardsAndResolvers, UrlHandlingStrategy, UrlSegmentGroup, UrlSerializer, UrlTree} from '@angular/router';
 import {EMPTY, Observable, Observer, of, Subscription, SubscriptionLike} from 'rxjs';
 import {delay, filter, first, map, mapTo, tap} from 'rxjs/operators';
 
@@ -4469,11 +4469,12 @@ describe('Integration', () => {
 
          router.resetConfig([{path: 'user/:name', component: UserCmp}]);
 
-         const recordedEvents: any[] = [];
+         let recordedEvents: any[] = [];
          router.events.forEach(e => recordedEvents.push(e));
 
          router.navigateByUrl('/user/fedor');
          advance(fixture);
+         recordedEvents = recordedEvents.filter(e => !(e instanceof OutletActivationStart));
 
          expect(fixture.nativeElement).toHaveText('user fedor');
          expect(recordedEvents[3] instanceof ChildActivationStart).toBe(true);
@@ -6050,6 +6051,7 @@ describe('Testing router options', () => {
 });
 
 function expectEvents(events: Event[], pairs: any[]) {
+  events = events.filter(e => !(e instanceof OutletActivationStart));
   expect(events.length).toEqual(pairs.length);
   for (let i = 0; i < events.length; ++i) {
     expect((<any>events[i].constructor).name).toBe(pairs[i][0].name);
