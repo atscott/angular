@@ -7,7 +7,7 @@
  */
 
 import {NavigationCancellationCode} from './events';
-import {NavigationBehaviorOptions} from './models';
+import {NavigationBehaviorOptions, RedirectCommand} from './models';
 import {isUrlTree, UrlSerializer, UrlTree} from './url_tree';
 
 export const NAVIGATION_CANCELING_ERROR = 'ngNavigationCancelingError';
@@ -21,7 +21,7 @@ export type RedirectingNavigationCancelingError = NavigationCancelingError&{
 };
 
 export function redirectingNavigationError(
-    urlSerializer: UrlSerializer, redirect: UrlTree): RedirectingNavigationCancelingError {
+    urlSerializer: UrlSerializer, redirect: UrlTree|RedirectCommand): RedirectingNavigationCancelingError {
   const {redirectTo, navigationBehaviorOptions} =
       isUrlTree(redirect) ? {redirectTo: redirect, navigationBehaviorOptions: undefined} : redirect;
   const error = navigationCancelingError(
