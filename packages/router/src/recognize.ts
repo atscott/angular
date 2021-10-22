@@ -72,18 +72,8 @@ export class Recognizer {
 
     const rootNode = new TreeNode<ActivatedRouteSnapshot>(root, children);
     const routeState = new RouterStateSnapshot(this.url, rootNode);
-    this.inheritParamsAndData(routeState._root);
+    inheritParamsAndData(routeState._root, this.paramsInheritanceStrategy);
     return routeState;
-  }
-
-  inheritParamsAndData(routeNode: TreeNode<ActivatedRouteSnapshot>): void {
-    const route = routeNode.value;
-
-    const i = inheritedParamsDataResolve(route, this.paramsInheritanceStrategy);
-    route.params = Object.freeze(i.params);
-    route.data = Object.freeze(i.data);
-
-    routeNode.children.forEach(n => this.inheritParamsAndData(n));
   }
 
   processSegmentGroup(config: Route[], segmentGroup: UrlSegmentGroup, outlet: string):
@@ -218,7 +208,7 @@ export class Recognizer {
   }
 }
 
-function sortActivatedRouteSnapshots(nodes: TreeNode<ActivatedRouteSnapshot>[]): void {
+export function sortActivatedRouteSnapshots(nodes: TreeNode<ActivatedRouteSnapshot>[]): void {
   nodes.sort((a, b) => {
     if (a.value.outlet === PRIMARY_OUTLET) return -1;
     if (b.value.outlet === PRIMARY_OUTLET) return 1;
@@ -248,7 +238,7 @@ function hasEmptyPathConfig(node: TreeNode<ActivatedRouteSnapshot>) {
  * children from each duplicate. This is necessary because different outlets can match a single
  * empty path route config and the results need to then be merged.
  */
-function mergeEmptyPathMatches(nodes: Array<TreeNode<ActivatedRouteSnapshot>>):
+export function mergeEmptyPathMatches(nodes: Array<TreeNode<ActivatedRouteSnapshot>>):
     Array<TreeNode<ActivatedRouteSnapshot>> {
   const result: Array<TreeNode<ActivatedRouteSnapshot>> = [];
   // The set of nodes which contain children that were merged from two duplicate empty path nodes.
@@ -280,7 +270,7 @@ function mergeEmptyPathMatches(nodes: Array<TreeNode<ActivatedRouteSnapshot>>):
   return result.filter(n => !mergedNodes.has(n));
 }
 
-function checkOutletNameUniqueness(nodes: TreeNode<ActivatedRouteSnapshot>[]): void {
+export function checkOutletNameUniqueness(nodes: TreeNode<ActivatedRouteSnapshot>[]): void {
   const names: {[k: string]: ActivatedRouteSnapshot} = {};
   nodes.forEach(n => {
     const routeWithSameOutletName = names[n.value.outlet];
@@ -293,7 +283,7 @@ function checkOutletNameUniqueness(nodes: TreeNode<ActivatedRouteSnapshot>[]): v
   });
 }
 
-function getSourceSegmentGroup(segmentGroup: UrlSegmentGroup): UrlSegmentGroup {
+export function getSourceSegmentGroup(segmentGroup: UrlSegmentGroup): UrlSegmentGroup {
   let s = segmentGroup;
   while (s._sourceSegment) {
     s = s._sourceSegment;
@@ -301,7 +291,7 @@ function getSourceSegmentGroup(segmentGroup: UrlSegmentGroup): UrlSegmentGroup {
   return s;
 }
 
-function getPathIndexShift(segmentGroup: UrlSegmentGroup): number {
+export function getPathIndexShift(segmentGroup: UrlSegmentGroup): number {
   let s = segmentGroup;
   let res = (s._segmentIndexShift ? s._segmentIndexShift : 0);
   while (s._sourceSegment) {
@@ -311,10 +301,22 @@ function getPathIndexShift(segmentGroup: UrlSegmentGroup): number {
   return res - 1;
 }
 
-function getData(route: Route): Data {
+export function getData(route: Route): Data {
   return route.data || {};
 }
 
-function getResolve(route: Route): ResolveData {
+export function getResolve(route: Route): ResolveData {
   return route.resolve || {};
+}
+
+export function inheritParamsAndData(
+    routeNode: TreeNode<ActivatedRouteSnapshot>,
+    paramsInheritanceStrategy: ParamsInheritanceStrategy): void {
+  const route = routeNode.value;
+
+  const i = inheritedParamsDataResolve(route, paramsInheritanceStrategy);
+  route.params = Object.freeze(i.params);
+  route.data = Object.freeze(i.data);
+
+  routeNode.children.forEach(n => inheritParamsAndData(n, paramsInheritanceStrategy));
 }

@@ -8,8 +8,6 @@
 
 import {NgModuleRef} from '@angular/core';
 import {fakeAsync, TestBed, tick} from '@angular/core/testing';
-import {ActivatedRouteSnapshot} from '@angular/router';
-import {TreeNode} from '@angular/router/src/utils/tree';
 import {Observable, of} from 'rxjs';
 import {delay, tap} from 'rxjs/operators';
 
@@ -204,7 +202,7 @@ describe('applyRedirects', () => {
 
       applyRedirects(testModule.injector, <any>loader, serializer, tree('a/b'), config)
           .forEach(r => {
-            expectTreeToBe(r, '/a/b');
+            expectTreeToBe(r.urlTree, '/a/b');
             expect((config[0] as any)._loadedConfig).toBe(loadedConfig);
           });
     });
@@ -239,7 +237,7 @@ describe('applyRedirects', () => {
       }];
 
       applyRedirects(<any>injector, <any>loader, serializer, tree('a/b'), config).forEach(r => {
-        expectTreeToBe(r, '/a/b');
+        expectTreeToBe(r.urlTree, '/a/b');
       });
     });
 
@@ -333,7 +331,7 @@ describe('applyRedirects', () => {
       applyRedirects(<any>injector, <any>loader, serializer, tree('a/b'), config)
           .subscribe(
               (r) => {
-                expectTreeToBe(r, '/a/b');
+                expectTreeToBe(r.urlTree, '/a/b');
               },
               (e) => {
                 throw 'Should not reach';
@@ -362,7 +360,7 @@ describe('applyRedirects', () => {
       applyRedirects(<any>injector, <any>loader, serializer, tree('a/b'), config)
           .subscribe(
               (r) => {
-                expectTreeToBe(r, '/a/b');
+                expectTreeToBe(r.urlTree, '/a/b');
                 expect(passedUrlSegments.length).toBe(2);
                 expect(passedUrlSegments[0].path).toBe('a');
                 expect(passedUrlSegments[1].path).toBe('b');
@@ -396,7 +394,7 @@ describe('applyRedirects', () => {
       applyRedirects(<any>injector, <any>loader, serializer, tree('a/b'), config)
           .subscribe(
               (r) => {
-                expectTreeToBe(r, '/a/b');
+                expectTreeToBe(r.urlTree, '/a/b');
                 expect(passedUrlSegments.length).toBe(2);
                 expect(passedUrlSegments[0].path).toBe('a');
                 expect(passedUrlSegments[1].path).toBe('b');
@@ -417,7 +415,7 @@ describe('applyRedirects', () => {
       ];
 
       applyRedirects(testModule.injector, <any>loader, serializer, tree(''), config).forEach(r => {
-        expectTreeToBe(r, 'a');
+        expectTreeToBe(r.urlTree, 'a');
         expect((config[1] as any)._loadedConfig).toBe(loadedConfig);
       });
     });
@@ -442,7 +440,7 @@ describe('applyRedirects', () => {
       applyRedirects(testModule.injector, <any>loader, serializer, tree('a?k2'), config)
           .subscribe(
               r => {
-                expectTreeToBe(r, 'a?k2');
+                expectTreeToBe(r.urlTree, 'a?k2');
                 expect((config[0] as any)._loadedConfig).toBe(loadedConfig);
               },
               (e) => {
@@ -1029,7 +1027,7 @@ describe('applyRedirects', () => {
             },
           ])
           .subscribe(
-              (tree: UrlTree) => {
+              ({urlTree: tree}) => {
                 expect(tree.toString()).toEqual('/b(aux:b)');
                 expect(tree.root.children['primary'].toString()).toEqual('b');
                 expect(tree.root.children['aux']).toBeDefined();
@@ -1055,8 +1053,8 @@ describe('applyRedirects', () => {
                },
              ])
              .subscribe(
-                 (tree: UrlTree) => {
-                   expect(tree.toString()).toEqual('/b');
+                 ({urlTree}) => {
+                   expect(urlTree.toString()).toEqual('/b');
                  },
                  () => {
                    fail('should not be reached');
@@ -1072,7 +1070,7 @@ describe('applyRedirects', () => {
             {path: 'modal', component: ComponentB, outlet: 'popup'},
           ])
           .subscribe(
-              (tree: UrlTree) => {
+              ({urlTree: tree}) => {
                 expect(tree.toString()).toEqual('/(popup:modal)');
               },
               (e) => {
@@ -1130,14 +1128,14 @@ describe('applyRedirects', () => {
     }
     config.push({path: 'match', component: ComponentA});
     applyRedirects(testModule.injector, null!, serializer, tree('match'), config).forEach(r => {
-      expectTreeToBe(r, 'match');
+      expectTreeToBe(r.urlTree, 'match');
     });
   });
 });
 
-function checkRedirect(config: Routes, url: string, callback: any): void {
+function checkRedirect(config: Routes, url: string, callback: (t: UrlTree) => void): void {
   applyRedirects(TestBed, null!, new DefaultUrlSerializer(), tree(url), config)
-      .subscribe(callback, e => {
+      .subscribe((r) => callback(r.urlTree), e => {
         throw e;
       });
 }

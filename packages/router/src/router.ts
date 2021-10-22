@@ -692,7 +692,8 @@ export class Router {
                              // ApplyRedirects
                              applyRedirects(
                                  this.ngModule.injector, this.configLoader, this.urlSerializer,
-                                 this.config),
+                                 this.config, this.paramsInheritanceStrategy,
+                                 this.rootComponentType, this.relativeLinkResolution),
 
                              // Update the currentNavigation
                              // `urlAfterRedirects` is guaranteed to be set after this point
