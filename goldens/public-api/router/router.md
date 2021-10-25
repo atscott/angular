@@ -25,6 +25,7 @@ import { OnInit } from '@angular/core';
 import { QueryList } from '@angular/core';
 import { Renderer2 } from '@angular/core';
 import { SimpleChanges } from '@angular/core';
+import { Title } from '@angular/platform-browser';
 import { Type } from '@angular/core';
 import { Version } from '@angular/core';
 import { ViewContainerRef } from '@angular/core';
@@ -101,7 +102,6 @@ export abstract class BasePageTitleStrategy implements OnDestroy {
     protected getPageTitle(snapshot: RouterStateSnapshot): string | undefined;
     // (undocumented)
     ngOnDestroy(): void;
-    protected onNavigationEnd(): void;
     // (undocumented)
     protected readonly router: Router;
     abstract setTitle(title: string): void;
@@ -118,6 +118,16 @@ export abstract class BaseRouteReuseStrategy implements RouteReuseStrategy {
     shouldDetach(route: ActivatedRouteSnapshot): boolean;
     shouldReuseRoute(future: ActivatedRouteSnapshot, curr: ActivatedRouteSnapshot): boolean;
     store(route: ActivatedRouteSnapshot, detachedTree: DetachedRouteHandle): void;
+}
+
+// @public
+export class BrowserPageTitleStrategy extends BasePageTitleStrategy {
+    constructor(title: Title, router: Router);
+    setTitle(title: string): void;
+    // (undocumented)
+    static ɵfac: i0.ɵɵFactoryDeclaration<BrowserPageTitleStrategy, never>;
+    // (undocumented)
+    static ɵprov: i0.ɵɵInjectableDeclaration<BrowserPageTitleStrategy>;
 }
 
 // @public
@@ -193,16 +203,6 @@ export class DefaultUrlSerializer implements UrlSerializer {
 
 // @public
 export type DetachedRouteHandle = {};
-
-// @public
-export class DocumentPageTitleStrategy extends BasePageTitleStrategy {
-    constructor(document: Document, router: Router);
-    setTitle(title: string): void;
-    // (undocumented)
-    static ɵfac: i0.ɵɵFactoryDeclaration<DocumentPageTitleStrategy, never>;
-    // (undocumented)
-    static ɵprov: i0.ɵɵInjectableDeclaration<DocumentPageTitleStrategy>;
-}
 
 // @public
 type Event_2 = RouterEvent | RouteConfigLoadStart | RouteConfigLoadEnd | ChildActivationStart | ChildActivationEnd | ActivationStart | ActivationEnd | Scroll;

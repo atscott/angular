@@ -1,7 +1,7 @@
 // #docplaster
 import {NgModule} from '@angular/core';
 import {Title} from '@angular/platform-browser';
-import {BasePageTitleStrategy, DocumentPageTitleStrategy, Router, RouterModule, Routes} from '@angular/router';  // CLI imports router
+import {BasePageTitleStrategy, BrowserPageTitleStrategy, Router, RouterModule, Routes} from '@angular/router';  // CLI imports router
 
 // #docregion page-title
 const routes: Routes = [
@@ -44,6 +44,6 @@ export class TemplatePageTitleStrategy extends BasePageTitleStrategy {
 })
 export class AppRoutingModule {
   // #docregion page-title
-  constructor(title: DocumentPageTitleStrategy) {}
+  constructor(title: BrowserPageTitleStrategy) {}
   // #enddocregion page-title
 }

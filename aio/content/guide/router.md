@@ -232,8 +232,8 @@ The one difference is that you place child routes in a `children` array within t
 
 Each page in your application should have a unique title so that they can be identified in the browser history.
 The `Router` sets the document's title using the `pageTitle` property in the route data when using the 
-`DocumentPageTitleStrategy`. All you need to do to enable this in your application is inject the `DocumentPageTitleStrategy`
-somewhere in your application. In this example, we inject `DocumentPageTitleStrategy` in the `AppRoutingModule` constructor:
+`BrowserPageTitleStrategy`. All you need to do to enable this in your application is inject the `BrowserPageTitleStrategy`
+somewhere in your application. In this example, we inject `BrowserPageTitleStrategy` in the `AppRoutingModule` constructor:
 
 <code-example path="router/src/app/app-routing.module.10.ts" region="page-title" header="AppRoutingModule (excerpt)">
 </code-example>

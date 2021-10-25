@@ -13,7 +13,7 @@ import {Title} from '@angular/platform-browser';
 import {Router, RouterModule} from '@angular/router';
 import {RouterTestingModule} from '@angular/router/testing';
 
-import {BasePageTitleStrategy, DocumentPageTitleStrategy} from '../src';
+import {BasePageTitleStrategy, BrowserPageTitleStrategy} from '../src';
 
 describe('page title strategy', () => {
   it('does not set page title by default (so that the feature is non-breaking)', fakeAsync(() => {
@@ -34,7 +34,7 @@ describe('page title strategy', () => {
        expect(document.title).toBe('before');
      }));
 
-  describe('DocumentPageTitleStrategy', () => {
+  describe('BrowserPageTitleStrategy', () => {
     let router: Router;
     let document: Document;
 
@@ -47,7 +47,7 @@ describe('page title strategy', () => {
       });
       router = TestBed.inject(Router);
       document = TestBed.inject(DOCUMENT);
-      TestBed.inject(DocumentPageTitleStrategy);
+      TestBed.inject(BrowserPageTitleStrategy);
     });
 
     it('sets page title from data', fakeAsync(() => {
@@ -183,7 +183,6 @@ export class RootCmp {
 
 @NgModule({
   declarations: [BlankCmp],
-  entryComponents: [BlankCmp],
   imports: [RouterModule],
 })
 export class TestModule {

@@ -6,8 +6,8 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {DOCUMENT} from '@angular/common';
-import {Inject, Injectable, OnDestroy} from '@angular/core';
+import {Injectable, OnDestroy} from '@angular/core';
+import {Title} from '@angular/platform-browser';
 import {filter} from 'rxjs/operators';
 
 import {NavigationEnd} from './events';
@@ -51,12 +51,7 @@ export abstract class BasePageTitleStrategy implements OnDestroy {
   /** Performs the actual setting of the page title. */
   abstract setTitle(title: string): void;
 
-  /**
-   * Gets and sets the page title from the router state.
-   *
-   * Called after the `NavigationEnd` event emits from the `Router`.
-   */
-  protected onNavigationEnd(): void {
+  private onNavigationEnd(): void {
     const routerState = this.router.routerState.snapshot;
     const title = this.getPageTitle(routerState);
     if (title !== undefined) {
@@ -86,23 +81,23 @@ export abstract class BasePageTitleStrategy implements OnDestroy {
 }
 
 /**
- * A service which sets the document page title after a router navigation.
+ * A service which sets the browser page title after a router navigation.
  *
  * @publicApi
  * @see BasePageTitleStrategy
  */
 @Injectable({providedIn: 'root'})
-export class DocumentPageTitleStrategy extends BasePageTitleStrategy {
-  constructor(@Inject(DOCUMENT) private readonly document: Document, router: Router) {
+export class BrowserPageTitleStrategy extends BasePageTitleStrategy {
+  constructor(private readonly title: Title, router: Router) {
     super(router);
   }
 
   /**
-   * Sets the title of the document to the given value.
+   * Sets the title of the browser to the given value.
    *
    * @param title The `pageTitle` from the deepest primary route.
    */
   override setTitle(title: string): void {
-    this.document.title = title;
+    this.title.setTitle(title);
   }
 }
