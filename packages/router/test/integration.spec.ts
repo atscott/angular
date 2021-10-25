@@ -5330,28 +5330,28 @@ describe('Integration', () => {
        })));
 
     it('should work with wildcard route',
-       fakeAsync(inject([Router, Location], (router: Router, location: Location) => {
-         @Component({selector: 'lazy', template: 'lazy-loaded'})
-         class LazyLoadedComponent {
-         }
+        fakeAsync(inject([Router, Location], (router: Router, location: Location) => {
+          @Component({selector: 'lazy', template: 'lazy-loaded'})
+          class LazyLoadedComponent {
+          }
 
-         @NgModule({
-           declarations: [LazyLoadedComponent],
-           imports: [RouterModule.forChild([{path: '', component: LazyLoadedComponent}])],
-         })
-         class LazyLoadedModule {
-         }
+          @NgModule({
+            declarations: [LazyLoadedComponent],
+            imports: [RouterModule.forChild([{path: '', component: LazyLoadedComponent}])],
+          })
+          class LazyLoadedModule {
+          }
 
-         const fixture = createRoot(router, RootCmp);
+          const fixture = createRoot(router, RootCmp);
 
-         router.resetConfig([{path: '**', loadChildren: () => LazyLoadedModule}]);
+          router.resetConfig([{path: '**', loadChildren: () => LazyLoadedModule}]);
 
-         router.navigateByUrl('/lazy');
-         advance(fixture);
+          router.navigateByUrl('/lazy');
+          advance(fixture);
 
-         expect(location.path()).toEqual('/lazy');
-         expect(fixture.nativeElement).toHaveText('lazy-loaded');
-       })));
+          expect(location.path()).toEqual('/lazy');
+          expect(fixture.nativeElement).toHaveText('lazy-loaded');
+        })));
 
     describe('preloading', () => {
       let log: string[] = [];

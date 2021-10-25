@@ -8,7 +8,7 @@
 
 import {ActivatedRoute} from './router_state';
 import {Params, PRIMARY_OUTLET} from './shared';
-import {UrlSegment, UrlSegmentGroup, UrlTree} from './url_tree';
+import {equalSegments, UrlSegment, UrlSegmentGroup, UrlTree} from './url_tree';
 import {forEach, last, shallowEqual} from './utils/collection';
 
 export function createUrlTree(
@@ -67,7 +67,7 @@ function replaceSegment(
     newSegment: UrlSegmentGroup): UrlSegmentGroup {
   const children: {[key: string]: UrlSegmentGroup} = {};
   forEach(current.children, (c: UrlSegmentGroup, outletName: string) => {
-    if (c === oldSegment) {
+    if (equalConsumedPaths(c, oldSegment)) {
       children[outletName] = newSegment;
     } else {
       children[outletName] = replaceSegment(c, oldSegment, newSegment);
@@ -75,6 +75,15 @@ function replaceSegment(
   });
   return new UrlSegmentGroup(current.segments, children);
 }
+
+function equalConsumedPaths(
+    a: UrlSegmentGroup|null|undefined, b: UrlSegmentGroup|null|undefined): boolean {
+  if (!a?.segments || !b?.segments) {
+    return a == b;
+  }
+  return equalSegments(a.segments, b.segments) && equalConsumedPaths(a.parent, b.parent);
+}
+
 
 class Navigation {
   constructor(

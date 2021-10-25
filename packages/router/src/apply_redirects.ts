@@ -112,14 +112,13 @@ class ApplyRedirects {
     const expanded$ =
         this.expandSegmentGroup(this.ngModule, this.config, rootSegmentGroup, PRIMARY_OUTLET);
     const urlTrees$ = expanded$.pipe(map((expanded: CombinedResult) => {
+      const urlTree = this.createUrlTree(
+          squashSegmentGroup(expanded.group), this.urlTree.queryParams, this.urlTree.fragment);
       // Use Object.freeze to prevent readers of the Router state from modifying it outside of a
       // navigation, resulting in the router being out of sync with the browser.
       const root = new ActivatedRouteSnapshot(
-          [], Object.freeze({}), Object.freeze({...this.urlTree.queryParams}),
-          this.urlTree.fragment, {}, PRIMARY_OUTLET, this.rootComponentType, null,
-          this.urlTree.root, -1, {});
-      const urlTree = this.createUrlTree(
-          squashSegmentGroup(expanded.group), this.urlTree.queryParams, this.urlTree.fragment);
+          [], Object.freeze({}), Object.freeze({...urlTree.queryParams}), urlTree.fragment, {},
+          PRIMARY_OUTLET, this.rootComponentType, null, urlTree.root, -1, {});
       const rootNode = new TreeNode<ActivatedRouteSnapshot>(root, expanded.trees);
       const state = new RouterStateSnapshot(urlTree.toString(), rootNode);
       inheritParamsAndData(state._root, this.paramsInheritanceStrategy);
@@ -146,12 +145,11 @@ class ApplyRedirects {
     const expanded$ =
         this.expandSegmentGroup(this.ngModule, this.config, tree.root, PRIMARY_OUTLET);
     const mapped$ = expanded$.pipe(map((expanded: CombinedResult) => {
-      const root = new ActivatedRouteSnapshot(
-          [], Object.freeze({}), Object.freeze({...this.urlTree.queryParams}),
-          this.urlTree.fragment, {}, PRIMARY_OUTLET, this.rootComponentType, null,
-          this.urlTree.root, -1, {});
       const urlTree =
           this.createUrlTree(squashSegmentGroup(expanded.group), tree.queryParams, tree.fragment);
+      const root = new ActivatedRouteSnapshot(
+          [], Object.freeze({}), Object.freeze({...urlTree.queryParams}), urlTree.fragment, {},
+          PRIMARY_OUTLET, this.rootComponentType, null, urlTree.root, -1, {});
       const rootNode = new TreeNode<ActivatedRouteSnapshot>(root, expanded.trees);
       const state = new RouterStateSnapshot(urlTree.toString(), rootNode);
       inheritParamsAndData(state._root, this.paramsInheritanceStrategy);
@@ -346,37 +344,31 @@ class ApplyRedirects {
   private matchSegmentAgainstRoute(
       ngModule: NgModuleRef<any>, rawSegmentGroup: UrlSegmentGroup, route: Route,
       segments: UrlSegment[], outlet: string): Observable<CombinedResult> {
+    let snapshot: ActivatedRouteSnapshot;
+    let consumedSegments: UrlSegment[] = [];
+    let rawSlicedSegments: UrlSegment[] = [];
     if (route.path === '**') {
+      consumedSegments = segments;
       const params = segments.length > 0 ? lastOf(segments)!.parameters : {};
-      const snapshot = new ActivatedRouteSnapshot(
+      snapshot = new ActivatedRouteSnapshot(
           segments, params, Object.freeze({...this.urlTree.queryParams}), this.urlTree.fragment,
           getData(route), getOutlet(route), route.component!, route,
           getSourceSegmentGroup(rawSegmentGroup),
           getPathIndexShift(rawSegmentGroup) + segments.length, getResolve(route));
-      const childTrees = [new TreeNode<ActivatedRouteSnapshot>(snapshot, [])];
-      if (route.loadChildren) {
-        const loaded$ = route._loadedConfig ? of(route._loadedConfig) :
-                                              this.configLoader.load(ngModule.injector, route);
-        return loaded$.pipe(map((cfg: LoadedRouterConfig) => {
-          route._loadedConfig = cfg;
-          return createCombinedResult(new UrlSegmentGroup(segments, {}), childTrees);
-        }));
-      }
+    } else {
+      const result = match(rawSegmentGroup, route, segments);
+      if (!result.matched) return noMatch(rawSegmentGroup);
 
-      return of(createCombinedResult(new UrlSegmentGroup(segments, {}), childTrees));
+      consumedSegments = result.consumedSegments;
+      rawSlicedSegments = segments.slice(result.lastChild);
+      snapshot = new ActivatedRouteSnapshot(
+          consumedSegments, result.parameters, Object.freeze({...this.urlTree.queryParams}),
+          this.urlTree.fragment, getData(route), getOutlet(route), route.component!, route,
+          getSourceSegmentGroup(rawSegmentGroup),
+          getPathIndexShift(rawSegmentGroup) + consumedSegments.length, getResolve(route));
     }
 
-    const {matched, consumedSegments, lastChild, parameters} =
-        match(rawSegmentGroup, route, segments);
-    if (!matched) return noMatch(rawSegmentGroup);
-
-    const rawSlicedSegments = segments.slice(lastChild);
     const childConfig$ = this.getChildConfig(ngModule, route, segments);
-    const snapshot = new ActivatedRouteSnapshot(
-        consumedSegments, parameters, Object.freeze({...this.urlTree.queryParams}),
-        this.urlTree.fragment, getData(route), getOutlet(route), route.component!, route,
-        getSourceSegmentGroup(rawSegmentGroup),
-        getPathIndexShift(rawSegmentGroup) + consumedSegments.length, getResolve(route));
 
     return childConfig$.pipe(mergeMap((routerConfig: LoadedRouterConfig) => {
       const childModule = routerConfig.module;

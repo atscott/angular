@@ -30,7 +30,10 @@ export function applyRedirects(
       t => applyRedirectsFn(
                moduleInjector, configLoader, urlSerializer, t.extractedUrl, config,
                paramsInheritanceStrategy, rootComponentType, relativeLinkResolution)
-               .pipe(map(
-                   result =>
-                       ({...t, urlAfterRedirects: result.urlTree, targetSnapshot: result.state}))));
+               .pipe(map(result => ({
+                           ...t,
+                           urlAfterRedirects: result.urlTree,
+                           _targetSnapshot: result.state,
+                           targetSnapshot: result.state
+                         }))));
 }
