@@ -18,7 +18,6 @@ import {Event, GuardsCheckEnd, GuardsCheckStart, NavigationCancel, NavigationEnd
 import {activateRoutes} from './operators/activate_routes';
 import {applyRedirects} from './operators/apply_redirects';
 import {checkGuards} from './operators/check_guards';
-import {recognize} from './operators/recognize';
 import {resolveData} from './operators/resolve_data';
 import {switchTap} from './operators/switch_tap';
 import {DefaultRouteReuseStrategy, RouteReuseStrategy} from './route_reuse_strategy';
@@ -703,12 +702,6 @@ export class Router {
                                  finalUrl: t.urlAfterRedirects
                                };
                              }),
-
-                             // Recognize
-                             //  recognize(
-                             //      this.rootComponentType, this.config,
-                             //      (url) => this.serializeUrl(url),
-                             //      this.paramsInheritanceStrategy, this.relativeLinkResolution),
 
                              // Update URL if in `eager` update mode
                              tap(t => {

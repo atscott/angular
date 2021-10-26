@@ -9,7 +9,6 @@
 import {TestBed} from '@angular/core/testing';
 import {applyRedirects} from '../src/apply_redirects';
 import {Routes} from '../src/config';
-import {Recognizer} from '../src/recognize';
 import {ActivatedRouteSnapshot, RouterStateSnapshot} from '../src/router_state';
 import {Params, PRIMARY_OUTLET} from '../src/shared';
 import {DefaultUrlSerializer, UrlTree} from '../src/url_tree';
@@ -647,19 +646,20 @@ describe('recognize', async () => {
 
       it('should not persist a primary segment beyond the boundary of a named outlet match',
          async () => {
-           const s = new Recognizer(
-                         RootComponent,
-                         [
-                           {
-                             path: '',
-                             component: ComponentA,
-                             outlet: 'a',
-                             children: [{path: 'b', component: ComponentB}],
-                           },
-                         ],
-                         tree('/b'), '/b', 'emptyOnly', 'corrected')
-                         .recognize();
-           expect(s).toBeNull();
+           try {
+             await recognize(
+                 [
+                   {
+                     path: '',
+                     component: ComponentA,
+                     outlet: 'a',
+                     children: [{path: 'b', component: ComponentB}],
+                   },
+                 ],
+                 '/b');
+             fail('Should only match if navigation was to `/(a:b)`');
+           } catch (e) {
+           }
          });
     });
   });

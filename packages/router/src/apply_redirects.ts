@@ -566,13 +566,13 @@ class ApplyRedirects {
  * children become the children of `s`. Think of this like a 'squash', merging the child segment
  * group into the parent.
  */
-function mergeTrivialChildren(s: UrlSegmentGroup): UrlSegmentGroup {
-  if (s.numberOfChildren === 1 && s.children[PRIMARY_OUTLET]) {
-    const c = s.children[PRIMARY_OUTLET];
-    return new UrlSegmentGroup(s.segments.concat(c.segments), c.children);
+function mergeTrivialChildren(segmentGroup: UrlSegmentGroup): UrlSegmentGroup {
+  if (segmentGroup.numberOfChildren === 1 && segmentGroup.children[PRIMARY_OUTLET]) {
+    const child = segmentGroup.children[PRIMARY_OUTLET];
+    return new UrlSegmentGroup(segmentGroup.segments.concat(child.segments), child.children);
   }
 
-  return s;
+  return segmentGroup;
 }
 
 /**
@@ -581,7 +581,7 @@ function mergeTrivialChildren(s: UrlSegmentGroup): UrlSegmentGroup {
  * group into something like `/a(aux:)`, where `aux` is an empty child segment.
  */
 function squashSegmentGroup(segmentGroup: UrlSegmentGroup): UrlSegmentGroup {
-  const newChildren = {} as any;
+  const newChildren: {[outlet: string]: UrlSegmentGroup} = {};
   for (const childOutlet of Object.keys(segmentGroup.children)) {
     const child = segmentGroup.children[childOutlet];
     const childCandidate = squashSegmentGroup(child);

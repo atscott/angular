@@ -6,9 +6,11 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
+import {TestBed} from '@angular/core/testing';
+
+import {applyRedirects} from '../src/apply_redirects';
 import {Routes} from '../src/config';
 import {createRouterState} from '../src/create_router_state';
-import {recognize} from '../src/recognize';
 import {DefaultRouteReuseStrategy} from '../src/route_reuse_strategy';
 import {ActivatedRoute, advanceActivatedRoute, createEmptyState, RouterState, RouterStateSnapshot} from '../src/router_state';
 import {PRIMARY_OUTLET} from '../src/shared';
@@ -24,17 +26,14 @@ describe('create router state', () => {
   const emptyState = () =>
       createEmptyState(new (UrlTree as any)(new UrlSegmentGroup([], {}), {}, null!), RootComponent);
 
-  it('should create new state', () => {
-    const state = createRouterState(
-        reuseStrategy,
-        createState(
-            [
-              {path: 'a', component: ComponentA},
-              {path: 'b', component: ComponentB, outlet: 'left'},
-              {path: 'c', component: ComponentC, outlet: 'right'}
-            ],
-            'a(left:b//right:c)'),
-        emptyState());
+  it('should create new state', async () => {
+    const snapshot = await createState(
+        [
+          {path: 'a', component: ComponentA}, {path: 'b', component: ComponentB, outlet: 'left'},
+          {path: 'c', component: ComponentC, outlet: 'right'}
+        ],
+        'a(left:b//right:c)');
+    const state = createRouterState(reuseStrategy, snapshot, emptyState());
 
     checkActivatedRoute(state.root, RootComponent);
 
@@ -44,16 +43,17 @@ describe('create router state', () => {
     checkActivatedRoute(c[2], ComponentC, 'right');
   });
 
-  it('should reuse existing nodes when it can', () => {
+  it('should reuse existing nodes when it can', async () => {
     const config = [
       {path: 'a', component: ComponentA}, {path: 'b', component: ComponentB, outlet: 'left'},
       {path: 'c', component: ComponentC, outlet: 'left'}
     ];
 
-    const prevState =
-        createRouterState(reuseStrategy, createState(config, 'a(left:b)'), emptyState());
+    let snapshot = await createState(config, 'a(left:b)');
+    const prevState = createRouterState(reuseStrategy, snapshot, emptyState());
     advanceState(prevState);
-    const state = createRouterState(reuseStrategy, createState(config, 'a(left:c)'), prevState);
+    snapshot = await createState(config, 'a(left:c)');
+    const state = createRouterState(reuseStrategy, snapshot, prevState);
 
     expect(prevState.root).toBe(state.root);
     const prevC = (prevState as any).children(prevState.root);
@@ -64,7 +64,7 @@ describe('create router state', () => {
     checkActivatedRoute(currC[1], ComponentC, 'left');
   });
 
-  it('should handle componentless routes', () => {
+  it('should handle componentless routes', async () => {
     const config = [{
       path: 'a/:id',
       children:
@@ -72,11 +72,11 @@ describe('create router state', () => {
     }];
 
 
-    const prevState = createRouterState(
-        reuseStrategy, createState(config, 'a/1;p=11/(b//right:c)'), emptyState());
+    let snapshot = await createState(config, 'a/1;p=11/(b//right:c)');
+    const prevState = createRouterState(reuseStrategy, snapshot, emptyState());
     advanceState(prevState);
-    const state =
-        createRouterState(reuseStrategy, createState(config, 'a/2;p=22/(b//right:c)'), prevState);
+    snapshot = await createState(config, 'a/2;p=22/(b//right:c)');
+    const state = createRouterState(reuseStrategy, snapshot, prevState);
 
     expect(prevState.root).toBe(state.root);
     const prevP = (prevState as any).firstChild(prevState.root)!;
@@ -92,31 +92,33 @@ describe('create router state', () => {
     checkActivatedRoute(currC[1], ComponentB, 'right');
   });
 
-  it('should not retrieve routes when `shouldAttach` is always false', () => {
+  it('should not retrieve routes when `shouldAttach` is always false', async () => {
     const config = [
       {path: 'a', component: ComponentA}, {path: 'b', component: ComponentB, outlet: 'left'},
       {path: 'c', component: ComponentC, outlet: 'left'}
     ];
     spyOn(reuseStrategy, 'retrieve');
 
-    const prevState =
-        createRouterState(reuseStrategy, createState(config, 'a(left:b)'), emptyState());
+    let snapshot = await createState(config, 'a(left:b)');
+    const prevState = createRouterState(reuseStrategy, snapshot, emptyState());
     advanceState(prevState);
-    createRouterState(reuseStrategy, createState(config, 'a(left:c)'), prevState);
+    snapshot = await createState(config, 'a(left:c)');
+    createRouterState(reuseStrategy, snapshot, prevState);
     expect(reuseStrategy.retrieve).not.toHaveBeenCalled();
   });
 
-  it('should consistently represent future and current state', () => {
+  it('should consistently represent future and current state', async () => {
     const config = [
       {path: '', pathMatch: 'full', component: ComponentA},
       {path: 'product/:id', component: ComponentB}
     ];
     spyOn(reuseStrategy, 'shouldReuseRoute').and.callThrough();
-    const previousState = createRouterState(reuseStrategy, createState(config, ''), emptyState());
+    let snapshot = await createState(config, '');
+    const previousState = createRouterState(reuseStrategy, snapshot, emptyState());
     advanceState(previousState);
     (reuseStrategy.shouldReuseRoute as jasmine.Spy).calls.reset();
-
-    createRouterState(reuseStrategy, createState(config, 'product/30'), previousState);
+    snapshot = await createState(config, 'product/30');
+    createRouterState(reuseStrategy, snapshot, previousState);
 
     // One call for the root and one call for each of the children
     expect(reuseStrategy.shouldReuseRoute).toHaveBeenCalledTimes(2);
@@ -127,10 +129,10 @@ describe('create router state', () => {
     const current2 = reuseCalls.argsFor(1)[1];
 
     // Routing from '' to 'product/30'
-    expect(current1._routerState.url).toEqual('');
-    expect(future1._routerState.url).toEqual('product/30');
-    expect(current2._routerState.url).toEqual('');
-    expect(future2._routerState.url).toEqual('product/30');
+    expect(current1._routerState.url).toEqual('/');
+    expect(future1._routerState.url).toEqual('/product/30');
+    expect(current2._routerState.url).toEqual('/');
+    expect(future2._routerState.url).toEqual('/product/30');
   });
 });
 
@@ -143,10 +145,18 @@ function advanceNode(node: TreeNode<ActivatedRoute>): void {
   node.children.forEach(advanceNode);
 }
 
-function createState(config: Routes, url: string): RouterStateSnapshot {
-  let res: RouterStateSnapshot = undefined!;
-  recognize(RootComponent, config, tree(url), url).forEach(s => res = s);
-  return res;
+async function createState(config: Routes, url: string): Promise<RouterStateSnapshot> {
+  return await recognize(config, url);
+}
+
+async function recognize(
+    config: Routes, url: string, paramsInheritanceStrategy: 'emptyOnly'|'always' = 'emptyOnly',
+    relativeLinkResolution: 'legacy'|'corrected' = 'legacy'): Promise<RouterStateSnapshot> {
+  const r = await applyRedirects(
+                TestBed, null!, new DefaultUrlSerializer(), tree(url), config,
+                paramsInheritanceStrategy, RootComponent, relativeLinkResolution)
+                .toPromise();
+  return r.state;
 }
 
 function checkActivatedRoute(
