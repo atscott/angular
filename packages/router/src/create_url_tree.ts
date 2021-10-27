@@ -67,7 +67,7 @@ function replaceSegment(
     newSegment: UrlSegmentGroup): UrlSegmentGroup {
   const children: {[key: string]: UrlSegmentGroup} = {};
   forEach(current.children, (c: UrlSegmentGroup, outletName: string) => {
-    if (equalConsumedPaths(c, oldSegment)) {
+    if (c === oldSegment) {
       children[outletName] = newSegment;
     } else {
       children[outletName] = replaceSegment(c, oldSegment, newSegment);
@@ -78,12 +78,44 @@ function replaceSegment(
 
 function equalConsumedPaths(
     a: UrlSegmentGroup|null|undefined, b: UrlSegmentGroup|null|undefined): boolean {
-  if (!a?.segments || !b?.segments) {
-    return a == b;
-  }
-  return equalSegments(a.segments, b.segments) && equalConsumedPaths(a.parent, b.parent);
+  return segmentGroupConsumedPath(a) === segmentGroupConsumedPath(b);
 }
 
+/**
+ * Walks up the `UrlSegmentGroup` tree, collecting the consumed outlets and URL segments. This can
+ * give as a unique identity for a given `UrlSegmentGroup` and allows us to compare
+ * `UrlSegmentGroup`s without needing them to have equal references. Note that we need to also
+ * compare the outlets because outlets can have empty paths, which means that two segments of
+ * different outlets would consume the same URL parts, but be targetting different outlets.
+ */
+function segmentGroupConsumedPath(group: UrlSegmentGroup|null|undefined) {
+  const segmentGroupPath: UrlSegmentGroup[] = [];
+  let outletsPath: string[] = [];
+  while (group) {
+    // Create a new `UrlSegmentGroup` so we can modify the children
+    const filteredGroup = new UrlSegmentGroup(group.segments, group.children);
+    filteredGroup._sourceSegment = group;
+    const lastChild = last(segmentGroupPath);
+    if (lastChild) {
+      for (const [childOutlet, child] of Object.entries(group.children)) {
+        if (child === lastChild._sourceSegment) {
+          filteredGroup.children = {[childOutlet]: lastChild};
+          if (childOutlet !== last(outletsPath)) {
+            outletsPath.push(childOutlet);
+          }
+          break;
+        }
+      }
+    }
+    segmentGroupPath.push(filteredGroup);
+    group = group.parent;
+  }
+  const consumedUrlPath = segmentGroupPath.length === 0 ?
+      '' :
+      new UrlTree(last(segmentGroupPath)!, {}, null).toString();
+  const consumedOutletPath = outletsPath.length === 0 ? PRIMARY_OUTLET : outletsPath.join(',');
+  return consumedUrlPath + consumedOutletPath;
+}
 
 class Navigation {
   constructor(
@@ -164,8 +196,8 @@ function findStartingPosition(nav: Navigation, tree: UrlTree, route: ActivatedRo
     return new Position(tree.root, true, 0);
   }
 
+  const segmentGroup = findTheSegment(route, tree);
   if (route.snapshot._lastPathIndex === -1) {
-    const segmentGroup = route.snapshot._urlSegment;
     // Pathless ActivatedRoute has _lastPathIndex === -1 but should not process children
     // see issue #26224, #13011, #35687
     // However, if the ActivatedRoute is the root we should process children like above.
@@ -175,8 +207,42 @@ function findStartingPosition(nav: Navigation, tree: UrlTree, route: ActivatedRo
 
   const modifier = isMatrixParams(nav.commands[0]) ? 0 : 1;
   const index = route.snapshot._lastPathIndex + modifier;
-  return createPositionApplyingDoubleDots(
-      route.snapshot._urlSegment, index, nav.numberOfDoubleDots);
+  return createPositionApplyingDoubleDots(segmentGroup, index, nav.numberOfDoubleDots);
+}
+
+function findTheSegment(route: ActivatedRoute, tree: UrlTree) {
+  const path = route.pathFromRoot.reverse().map(route => route.snapshot);
+  let currentRoute = path.pop();
+  let currentSegmentGroup = tree.root;
+  const consumedSegments: UrlSegment[] = [];
+  while (currentRoute) {
+    if (currentRoute.outlet !== PRIMARY_OUTLET) {
+      currentSegmentGroup = currentSegmentGroup.children[currentRoute.outlet];
+    }
+    if (currentRoute.url.length === 0) {
+      currentRoute = path.pop();
+      continue;
+    }
+    const routeSegments = currentRoute.url;
+    for (const segment of routeSegments) {
+      let matched = false;
+      while (!matched) {
+        matched = currentSegmentGroup.segments.some(s => equalSegments([s], [segment]));
+        if (!matched) {
+          currentSegmentGroup = currentSegmentGroup.children[PRIMARY_OUTLET];
+          if (!currentSegmentGroup) {
+            return tree.root;
+          }
+        } else {
+          consumedSegments.push(segment);
+        }
+      }
+    }
+    currentRoute = path.pop();
+  }
+  const leftover = currentSegmentGroup.segments.filter(
+      s => !consumedSegments.some(cs => equalSegments([s], [cs])));
+  return currentSegmentGroup;
 }
 
 function createPositionApplyingDoubleDots(
