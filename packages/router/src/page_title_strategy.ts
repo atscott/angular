@@ -31,12 +31,13 @@ import {PRIMARY_OUTLET} from './shared';
  * ```
  *
  * This class be used as a base class for custom title strategies. That is, you can create your own
- * class that extends the `BasePageTitleStrategy`.
+ * class that extends the `PageTitleStrategy`.
  *
  * @publicApi
+ * @see [Page title guide](guide/router#setting-the-page-title)
  */
-@Injectable()
-export abstract class BasePageTitleStrategy implements OnDestroy {
+@Injectable({providedIn: 'root'})
+export class PageTitleStrategy implements OnDestroy {
   private readonly eventsSubscription =
       this.router.events
           .pipe(
@@ -46,10 +47,7 @@ export abstract class BasePageTitleStrategy implements OnDestroy {
             this.onNavigationEnd();
           });
 
-  constructor(protected readonly router: Router) {}
-
-  /** Performs the actual setting of the page title. */
-  abstract setTitle(title: string): void;
+  constructor(protected readonly title: Title, private readonly router: Router) {}
 
   private onNavigationEnd(): void {
     const routerState = this.router.routerState.snapshot;
@@ -60,9 +58,18 @@ export abstract class BasePageTitleStrategy implements OnDestroy {
   }
 
   /**
+   * Sets the title of the browser to the given value.
+   *
+   * @param title The `pageTitle` from the deepest primary route.
+   */
+  setTitle(title: string): void {
+    this.title.setTitle(title);
+  }
+
+  /**
    * @returns The `pageTitle` in the `data` of the deepest primary route.
    */
-  protected getPageTitle(snapshot: RouterStateSnapshot): string|undefined {
+  getPageTitle(snapshot: RouterStateSnapshot): string|undefined {
     let pageTitle: string|undefined;
     let route: ActivatedRouteSnapshot|undefined = snapshot.root;
     while (route !== undefined) {
@@ -77,27 +84,5 @@ export abstract class BasePageTitleStrategy implements OnDestroy {
    */
   ngOnDestroy() {
     this.eventsSubscription.unsubscribe();
-  }
-}
-
-/**
- * A service which sets the browser page title after a router navigation.
- *
- * @publicApi
- * @see BasePageTitleStrategy
- */
-@Injectable({providedIn: 'root'})
-export class BrowserPageTitleStrategy extends BasePageTitleStrategy {
-  constructor(private readonly title: Title, router: Router) {
-    super(router);
-  }
-
-  /**
-   * Sets the title of the browser to the given value.
-   *
-   * @param title The `pageTitle` from the deepest primary route.
-   */
-  override setTitle(title: string): void {
-    this.title.setTitle(title);
   }
 }

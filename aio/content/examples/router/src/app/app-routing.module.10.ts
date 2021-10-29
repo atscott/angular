@@ -1,7 +1,6 @@
 // #docplaster
 import {NgModule} from '@angular/core';
-import {Title} from '@angular/platform-browser';
-import {BasePageTitleStrategy, BrowserPageTitleStrategy, Router, RouterModule, Routes} from '@angular/router';  // CLI imports router
+import {PageTitleStrategy, RouterModule, Routes} from '@angular/router';  // CLI imports router
 
 // #docregion page-title
 const routes: Routes = [
@@ -27,23 +26,19 @@ const routes: Routes = [
 
 
 // #docregion custom-page-title
-export class TemplatePageTitleStrategy extends BasePageTitleStrategy {
-  constructor(router: Router, private readonly title: Title) {
-    super(router);
-  }
-
-  setTitle(title: string) {
+export class TemplatePageTitleStrategy extends PageTitleStrategy {
+  override setTitle(title: string) {
     this.title.setTitle(`My Application | ${title}`);
   }
 }
 // #enddocregion custom-page-title
 
+// #docregion page-title
 @NgModule({
   imports: [RouterModule.forRoot(routes)],
   exports: [RouterModule],
 })
 export class AppRoutingModule {
-  // #docregion page-title
-  constructor(title: BrowserPageTitleStrategy) {}
-  // #enddocregion page-title
+  constructor(title: PageTitleStrategy) {}
 }
+// #enddocregion page-title

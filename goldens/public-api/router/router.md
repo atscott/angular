@@ -96,38 +96,12 @@ export class ActivationStart {
 }
 
 // @public
-export abstract class BasePageTitleStrategy implements OnDestroy {
-    constructor(router: Router);
-    // (undocumented)
-    protected getPageTitle(snapshot: RouterStateSnapshot): string | undefined;
-    // (undocumented)
-    ngOnDestroy(): void;
-    // (undocumented)
-    protected readonly router: Router;
-    abstract setTitle(title: string): void;
-    // (undocumented)
-    static ɵfac: i0.ɵɵFactoryDeclaration<BasePageTitleStrategy, never>;
-    // (undocumented)
-    static ɵprov: i0.ɵɵInjectableDeclaration<BasePageTitleStrategy>;
-}
-
-// @public
 export abstract class BaseRouteReuseStrategy implements RouteReuseStrategy {
     retrieve(route: ActivatedRouteSnapshot): DetachedRouteHandle | null;
     shouldAttach(route: ActivatedRouteSnapshot): boolean;
     shouldDetach(route: ActivatedRouteSnapshot): boolean;
     shouldReuseRoute(future: ActivatedRouteSnapshot, curr: ActivatedRouteSnapshot): boolean;
     store(route: ActivatedRouteSnapshot, detachedTree: DetachedRouteHandle): void;
-}
-
-// @public
-export class BrowserPageTitleStrategy extends BasePageTitleStrategy {
-    constructor(title: Title, router: Router);
-    setTitle(title: string): void;
-    // (undocumented)
-    static ɵfac: i0.ɵɵFactoryDeclaration<BrowserPageTitleStrategy, never>;
-    // (undocumented)
-    static ɵprov: i0.ɵɵInjectableDeclaration<BrowserPageTitleStrategy>;
 }
 
 // @public
@@ -373,6 +347,22 @@ export class OutletContext {
     resolver: ComponentFactoryResolver | null;
     // (undocumented)
     route: ActivatedRoute | null;
+}
+
+// @public
+export class PageTitleStrategy implements OnDestroy {
+    constructor(title: Title, router: Router);
+    // (undocumented)
+    getPageTitle(snapshot: RouterStateSnapshot): string | undefined;
+    // (undocumented)
+    ngOnDestroy(): void;
+    setTitle(title: string): void;
+    // (undocumented)
+    protected readonly title: Title;
+    // (undocumented)
+    static ɵfac: i0.ɵɵFactoryDeclaration<PageTitleStrategy, never>;
+    // (undocumented)
+    static ɵprov: i0.ɵɵInjectableDeclaration<PageTitleStrategy>;
 }
 
 // @public

@@ -13,7 +13,7 @@ import {Title} from '@angular/platform-browser';
 import {Router, RouterModule} from '@angular/router';
 import {RouterTestingModule} from '@angular/router/testing';
 
-import {BasePageTitleStrategy, BrowserPageTitleStrategy} from '../src';
+import {PageTitleStrategy} from '../src';
 
 describe('page title strategy', () => {
   it('does not set page title by default (so that the feature is non-breaking)', fakeAsync(() => {
@@ -47,7 +47,7 @@ describe('page title strategy', () => {
       });
       router = TestBed.inject(Router);
       document = TestBed.inject(DOCUMENT);
-      TestBed.inject(BrowserPageTitleStrategy);
+      TestBed.inject(PageTitleStrategy);
     });
 
     it('sets page title from data', fakeAsync(() => {
@@ -131,14 +131,10 @@ describe('page title strategy', () => {
   describe('custom strategies', () => {
     it('overriding the setTitle method', fakeAsync(() => {
          @Injectable({providedIn: 'root'})
-         class TemplatePageTitleStrategy extends BasePageTitleStrategy {
-           constructor(router: Router, private readonly titleService: Title) {
-             super(router);
-           }
-
+         class TemplatePageTitleStrategy extends PageTitleStrategy {
            // Example of how setTitle could implement a template for the title
            override setTitle(title: string) {
-             this.titleService.setTitle(`My Application | ${title}`);
+             this.title.setTitle(`My Application | ${title}`);
            }
          }
 
