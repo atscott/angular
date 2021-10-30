@@ -706,8 +706,7 @@ export class Router {
                              // Recognize
                              recognize(
                                  this.rootComponentType, this.config,
-                                 (url) => this.serializeUrl(url), this.paramsInheritanceStrategy,
-                                 this.relativeLinkResolution),
+                                 (url) => this.serializeUrl(url), this.paramsInheritanceStrategy),
 
                              // Update URL if in `eager` update mode
                              tap(t => {
@@ -1190,7 +1189,8 @@ export class Router {
     if (q !== null) {
       q = this.removeEmptyProps(q);
     }
-    return createUrlTree(a, this.currentUrlTree, commands, q, f ?? null);
+    return createUrlTree(
+        a, this.currentUrlTree, commands, q, f ?? null, this.relativeLinkResolution);
   }
 
   /**

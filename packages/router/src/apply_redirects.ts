@@ -79,12 +79,6 @@ class ApplyRedirects {
 
   apply(): Observable<UrlTree> {
     const splitGroup = split(this.urlTree.root, [], [], this.config).segmentGroup;
-    // TODO(atscott): creating a new segment removes the _sourceSegment _segmentIndexShift, which is
-    // only necessary to prevent failures in tests which assert exact object matches. The `split` is
-    // now shared between `applyRedirects` and `recognize` but only the `recognize` step needs these
-    // properties. Before the implementations were merged, the `applyRedirects` would not assign
-    // them. We should be able to remove this logic as a "breaking change" but should do some more
-    // investigation into the failures first.
     const rootSegmentGroup = new UrlSegmentGroup(splitGroup.segments, splitGroup.children);
 
     const expanded$ =

@@ -6,14 +6,14 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {ActivatedRoute} from './router_state';
+import {ActivatedRoute, ActivatedRouteSnapshot} from './router_state';
 import {Params, PRIMARY_OUTLET} from './shared';
-import {UrlSegment, UrlSegmentGroup, UrlTree} from './url_tree';
+import {equalSegments, UrlSegment, UrlSegmentGroup, UrlTree} from './url_tree';
 import {forEach, last, shallowEqual} from './utils/collection';
 
 export function createUrlTree(
     route: ActivatedRoute, urlTree: UrlTree, commands: any[], queryParams: Params|null,
-    fragment: string|null): UrlTree {
+    fragment: string|null, relativeLinkResolution: 'legacy'|'corrected' = 'corrected'): UrlTree {
   if (commands.length === 0) {
     return tree(urlTree.root, urlTree.root, urlTree, queryParams, fragment);
   }
@@ -24,7 +24,7 @@ export function createUrlTree(
     return tree(urlTree.root, new UrlSegmentGroup([], {}), urlTree, queryParams, fragment);
   }
 
-  const startingPosition = findStartingPosition(nav, urlTree, route);
+  const startingPosition = findStartingPosition(nav, urlTree, route, relativeLinkResolution);
 
   const segmentGroup = startingPosition.processChildren ?
       updateSegmentGroupChildren(
@@ -150,24 +150,80 @@ class Position {
   }
 }
 
-function findStartingPosition(nav: Navigation, tree: UrlTree, route: ActivatedRoute): Position {
+function findStartingPosition(
+    nav: Navigation, tree: UrlTree, route: ActivatedRoute,
+    relativeLinkResolution: 'legacy'|'corrected' = 'corrected'): Position {
   if (nav.isAbsolute) {
     return new Position(tree.root, true, 0);
   }
 
-  if (route.snapshot._lastPathIndex === -1) {
-    const segmentGroup = route.snapshot._urlSegment;
-    // Pathless ActivatedRoute has _lastPathIndex === -1 but should not process children
+  const [segmentGroup, indexOfLastConsumedSegmentInOutlet] =
+      findTheSegment(route, tree, relativeLinkResolution);
+  if (segmentGroup.parent === null) {
+    return new Position(segmentGroup, true, 0);
+  }
+  if (indexOfLastConsumedSegmentInOutlet === -1) {
+    // Pathless ActivatedRoute can be _lastPathIndex === -1 but should not process children
     // see issue #26224, #13011, #35687
-    // However, if the ActivatedRoute is the root we should process children like above.
-    const processChildren = segmentGroup === tree.root;
-    return new Position(segmentGroup, processChildren, 0);
+    return new Position(segmentGroup, false, 0);
   }
 
   const modifier = isMatrixParams(nav.commands[0]) ? 0 : 1;
-  const index = route.snapshot._lastPathIndex + modifier;
-  return createPositionApplyingDoubleDots(
-      route.snapshot._urlSegment, index, nav.numberOfDoubleDots);
+  const index = indexOfLastConsumedSegmentInOutlet + modifier;
+  return createPositionApplyingDoubleDots(segmentGroup, index, nav.numberOfDoubleDots);
+}
+
+function findTheSegment(
+    route: ActivatedRoute, tree: UrlTree,
+    relativeLinkResolution: 'legacy'|'corrected' = 'corrected'): [UrlSegmentGroup, number] {
+  // The below code should not throw in production, but tests can stub out `ActivatedRoute`
+  // incorrectly.
+  try {
+    let indexOfLastConsumedSegmentInOutlet = -1;
+    const path = route.pathFromRoot.reverse().map(route => route.snapshot);
+    let currentRoute = path.pop();
+    let currentSegmentGroup = tree.root;
+    while (currentRoute) {
+      if (currentRoute.outlet !== PRIMARY_OUTLET) {
+        indexOfLastConsumedSegmentInOutlet = -1;
+        currentSegmentGroup = currentSegmentGroup.children[currentRoute.outlet];
+      }
+      if (currentRoute.url.length === 0) {
+        currentRoute = path.pop();
+        continue;
+      }
+      const routeSegments = currentRoute.url;
+      for (const segment of routeSegments) {
+        let matched = false;
+        while (!matched) {
+          matched = currentSegmentGroup.segments.some(s => equalSegments([s], [segment]));
+          if (!matched) {
+            currentSegmentGroup = currentSegmentGroup.children[PRIMARY_OUTLET];
+            if (!currentSegmentGroup) {
+              return [tree.root, indexOfLastConsumedSegmentInOutlet];
+            }
+          } else {
+            indexOfLastConsumedSegmentInOutlet++;
+          }
+        }
+      }
+      currentRoute = path.pop();
+    }
+    if (relativeLinkResolution === 'legacy') {
+      let current: ActivatedRouteSnapshot|null = route.snapshot;
+      const emptyPathLeaf = true;
+      while (current && emptyPathLeaf) {
+        const emptyPathLeaf = route.snapshot.url.length === 0;
+        current = current.firstChild;
+      }
+      if (emptyPathLeaf) {
+        indexOfLastConsumedSegmentInOutlet *= 2;
+      }
+    }
+    return [currentSegmentGroup, indexOfLastConsumedSegmentInOutlet];
+  } catch (e: unknown) {
+    return [tree.root, -1];
+  }
 }
 
 function createPositionApplyingDoubleDots(

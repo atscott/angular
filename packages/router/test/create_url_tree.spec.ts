@@ -410,8 +410,7 @@ describe('createUrlTree', () => {
 
 function createRoot(tree: UrlTree, commands: any[], queryParams?: Params, fragment?: string) {
   const s = new (ActivatedRouteSnapshot as any)(
-      [], <any>{}, <any>{}, '', <any>{}, PRIMARY_OUTLET, 'someComponent', null, tree.root, -1,
-      <any>null);
+      [], <any>{}, <any>{}, '', <any>{}, PRIMARY_OUTLET, 'someComponent', null, <any>null);
   const a = new (ActivatedRoute as any)(
       new BehaviorSubject(null!), new BehaviorSubject(null!), new BehaviorSubject(null!),
       new BehaviorSubject(null!), new BehaviorSubject(null!), PRIMARY_OUTLET, 'someComponent', s);
@@ -425,9 +424,10 @@ function create(
   if (!segment) {
     expect(segment).toBeDefined();
   }
+  segment.segments.splice(startIndex + 1);
   const s = new (ActivatedRouteSnapshot as any)(
       segment.segments, <any>{}, <any>{}, '', <any>{}, PRIMARY_OUTLET, 'someComponent', null,
-      <any>segment, startIndex, <any>null);
+      <any>null);
   const a = new (ActivatedRoute as any)(
       new BehaviorSubject(null!), new BehaviorSubject(null!), new BehaviorSubject(null!),
       new BehaviorSubject(null!), new BehaviorSubject(null!), PRIMARY_OUTLET, 'someComponent', s);

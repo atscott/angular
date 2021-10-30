@@ -27,13 +27,12 @@ function newObservableError(e: unknown): Observable<RouterStateSnapshot> {
 
 export function recognize(
     rootComponentType: Type<any>|null, config: Routes, urlTree: UrlTree, url: string,
-    paramsInheritanceStrategy: ParamsInheritanceStrategy = 'emptyOnly',
-    relativeLinkResolution: 'legacy'|'corrected' = 'legacy'): Observable<RouterStateSnapshot> {
+    paramsInheritanceStrategy: ParamsInheritanceStrategy =
+        'emptyOnly'): Observable<RouterStateSnapshot> {
   try {
-    const result = new Recognizer(
-                       rootComponentType, config, urlTree, url, paramsInheritanceStrategy,
-                       relativeLinkResolution)
-                       .recognize();
+    const result =
+        new Recognizer(rootComponentType, config, urlTree, url, paramsInheritanceStrategy)
+            .recognize();
     if (result === null) {
       return newObservableError(new NoMatch());
     } else {
@@ -49,14 +48,11 @@ export function recognize(
 export class Recognizer {
   constructor(
       private rootComponentType: Type<any>|null, private config: Routes, private urlTree: UrlTree,
-      private url: string, private paramsInheritanceStrategy: ParamsInheritanceStrategy,
-      private relativeLinkResolution: 'legacy'|'corrected') {}
+      private url: string, private paramsInheritanceStrategy: ParamsInheritanceStrategy) {}
 
   recognize(): RouterStateSnapshot|null {
     const rootSegmentGroup =
-        split(
-            this.urlTree.root, [], [], this.config.filter(c => c.redirectTo === undefined),
-            this.relativeLinkResolution)
+        split(this.urlTree.root, [], [], this.config.filter(c => c.redirectTo === undefined))
             .segmentGroup;
 
     const children = this.processSegmentGroup(this.config, rootSegmentGroup, PRIMARY_OUTLET);
@@ -68,7 +64,7 @@ export class Recognizer {
     // navigation, resulting in the router being out of sync with the browser.
     const root = new ActivatedRouteSnapshot(
         [], Object.freeze({}), Object.freeze({...this.urlTree.queryParams}), this.urlTree.fragment,
-        {}, PRIMARY_OUTLET, this.rootComponentType, null, this.urlTree.root, -1, {});
+        {}, PRIMARY_OUTLET, this.rootComponentType, null, {});
 
     const rootNode = new TreeNode<ActivatedRouteSnapshot>(root, children);
     const routeState = new RouterStateSnapshot(this.url, rootNode);
@@ -161,9 +157,7 @@ export class Recognizer {
       const params = segments.length > 0 ? last(segments)!.parameters : {};
       snapshot = new ActivatedRouteSnapshot(
           segments, params, Object.freeze({...this.urlTree.queryParams}), this.urlTree.fragment,
-          getData(route), getOutlet(route), route.component!, route,
-          getSourceSegmentGroup(rawSegment), getPathIndexShift(rawSegment) + segments.length,
-          getResolve(route));
+          getData(route), getOutlet(route), route.component!, route, getResolve(route));
     } else {
       const result = match(rawSegment, route, segments);
       if (!result.matched) {
@@ -175,8 +169,7 @@ export class Recognizer {
       snapshot = new ActivatedRouteSnapshot(
           consumedSegments, result.parameters, Object.freeze({...this.urlTree.queryParams}),
           this.urlTree.fragment, getData(route), getOutlet(route), route.component!, route,
-          getSourceSegmentGroup(rawSegment),
-          getPathIndexShift(rawSegment) + consumedSegments.length, getResolve(route));
+          getResolve(route));
     }
 
     const childConfig: Route[] = getChildConfig(route);
@@ -186,7 +179,7 @@ export class Recognizer {
         // Filter out routes with redirectTo because we are trying to create activated route
         // snapshots and don't handle redirects here. That should have been done in
         // `applyRedirects`.
-        childConfig.filter(c => c.redirectTo === undefined), this.relativeLinkResolution);
+        childConfig.filter(c => c.redirectTo === undefined));
 
     if (slicedSegments.length === 0 && segmentGroup.hasChildren()) {
       const children = this.processChildren(childConfig, segmentGroup);
@@ -291,24 +284,6 @@ function checkOutletNameUniqueness(nodes: TreeNode<ActivatedRouteSnapshot>[]): v
     }
     names[n.value.outlet] = n.value;
   });
-}
-
-function getSourceSegmentGroup(segmentGroup: UrlSegmentGroup): UrlSegmentGroup {
-  let s = segmentGroup;
-  while (s._sourceSegment) {
-    s = s._sourceSegment;
-  }
-  return s;
-}
-
-function getPathIndexShift(segmentGroup: UrlSegmentGroup): number {
-  let s = segmentGroup;
-  let res = (s._segmentIndexShift ? s._segmentIndexShift : 0);
-  while (s._sourceSegment) {
-    s = s._sourceSegment;
-    res += (s._segmentIndexShift ? s._segmentIndexShift : 0);
-  }
-  return res - 1;
 }
 
 function getData(route: Route): Data {

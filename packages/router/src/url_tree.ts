@@ -223,10 +223,6 @@ export class UrlTree {
  * @publicApi
  */
 export class UrlSegmentGroup {
-  /** @internal */
-  _sourceSegment?: UrlSegmentGroup;
-  /** @internal */
-  _segmentIndexShift?: number;
   /** The parent node in the url tree */
   parent: UrlSegmentGroup|null = null;
 
