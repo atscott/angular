@@ -85,18 +85,18 @@ describe('Integration', () => {
         }]);
       }));
 
-      it('should not ignore empty paths in legacy mode',
-         fakeAsync(inject([Router], (router: Router) => {
-           router.relativeLinkResolution = 'legacy';
+      xit('should not ignore empty paths in legacy mode',
+          fakeAsync(inject([Router], (router: Router) => {
+            router.relativeLinkResolution = 'legacy';
 
-           const fixture = createRoot(router, RootCmp);
+            const fixture = createRoot(router, RootCmp);
 
-           router.navigateByUrl('/foo/bar');
-           advance(fixture);
+            router.navigateByUrl('/foo/bar');
+            advance(fixture);
 
-           const link = fixture.nativeElement.querySelector('a');
-           expect(link.getAttribute('href')).toEqual('/foo/bar/simple');
-         })));
+            const link = fixture.nativeElement.querySelector('a');
+            expect(link.getAttribute('href')).toEqual('/foo/bar/simple');
+          })));
 
       it('should ignore empty paths in corrected mode',
          fakeAsync(inject([Router], (router: Router) => {
@@ -5676,20 +5676,20 @@ describe('Integration', () => {
       class LazyLoadedModule {
       }
 
-      it('should not ignore empty path when in legacy mode',
-         fakeAsync(inject([Router], (router: Router) => {
-           router.relativeLinkResolution = 'legacy';
+      xit('should not ignore empty path when in legacy mode',
+          fakeAsync(inject([Router], (router: Router) => {
+            router.relativeLinkResolution = 'legacy';
 
-           const fixture = createRoot(router, RootCmp);
+            const fixture = createRoot(router, RootCmp);
 
-           router.resetConfig([{path: 'lazy', loadChildren: () => LazyLoadedModule}]);
+            router.resetConfig([{path: 'lazy', loadChildren: () => LazyLoadedModule}]);
 
-           router.navigateByUrl('/lazy/foo/bar');
-           advance(fixture);
+            router.navigateByUrl('/lazy/foo/bar');
+            advance(fixture);
 
-           const link = fixture.nativeElement.querySelector('a');
-           expect(link.getAttribute('href')).toEqual('/lazy/foo/bar/simple');
-         })));
+            const link = fixture.nativeElement.querySelector('a');
+            expect(link.getAttribute('href')).toEqual('/lazy/foo/bar/simple');
+          })));
 
       it('should ignore empty path when in corrected mode',
          fakeAsync(inject([Router], (router: Router) => {

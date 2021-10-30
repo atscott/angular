@@ -79,18 +79,12 @@ class ApplyRedirects {
 
   apply(): Observable<UrlTree> {
     const splitGroup = split(this.urlTree.root, [], [], this.config).segmentGroup;
-    // TODO(atscott): creating a new segment removes the _sourceSegment _segmentIndexShift, which is
-    // only necessary to prevent failures in tests which assert exact object matches. The `split` is
-    // now shared between `applyRedirects` and `recognize` but only the `recognize` step needs these
-    // properties. Before the implementations were merged, the `applyRedirects` would not assign
-    // them. We should be able to remove this logic as a "breaking change" but should do some more
-    // investigation into the failures first.
     const rootSegmentGroup = new UrlSegmentGroup(splitGroup.segments, splitGroup.children);
 
     const expanded$ =
         this.expandSegmentGroup(this.ngModule, this.config, rootSegmentGroup, PRIMARY_OUTLET);
     const urlTrees$ = expanded$.pipe(map((rootSegmentGroup: UrlSegmentGroup) => {
-      return this.createUrlTree(
+      return createUrlTree(
           squashSegmentGroup(rootSegmentGroup), this.urlTree.queryParams, this.urlTree.fragment);
     }));
     return urlTrees$.pipe(catchError((e: any) => {
@@ -114,8 +108,7 @@ class ApplyRedirects {
     const expanded$ =
         this.expandSegmentGroup(this.ngModule, this.config, tree.root, PRIMARY_OUTLET);
     const mapped$ = expanded$.pipe(map((rootSegmentGroup: UrlSegmentGroup) => {
-      return this.createUrlTree(
-          squashSegmentGroup(rootSegmentGroup), tree.queryParams, tree.fragment);
+      return createUrlTree(squashSegmentGroup(rootSegmentGroup), tree.queryParams, tree.fragment);
     }));
     return mapped$.pipe(catchError((e: any): Observable<UrlTree> => {
       if (e instanceof NoMatch) {
@@ -130,13 +123,6 @@ class ApplyRedirects {
     return new Error(`Cannot match any routes. URL Segment: '${e.segmentGroup}'`);
   }
 
-  private createUrlTree(rootCandidate: UrlSegmentGroup, queryParams: Params, fragment: string|null):
-      UrlTree {
-    const root = rootCandidate.segments.length > 0 ?
-        new UrlSegmentGroup([], {[PRIMARY_OUTLET]: rootCandidate}) :
-        rootCandidate;
-    return new UrlTree(root, queryParams, fragment);
-  }
 
   private expandSegmentGroup(
       ngModule: NgModuleRef<any>, routes: Route[], segmentGroup: UrlSegmentGroup,
@@ -502,7 +488,7 @@ function mergeTrivialChildren(s: UrlSegmentGroup): UrlSegmentGroup {
  * (those which have no segments and no children themselves). The latter prevents serializing a
  * group into something like `/a(aux:)`, where `aux` is an empty child segment.
  */
-function squashSegmentGroup(segmentGroup: UrlSegmentGroup): UrlSegmentGroup {
+export function squashSegmentGroup(segmentGroup: UrlSegmentGroup): UrlSegmentGroup {
   const newChildren = {} as any;
   for (const childOutlet of Object.keys(segmentGroup.children)) {
     const child = segmentGroup.children[childOutlet];
@@ -514,4 +500,12 @@ function squashSegmentGroup(segmentGroup: UrlSegmentGroup): UrlSegmentGroup {
   }
   const s = new UrlSegmentGroup(segmentGroup.segments, newChildren);
   return mergeTrivialChildren(s);
+}
+
+export function createUrlTree(
+    rootCandidate: UrlSegmentGroup, queryParams: Params, fragment: string|null): UrlTree {
+  const root = rootCandidate.segments.length > 0 ?
+      new UrlSegmentGroup([], {[PRIMARY_OUTLET]: rootCandidate}) :
+      rootCandidate;
+  return new UrlTree(root, queryParams, fragment);
 }
