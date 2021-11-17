@@ -1,25 +1,40 @@
 // #docregion
-import { Injectable } from '@angular/core';
-import { CanActivate, ActivatedRouteSnapshot, RouterStateSnapshot, Router, UrlTree } from '@angular/router';
+import {Injectable} from '@angular/core';
+import {ActivatedRouteSnapshot, CanActivate, CanMatch, Route, Router, RouterStateSnapshot, UrlTree} from '@angular/router';
 
-import { AuthService } from './auth.service';
+import {AuthService} from './auth.service';
 
 @Injectable({
   providedIn: 'root',
 })
-export class AuthGuard implements CanActivate {
+export class AuthGuard implements CanActivate, CanMatch {
   constructor(private authService: AuthService, private router: Router) {}
 
+<<<<<<< HEAD
   canActivate(
     route: ActivatedRouteSnapshot,
     state: RouterStateSnapshot): true|UrlTree {
+=======
+  canActivate(next: ActivatedRouteSnapshot, state: RouterStateSnapshot): true|UrlTree {
+>>>>>>> cef849fc79 (WIP)
     const url: string = state.url;
 
     return this.checkLogin(url);
   }
 
+  // #enddocregion
+  // #docregion, can-match
+  canMatch(route: Route) {
+    const url = `/${route.path}`;
+    return this.checkLogin(url) === true;
+  }
+  // #enddocregion can-match
+  // #docregion
+
   checkLogin(url: string): true|UrlTree {
-    if (this.authService.isLoggedIn) { return true; }
+    if (this.authService.isLoggedIn) {
+      return true;
+    }
 
     // Store the attempted URL for redirecting
     this.authService.redirectUrl = url;
