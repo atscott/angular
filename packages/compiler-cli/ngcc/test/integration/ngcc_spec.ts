@@ -1524,7 +1524,7 @@ runInEachFileSystem(() => {
              propertiesToConsider: ['esm2015', 'esm5'],
            });
            fail('should have thrown');
-         } catch (e) {
+         } catch (e: any) {
            expect(e.message).toContain(
                'Failed to compile entry-point test-package (`esm2015` as esm2015) due to compilation errors:');
            expect(e.message).toContain('NG1010');
@@ -2826,7 +2826,7 @@ runInEachFileSystem(() => {
                propertiesToConsider: ['es2015']
              });
              fail('should have thrown');
-           } catch (e) {
+           } catch (e: any) {
              expect(e.message).toContain(
                  'Failed to compile entry-point fatal-error (`es2015` as esm2015) due to compilation errors:');
              expect(e.message).toContain('NG2001');
