@@ -106,8 +106,8 @@ export type ResolveData = {
  * @see [Route.loadChildren](api/router/Route#loadChildren)
  * @publicApi
  */
-export type LoadChildrenCallback = () =>
-    Type<any>|NgModuleFactory<any>|Observable<Type<any>>|Promise<NgModuleFactory<any>|Type<any>>;
+export type LoadChildrenCallback = () => Type<any>|NgModuleFactory<any>|Routes|
+    Observable<Type<any>|Routes>|Promise<NgModuleFactory<any>|Type<any>|Routes>;
 
 /**
  *
