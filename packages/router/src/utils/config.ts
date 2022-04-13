@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {EnvironmentInjector} from '@angular/core';
+import {EnvironmentInjector, Type} from '@angular/core';
 import {isStandalone} from '@angular/core/src/render3/jit/module';
 
 import {EmptyOutletComponent} from '../components/empty_outlet';
@@ -21,6 +21,9 @@ export function getLoadedRoutes(route: Route): Route[]|undefined {
 export function getLoadedInjector(route: Route): EnvironmentInjector|undefined {
   return route._loadedInjector;
 }
+export function getLoadedComponent(route: Route): Type<unknown>|undefined {
+  return route._loadedComponent;
+}
 
 export function getProvidersInjector(route: Route): EnvironmentInjector|undefined {
   return route._injector;
@@ -33,6 +36,13 @@ export function validateConfig(
     const route: Route = config[i];
     const fullPath: string = getFullPath(parentPath, route);
     validateNode(route, fullPath, requireStandaloneComponents);
+  }
+}
+
+export function assertStandalone(fullPath: string, component: Type<unknown>|undefined) {
+  if (component && !isStandalone(component)) {
+    throw new Error(
+        `Invalid configuration of route '${fullPath}'. The component must be standalone.`);
   }
 }
 
@@ -54,7 +64,7 @@ function validateNode(route: Route, fullPath: string, requireStandaloneComponent
     if (Array.isArray(route)) {
       throw new Error(`Invalid configuration of route '${fullPath}': Array cannot be specified`);
     }
-    if (!route.component && !route.children && !route.loadChildren &&
+    if (!route.component && !route.loadComponent && !route.children && !route.loadChildren &&
         (route.outlet && route.outlet !== PRIMARY_OUTLET)) {
       throw new Error(`Invalid configuration of route '${
           fullPath}': a componentless route without children or loadChildren cannot have a named outlet set`);
@@ -71,9 +81,13 @@ function validateNode(route: Route, fullPath: string, requireStandaloneComponent
       throw new Error(`Invalid configuration of route '${
           fullPath}': children and loadChildren cannot be used together`);
     }
-    if (route.redirectTo && route.component) {
+    if (route.redirectTo && (route.component || route.loadComponent)) {
       throw new Error(`Invalid configuration of route '${
-          fullPath}': redirectTo and component cannot be used together`);
+          fullPath}': redirectTo and component/loadComponent cannot be used together`);
+    }
+    if (route.component && route.loadComponent) {
+      throw new Error(`Invalid configuration of route '${
+          fullPath}': component and loadComponent cannot be used together`);
     }
     if (route.redirectTo && route.canActivate) {
       throw new Error(
@@ -85,9 +99,10 @@ function validateNode(route: Route, fullPath: string, requireStandaloneComponent
       throw new Error(
           `Invalid configuration of route '${fullPath}': path and matcher cannot be used together`);
     }
-    if (route.redirectTo === void 0 && !route.component && !route.children && !route.loadChildren) {
+    if (route.redirectTo === void 0 && !route.component && !route.loadComponent &&
+        !route.children && !route.loadChildren) {
       throw new Error(`Invalid configuration of route '${
-          fullPath}'. One of the following must be provided: component, redirectTo, children or loadChildren`);
+          fullPath}'. One of the following must be provided: component, loadComponent, redirectTo, children or loadChildren`);
     }
     if (route.path === void 0 && route.matcher === void 0) {
       throw new Error(`Invalid configuration of route '${
@@ -103,9 +118,8 @@ function validateNode(route: Route, fullPath: string, requireStandaloneComponent
       throw new Error(`Invalid configuration of route '{path: "${fullPath}", redirectTo: "${
           route.redirectTo}"}': please provide 'pathMatch'. ${exp}`);
     }
-    if (requireStandaloneComponents && route.component && !isStandalone(route.component)) {
-      throw new Error(
-          `Invalid configuration of route '${fullPath}'. The component must be standalone.`);
+    if (requireStandaloneComponents) {
+      assertStandalone(fullPath, route.component);
     }
   }
   if (route.children) {

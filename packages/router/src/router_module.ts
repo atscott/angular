@@ -64,6 +64,7 @@ export const ROUTER_PROVIDERS: Provider[] = [
   RouterPreloader,
   NoPreloading,
   PreloadAllModules,
+  RouterConfigLoader,
   {provide: ROUTER_CONFIGURATION, useValue: {enableTracing: false}},
   RouterConfigLoader,
 ];

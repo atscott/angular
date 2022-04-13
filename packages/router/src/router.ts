@@ -8,8 +8,8 @@
 
 import {Location, PopStateEvent} from '@angular/common';
 import {Compiler, Injectable, Injector, NgModuleRef, NgZone, Type, ɵConsole as Console} from '@angular/core';
-import {BehaviorSubject, EMPTY, Observable, of, Subject, SubscriptionLike} from 'rxjs';
-import {catchError, filter, finalize, map, switchMap, tap} from 'rxjs/operators';
+import {BehaviorSubject, EMPTY, forkJoin, from, Observable, of, Subject, SubscriptionLike} from 'rxjs';
+import {catchError, defaultIfEmpty, filter, finalize, map, mergeAll, switchMap, takeLast, tap} from 'rxjs/operators';
 
 import {createRouterState} from './create_router_state';
 import {createUrlTree} from './create_url_tree';
@@ -25,7 +25,7 @@ import {TitleStrategy} from './page_title_strategy';
 import {DefaultRouteReuseStrategy, RouteReuseStrategy} from './route_reuse_strategy';
 import {RouterConfigLoader} from './router_config_loader';
 import {ChildrenOutletContexts} from './router_outlet_context';
-import {ActivatedRoute, createEmptyState, RouterState, RouterStateSnapshot} from './router_state';
+import {ActivatedRoute, ActivatedRouteSnapshot, createEmptyState, RouterState, RouterStateSnapshot} from './router_state';
 import {isNavigationCancelingError, navigationCancelingError, Params} from './shared';
 import {DefaultUrlHandlingStrategy, UrlHandlingStrategy} from './url_handling_strategy';
 import {containsTree, createEmptyUrlTree, IsActiveMatchOptions, UrlSerializer, UrlTree} from './url_tree';
@@ -882,6 +882,36 @@ export class Router {
                          skipLocationChange: !!skipLocationChange,
                          replaceUrl: !!replaceUrl,
                        });
+                     }),
+
+                     // --- LOAD COMPONENTS ---
+                     switchTap((t: NavigationTransition) => {
+                       const loadComponents =
+                           (route: ActivatedRouteSnapshot): Array<Observable<void>> => {
+                             const loaders: Array<Observable<void>> = [];
+                             if (route.routeConfig?.loadComponent &&
+                                 !route.routeConfig._loadedComponent) {
+                               loaders.push(this.configLoader.loadComponent(route.routeConfig)
+                                                .pipe(
+                                                    tap(loadedComponent => {
+                                                      route.component = loadedComponent;
+                                                    }),
+                                                    map(() => void 0),
+                                                    ));
+                             }
+                             for (const child of route.children) {
+                               loaders.push(...loadComponents(child));
+                             }
+                             return loaders;
+                           };
+                       // TODO: analyze payload size difference between forkJoin and
+                       // from(...).pipe(mergeAll(), takeLast(1))
+                       // forkJoin is not used in router codebase right now so may incur non-trivial
+                       // bundle size increases
+                       return forkJoin(loadComponents(t.targetSnapshot!.root))
+                           .pipe(defaultIfEmpty([] as void[]));
+                       //  return from(loadComponents(t.targetSnapshot!.root))
+                       //      .pipe(mergeAll(), takeLast(1));
                      }),
 
                      map((t: NavigationTransition) => {
