@@ -11,7 +11,7 @@ import ts from 'typescript';
 
 import {DiagnosticCategoryLabel, NgCompilerOptions} from '../../../core/api';
 import {ErrorCode, ExtendedTemplateDiagnosticName} from '../../../diagnostics';
-import {NgTemplateDiagnostic, TemplateDiagnostic, TemplateTypeChecker} from '../../api';
+import {NgTemplateDiagnostic, TemplateDiagnostic, TemplateQuickFixData, TemplateTypeChecker} from '../../api';
 import {ExtendedTemplateChecker, TemplateCheck, TemplateCheckFactory, TemplateContext} from '../api';
 
 export class ExtendedTemplateCheckerImpl implements ExtendedTemplateChecker {
@@ -67,14 +67,19 @@ export class ExtendedTemplateCheckerImpl implements ExtendedTemplateChecker {
         ...this.partialCtx,
         // Wrap `templateTypeChecker.makeTemplateDiagnostic()` to implicitly provide all the known
         // options.
-        makeTemplateDiagnostic: (span: ParseSourceSpan, message: string, relatedInformation?: {
-          text: string,
-          start: number,
-          end: number,
-          sourceFile: ts.SourceFile,
-        }[]): NgTemplateDiagnostic<ErrorCode> => {
+        makeTemplateDiagnostic: (
+            span: ParseSourceSpan,
+            message: string,
+            relatedInformation?: {
+              text: string,
+              start: number,
+              end: number,
+              sourceFile: ts.SourceFile,
+            }[],
+            quickFix?: TemplateQuickFixData,
+            ): NgTemplateDiagnostic<ErrorCode> => {
           return this.partialCtx.templateTypeChecker.makeTemplateDiagnostic(
-              component, span, category, check.code, message, relatedInformation);
+              component, span, category, check.code, message, relatedInformation, quickFix);
         },
       };
 

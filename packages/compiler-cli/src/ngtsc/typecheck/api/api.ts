@@ -8,8 +8,8 @@
 
 import {AbsoluteSourceSpan, BoundTarget, DirectiveMeta, ParseSourceSpan, SchemaMetadata} from '@angular/compiler';
 import ts from 'typescript';
-import {ErrorCode} from '../../diagnostics';
 
+import {ErrorCode} from '../../diagnostics';
 import {AbsoluteFsPath} from '../../file_system';
 import {Reference} from '../../imports';
 import {ClassPropertyMapping, DirectiveTypeCheckMeta} from '../../metadata';
@@ -43,6 +43,16 @@ export interface TemplateDiagnostic extends ts.Diagnostic {
    * The template id of the component that resulted in this diagnostic.
    */
   templateId: TemplateId;
+
+  quickFix?: TemplateQuickFixData;
+}
+
+export interface TemplateQuickFixData {
+  title: string;
+
+  replacementSpan: ts.TextSpan;
+
+  replacementText: string;
 }
 
 /**

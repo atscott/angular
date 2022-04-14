@@ -19,7 +19,7 @@ import {ClassDeclaration, isNamedClassDeclaration, ReflectionHost} from '../../r
 import {ComponentScopeReader, TypeCheckScopeRegistry} from '../../scope';
 import {isShim} from '../../shims';
 import {getSourceFileOrNull, isSymbolWithValueDeclaration} from '../../util/src/typescript';
-import {DirectiveInScope, ElementSymbol, FullTemplateMapping, GlobalCompletion, NgTemplateDiagnostic, OptimizeFor, PipeInScope, ProgramTypeCheckAdapter, Symbol, TcbLocation, TemplateDiagnostic, TemplateId, TemplateSymbol, TemplateTypeChecker, TypeCheckableDirectiveMeta, TypeCheckingConfig} from '../api';
+import {DirectiveInScope, ElementSymbol, FullTemplateMapping, GlobalCompletion, NgTemplateDiagnostic, OptimizeFor, PipeInScope, ProgramTypeCheckAdapter, Symbol, TcbLocation, TemplateDiagnostic, TemplateId, TemplateQuickFixData, TemplateSymbol, TemplateTypeChecker, TypeCheckableDirectiveMeta, TypeCheckingConfig} from '../api';
 import {makeTemplateDiagnostic} from '../diagnostics';
 
 import {CompletionEngine} from './completion';
@@ -335,13 +335,19 @@ export class TemplateTypeCheckerImpl implements TemplateTypeChecker {
   }
 
   makeTemplateDiagnostic<T extends ErrorCode>(
-      clazz: ts.ClassDeclaration, sourceSpan: ParseSourceSpan, category: ts.DiagnosticCategory,
-      errorCode: T, message: string, relatedInformation?: {
+      clazz: ts.ClassDeclaration,
+      sourceSpan: ParseSourceSpan,
+      category: ts.DiagnosticCategory,
+      errorCode: T,
+      message: string,
+      relatedInformation?: {
         text: string,
         start: number,
         end: number,
         sourceFile: ts.SourceFile,
-      }[]): NgTemplateDiagnostic<T> {
+      }[],
+      quickFix?: TemplateQuickFixData,
+      ): NgTemplateDiagnostic<T> {
     const sfPath = absoluteFromSourceFile(clazz.getSourceFile());
     const fileRecord = this.state.get(sfPath)!;
     const templateId = fileRecord.sourceManager.getTemplateId(clazz);
@@ -350,8 +356,8 @@ export class TemplateTypeCheckerImpl implements TemplateTypeChecker {
     return {
       ...makeTemplateDiagnostic(
           templateId, mapping, sourceSpan, category, ngErrorCode(errorCode), message,
-          relatedInformation),
-      __ngCode: errorCode
+          relatedInformation, quickFix),
+      __ngCode: errorCode,
     };
   }
 

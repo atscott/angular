@@ -10,7 +10,7 @@ import {AST, TmplAstBoundEvent, TmplAstNode} from '@angular/compiler';
 import ts from 'typescript';
 
 import {ErrorCode, ExtendedTemplateDiagnosticName} from '../../../../diagnostics';
-import {NgTemplateDiagnostic} from '../../../api';
+import {NgTemplateDiagnostic, TemplateQuickFixData} from '../../../api';
 import {TemplateCheckFactory, TemplateCheckWithVisitor, TemplateContext} from '../../api';
 
 /**
@@ -33,11 +33,20 @@ class InvalidBananaInBoxCheck extends TemplateCheckWithVisitor<ErrorCode.INVALID
 
     const boundSyntax = node.sourceSpan.toString();
     const expectedBoundSyntax = boundSyntax.replace(`(${name})`, `[(${name.slice(1, -1)})]`);
+    const quickFixData: TemplateQuickFixData = {
+      title: 'Place parentheses inside square brackets',
+      replacementSpan: ts.createTextSpan(
+          node.sourceSpan.start.offset, node.sourceSpan.end.offset - node.sourceSpan.start.offset),
+      replacementText: expectedBoundSyntax,
+    };
     const diagnostic = ctx.makeTemplateDiagnostic(
         node.sourceSpan,
         `In the two-way binding syntax the parentheses should be inside the brackets, ex. '${
             expectedBoundSyntax}'.
-        Find more at https://angular.io/guide/two-way-binding`);
+        Find more at https://angular.io/guide/two-way-binding`,
+        undefined,
+        quickFixData,
+    );
     return [diagnostic];
   }
 }

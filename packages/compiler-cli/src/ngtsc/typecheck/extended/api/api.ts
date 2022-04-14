@@ -11,7 +11,7 @@ import ts from 'typescript';
 
 import {NgCompilerOptions} from '../../../core/api';
 import {ErrorCode, ExtendedTemplateDiagnosticName} from '../../../diagnostics';
-import {NgTemplateDiagnostic, TemplateTypeChecker} from '../../api';
+import {NgTemplateDiagnostic, TemplateQuickFixData, TemplateTypeChecker} from '../../api';
 
 /**
  * A Template Check receives information about the template it's checking and returns
@@ -43,12 +43,17 @@ export interface TemplateContext<Code extends ErrorCode> {
    * Creates a template diagnostic with the given information for the template being processed and
    * using the diagnostic category configured for the extended template diagnostic.
    */
-  makeTemplateDiagnostic(sourceSpan: ParseSourceSpan, message: string, relatedInformation?: {
-    text: string,
-    start: number,
-    end: number,
-    sourceFile: ts.SourceFile,
-  }[]): NgTemplateDiagnostic<Code>;
+  makeTemplateDiagnostic(
+      sourceSpan: ParseSourceSpan,
+      message: string,
+      relatedInformation?: {
+        text: string,
+        start: number,
+        end: number,
+        sourceFile: ts.SourceFile,
+      }[],
+      quickFix?: TemplateQuickFixData,
+      ): NgTemplateDiagnostic<Code>;
 }
 
 /**

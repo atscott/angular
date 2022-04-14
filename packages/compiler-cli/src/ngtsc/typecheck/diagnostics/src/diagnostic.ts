@@ -9,7 +9,7 @@
 import {ParseSourceSpan} from '@angular/compiler';
 import ts from 'typescript';
 
-import {ExternalTemplateSourceMapping, TemplateDiagnostic, TemplateId, TemplateSourceMapping} from '../../api';
+import {ExternalTemplateSourceMapping, TemplateDiagnostic, TemplateId, TemplateQuickFixData, TemplateSourceMapping} from '../../api';
 
 /**
  * Constructs a `ts.Diagnostic` for a given `ParseSourceSpan` within a template.
@@ -22,7 +22,8 @@ export function makeTemplateDiagnostic(
       start: number,
       end: number,
       sourceFile: ts.SourceFile,
-    }[]): TemplateDiagnostic {
+    }[],
+    quickFix?: TemplateQuickFixData): TemplateDiagnostic {
   if (mapping.type === 'direct') {
     let relatedInformation: ts.DiagnosticRelatedInformation[]|undefined = undefined;
     if (relatedMessages !== undefined) {
@@ -52,6 +53,7 @@ export function makeTemplateDiagnostic(
       start: span.start.offset,
       length: span.end.offset - span.start.offset,
       relatedInformation,
+      quickFix,
     };
   } else if (mapping.type === 'indirect' || mapping.type === 'external') {
     // For indirect mappings (template was declared inline, but ngtsc couldn't map it directly
@@ -107,6 +109,7 @@ export function makeTemplateDiagnostic(
       length: span.end.offset - span.start.offset,
       // Show a secondary message indicating the component whose template contains the error.
       relatedInformation,
+      quickFix,
     };
   } else {
     throw new Error(`Unexpected source mapping type: ${(mapping as {type: string}).type}`);

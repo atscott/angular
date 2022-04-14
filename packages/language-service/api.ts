@@ -46,8 +46,15 @@ export type GetTcbResponse = {
   selections: ts.TextSpan[],
 };
 
+export interface TemplateQuickFixData {
+  title: string;
+  replacementSpan: ts.TextSpan;
+  replacementText: string;
+}
+
 export type GetComponentLocationsForTemplateResponse = ts.DocumentSpan[];
 export type GetTemplateLocationForComponentResponse = ts.DocumentSpan|undefined;
+export type GetQuickFixDataForDiagnosticResponse = TemplateQuickFixData|undefined
 
 /**
  * `NgLanguageService` describes an instance of an Angular language service,
@@ -58,6 +65,7 @@ export interface NgLanguageService extends ts.LanguageService {
   getComponentLocationsForTemplate(fileName: string): GetComponentLocationsForTemplateResponse;
   getTemplateLocationForComponent(fileName: string, position: number):
       GetTemplateLocationForComponentResponse;
+  getQuickFixDataForDiagnostic(diagnostic: ts.Diagnostic): GetQuickFixDataForDiagnosticResponse;
 }
 
 export function isNgLanguageService(ls: ts.LanguageService|

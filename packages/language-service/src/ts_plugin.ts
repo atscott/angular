@@ -6,9 +6,10 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
+import {isTemplateDiagnostic} from '@angular/compiler-cli/src/ngtsc/typecheck/diagnostics';
 import * as ts from 'typescript/lib/tsserverlibrary';
 
-import {GetComponentLocationsForTemplateResponse, GetTcbResponse, GetTemplateLocationForComponentResponse, NgLanguageService} from '../api';
+import {GetComponentLocationsForTemplateResponse, GetTcbResponse, GetTemplateLocationForComponentResponse, NgLanguageService, TemplateQuickFixData} from '../api';
 
 import {LanguageService} from './language_service';
 
@@ -164,6 +165,13 @@ export function create(info: ts.server.PluginCreateInfo): NgLanguageService {
     return ngLS.getTemplateLocationForComponent(fileName, position);
   }
 
+  function getQuickFixDataForDiagnostic(diagnostic: ts.Diagnostic): TemplateQuickFixData|undefined {
+    if (!isTemplateDiagnostic(diagnostic)) {
+      return undefined;
+    }
+    return diagnostic.quickFix;
+  }
+
   return {
     ...tsLS,
     getSemanticDiagnostics,
@@ -181,6 +189,7 @@ export function create(info: ts.server.PluginCreateInfo): NgLanguageService {
     getComponentLocationsForTemplate,
     getSignatureHelpItems,
     getTemplateLocationForComponent,
+    getQuickFixDataForDiagnostic,
   };
 }
 

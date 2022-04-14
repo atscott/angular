@@ -12,7 +12,7 @@ import ts from 'typescript';
 import {AbsoluteFsPath} from '../../../../src/ngtsc/file_system';
 import {ErrorCode} from '../../diagnostics';
 
-import {FullTemplateMapping, NgTemplateDiagnostic, TypeCheckableDirectiveMeta} from './api';
+import {FullTemplateMapping, NgTemplateDiagnostic, TemplateQuickFixData, TypeCheckableDirectiveMeta} from './api';
 import {GlobalCompletion} from './completion';
 import {DirectiveInScope, PipeInScope} from './scope';
 import {ElementSymbol, Symbol, TcbLocation, TemplateSymbol} from './symbols';
@@ -180,7 +180,8 @@ export interface TemplateTypeChecker {
         start: number,
         end: number,
         sourceFile: ts.SourceFile,
-      }[]): NgTemplateDiagnostic<T>;
+      }[],
+      quickFix?: TemplateQuickFixData): NgTemplateDiagnostic<T>;
 }
 
 /**
