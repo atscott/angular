@@ -12,7 +12,7 @@ import {BehaviorSubject, EMPTY, Observable, of, Subject, SubscriptionLike} from 
 import {catchError, filter, finalize, map, switchMap, tap} from 'rxjs/operators';
 
 import {createRouterState} from './create_router_state';
-import {createUrlTree} from './create_url_tree';
+import {createSegmentGroupFromRoute, createUrlTree} from './create_url_tree';
 import {Event, GuardsCheckEnd, GuardsCheckStart, NavigationCancel, NavigationEnd, NavigationError, NavigationStart, NavigationTrigger, ResolveEnd, ResolveStart, RouteConfigLoadEnd, RouteConfigLoadStart, RoutesRecognized} from './events';
 import {QueryParamsHandling, Route, Routes} from './models';
 import {activateRoutes} from './operators/activate_routes';
@@ -1555,25 +1555,4 @@ function validateCommands(commands: string[]): void {
 
 function isBrowserTriggeredNavigation(source: 'imperative'|'popstate'|'hashchange') {
   return source !== 'imperative';
-}
-
-function createSegmentGroupFromRoute(route: ActivatedRouteSnapshot): UrlSegmentGroup {
-  let targetGroup: UrlSegmentGroup|undefined;
-
-  function createSegmentGroupFromRouteRecursive(currentRoute: ActivatedRouteSnapshot) {
-    const childOutlets: {[outlet: string]: UrlSegmentGroup} = {};
-    for (const childSnapshot of currentRoute.children) {
-      const root = createSegmentGroupFromRouteRecursive(childSnapshot);
-      childOutlets[childSnapshot.outlet] = root;
-    }
-    const segmentGroup = new UrlSegmentGroup(currentRoute.url, childOutlets);
-    if (currentRoute === route) {
-      targetGroup = segmentGroup;
-    }
-    return segmentGroup;
-  }
-  const rootCandidate = createSegmentGroupFromRouteRecursive(route.root);
-  const rootSegmentGroup = createRoot(rootCandidate);
-
-  return targetGroup ?? rootSegmentGroup;
 }
