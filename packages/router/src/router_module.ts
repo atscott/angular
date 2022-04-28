@@ -7,7 +7,8 @@
  */
 
 import {APP_BASE_HREF, HashLocationStrategy, Location, LOCATION_INITIALIZED, LocationStrategy, PathLocationStrategy, PlatformLocation, ViewportScroller} from '@angular/common';
-import {ANALYZE_FOR_ENTRY_COMPONENTS, APP_BOOTSTRAP_LISTENER, APP_INITIALIZER, ApplicationRef, Compiler, ComponentRef, Inject, Injectable, InjectionToken, Injector, ModuleWithProviders, NgModule, NgProbeToken, OnDestroy, Optional, Provider, SkipSelf} from '@angular/core';
+import {ANALYZE_FOR_ENTRY_COMPONENTS, APP_BOOTSTRAP_LISTENER, APP_INITIALIZER, ApplicationRef, Compiler, ComponentRef, EnvironmentInjector, Inject, Injectable, InjectFlags, InjectionToken, Injector, ModuleWithProviders, NgModule, NgProbeToken, OnDestroy, Optional, Provider, Self, SkipSelf} from '@angular/core';
+import {INJECTOR_SCOPE} from '@angular/core/src/di/scope';
 import {Title} from '@angular/platform-browser';
 import {of, Subject} from 'rxjs';
 
@@ -99,7 +100,10 @@ export function routerNgProbeToken() {
 })
 export class RouterModule {
   // Note: We are injecting the Router so it gets created eagerly...
-  constructor(@Optional() @Inject(ROUTER_FORROOT_GUARD) guard: any, @Optional() router: Router) {}
+  constructor(@Optional() @Inject(ROUTER_FORROOT_GUARD) guard: any, @Optional() router: Router) {
+    if (guard) {
+    }
+  }
 
   /**
    * Creates and configures a module with all the router providers and directives.
@@ -128,7 +132,11 @@ export class RouterModule {
         {
           provide: ROUTER_FORROOT_GUARD,
           useFactory: provideForRootGuard,
-          deps: [[Router, new Optional(), new SkipSelf()]]
+          deps: [
+            [Router, new Optional(), new SkipSelf()],
+            [EnvironmentInjector, new Optional(), new Self()],
+            [INJECTOR_SCOPE, new Optional(), new Self()],
+          ]
         },
         {provide: ROUTER_CONFIGURATION, useValue: config ? config : {}},
         {
@@ -188,11 +196,20 @@ export function provideLocationStrategy(
                            new PathLocationStrategy(platformLocationStrategy, baseHref);
 }
 
-export function provideForRootGuard(router: Router): any {
+export function provideForRootGuard(
+    router: Router, envInj: EnvironmentInjector|null, scope: string|null): any {
   if ((typeof ngDevMode === 'undefined' || ngDevMode) && router) {
     throw new Error(
         `RouterModule.forRoot() called twice. Lazy loaded modules should use RouterModule.forChild() instead.`);
   }
+
+  if (!envInj) {
+    throw new Error('RouterModule.forRoot should only be used in bootstrapApplication');
+  }
+  if (!scope || scope !== 'root') {
+    throw new Error('RouterModule.forRoot should only be used in bootstrapApplication');
+  }
+
   return 'guarded';
 }
 

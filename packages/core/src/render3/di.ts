@@ -6,15 +6,18 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
+import {INJECTOR_INITIALIZER} from '../di';
 import {isForwardRef, resolveForwardRef} from '../di/forward_ref';
 import {injectRootLimpMode, setInjectImplementation} from '../di/inject_switch';
 import {Injector} from '../di/injector';
+import {setCurrentInjector} from '../di/injector_compatibility';
 import {InjectorMarkers} from '../di/injector_marker';
 import {InjectFlags} from '../di/interface/injector';
 import {ProviderToken} from '../di/provider_token';
 import {Type} from '../interface/type';
 import {assertDefined, assertEqual, assertIndexInRange} from '../util/assert';
 import {noSideEffects} from '../util/closure';
+import {EMPTY_ARRAY} from '../view';
 
 import {assertDirectiveDef, assertNodeInjector, assertTNodeForLView} from './assert';
 import {FactoryFn, getFactoryDef} from './definition_factory';
@@ -702,7 +705,23 @@ function shouldSearchParent(flags: InjectFlags, isFirstHostTNode: boolean): bool
 export class NodeInjector implements Injector {
   constructor(
       private _tNode: TElementNode|TContainerNode|TElementContainerNode|null,
-      private _lView: LView) {}
+      private _lView: LView) {
+    this.resolveInjectorInitializers();
+  }
+
+  resolveInjectorInitializers() {
+    const previousInjector = setCurrentInjector(this);
+    const previousInjectImplementation = setInjectImplementation(undefined);
+    try {
+      const initializers = this.get(INJECTOR_INITIALIZER.multi, EMPTY_ARRAY, InjectFlags.Self);
+      for (const initializer of initializers) {
+        initializer();
+      }
+    } finally {
+      setCurrentInjector(previousInjector);
+      setInjectImplementation(previousInjectImplementation);
+    }
+  }
 
   get(token: any, notFoundValue?: any, flags?: InjectFlags): any {
     return getOrCreateInjectable(this._tNode, this._lView, token, flags, notFoundValue);
