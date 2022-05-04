@@ -13,7 +13,7 @@ import {switchMap} from 'rxjs/operators';
 import {Data, ResolveData, Route, Routes} from './models';
 import {ActivatedRouteSnapshot, inheritedParamsDataResolve, ParamsInheritanceStrategy, RouterStateSnapshot} from './router_state';
 import {PRIMARY_OUTLET} from './shared';
-import {UrlSegment, UrlSegmentGroup, UrlTree} from './url_tree';
+import {UrlSegment, UrlSegmentGroup, UrlSerializer, UrlTree} from './url_tree';
 import {last} from './utils/collection';
 import {getOutlet, sortByMatchingOutlets} from './utils/config';
 import {isImmediateMatch, matchWithChecks, noLeftoversInUrl, split} from './utils/config_matching';
@@ -29,13 +29,14 @@ function newObservableError(e: unknown): Observable<RouterStateSnapshot> {
 }
 
 export function recognize(
-    injector: EnvironmentInjector, rootComponentType: Type<any>|null, config: Routes, urlTree: UrlTree,
-    url: string, paramsInheritanceStrategy: ParamsInheritanceStrategy = 'emptyOnly',
+    injector: EnvironmentInjector, rootComponentType: Type<any>|null, config: Routes,
+    urlTree: UrlTree, url: string, urlSerializer: UrlSerializer,
+    paramsInheritanceStrategy: ParamsInheritanceStrategy = 'emptyOnly',
     relativeLinkResolution: 'legacy'|'corrected' = 'legacy'): Observable<RouterStateSnapshot> {
   try {
     const result = new Recognizer(
-                       injector, rootComponentType, config, urlTree, url,
-                       paramsInheritanceStrategy, relativeLinkResolution)
+                       injector, rootComponentType, config, urlTree, url, paramsInheritanceStrategy,
+                       relativeLinkResolution, urlSerializer)
                        .recognize();
     return from(result).pipe(switchMap(result => {
       if (result === null) {
@@ -56,7 +57,8 @@ export class Recognizer {
       private injector: EnvironmentInjector, private rootComponentType: Type<any>|null,
       private config: Routes, private urlTree: UrlTree, private url: string,
       private paramsInheritanceStrategy: ParamsInheritanceStrategy,
-      private relativeLinkResolution: 'legacy'|'corrected') {}
+      private relativeLinkResolution: 'legacy'|'corrected',
+      private readonly urlSerializer: UrlSerializer) {}
 
   async recognize(): Promise<RouterStateSnapshot|null> {
     const rootSegmentGroup =
@@ -149,8 +151,8 @@ export class Recognizer {
       if (r.providers && !r._injector) {
         r._injector = createEnvironmentInjector(r.providers, injector, `Route: ${r.path}`);
       }
-      const children =
-          await this.processSegmentAgainstRoute(r._injector ?? injector, r, segmentGroup, segments, outlet);
+      const children = await this.processSegmentAgainstRoute(
+          r._injector ?? injector, r, segmentGroup, segments, outlet);
       if (children !== null) {
         return children;
       }
@@ -185,7 +187,8 @@ export class Recognizer {
                          pathIndexShift));
     } else {
       const result =
-          await matchWithChecks(rawSegment, route, segments, injector).toPromise();
+          await matchWithChecks(rawSegment, route, segments, injector, this.urlSerializer)
+              .toPromise();
       if (!result.matched) {
         return null;
       }

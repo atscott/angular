@@ -6,6 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
+import {EnvironmentInjector} from '@angular/core';
 import {TestBed} from '@angular/core/testing';
 
 import {createRouterState} from '../src/create_router_state';
@@ -16,7 +17,6 @@ import {ActivatedRoute, advanceActivatedRoute, createEmptyState, RouterState, Ro
 import {PRIMARY_OUTLET} from '../src/shared';
 import {DefaultUrlSerializer, UrlSegmentGroup, UrlTree} from '../src/url_tree';
 import {TreeNode} from '../src/utils/tree';
-import { EnvironmentInjector } from '@angular/core';
 
 describe('create router state', async () => {
   let reuseStrategy: DefaultRouteReuseStrategy;
@@ -149,7 +149,10 @@ function advanceNode(node: TreeNode<ActivatedRoute>): void {
 }
 
 async function createState(config: Routes, url: string): Promise<RouterStateSnapshot> {
-  return recognize(TestBed.inject(EnvironmentInjector), RootComponent, config, tree(url), url).toPromise();
+  return recognize(
+             TestBed.inject(EnvironmentInjector), RootComponent, config, tree(url), url,
+             new DefaultUrlSerializer())
+      .toPromise();
 }
 
 function checkActivatedRoute(

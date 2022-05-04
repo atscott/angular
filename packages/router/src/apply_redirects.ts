@@ -290,7 +290,7 @@ class ApplyRedirects {
       return of(new UrlSegmentGroup(segments, {}));
     }
 
-    return matchWithChecks(rawSegmentGroup, route, segments, injector)
+    return matchWithChecks(rawSegmentGroup, route, segments, injector, this.urlSerializer)
         .pipe(
             switchMap(({matched, consumedSegments, remainingSegments}) => {
               if (!matched) return noMatch(rawSegmentGroup);

@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {EnvironmentInjector,InjectionToken, ImportedNgModuleProviders, NgModuleFactory, Provider, Type} from '@angular/core';
+import {EnvironmentInjector, ImportedNgModuleProviders, InjectionToken, NgModuleFactory, Provider, Type} from '@angular/core';
 import {Observable} from 'rxjs';
 
 import {ActivatedRouteSnapshot, RouterStateSnapshot} from './router_state';
@@ -900,11 +900,12 @@ export type CanDeactivateFn<T> =
  * @publicApi
  */
 export interface CanMatch {
-  canMatch(route: Route, segments: UrlSegment[]): Observable<boolean>|Promise<boolean>|boolean;
+  canMatch(route: Route, segments: UrlSegment[]):
+      Observable<boolean|UrlTree>|Promise<boolean|UrlTree>|boolean|UrlTree;
 }
 
 export type CanMatchFn = (route: Route, segments: UrlSegment[]) =>
-    Observable<boolean>|Promise<boolean>|boolean;
+    Observable<boolean|UrlTree>|Promise<boolean|UrlTree>|boolean;
 
 /**
  * @description

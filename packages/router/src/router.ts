@@ -718,7 +718,7 @@ export class Router {
                              // Recognize
                              recognize(
                                  this.ngModule.injector, this.rootComponentType, this.config,
-                                 (url) => this.serializeUrl(url), this.paramsInheritanceStrategy,
+                                 this.urlSerializer, this.paramsInheritanceStrategy,
                                  this.relativeLinkResolution),
 
                              // Update URL if in `eager` update mode
