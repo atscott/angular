@@ -8,7 +8,7 @@
 
 import {createEnvironmentInjector, EnvironmentInjector, Injector, NgModuleRef, Type} from '@angular/core';
 import {from, Observable, Observer, of} from 'rxjs';
-import {switchMap} from 'rxjs/operators';
+import {switchMap, takeUntil} from 'rxjs/operators';
 
 import {Data, ResolveData, Route, Routes} from './models';
 import {ActivatedRouteSnapshot, inheritedParamsDataResolve, ParamsInheritanceStrategy, RouterStateSnapshot} from './router_state';
@@ -16,7 +16,7 @@ import {PRIMARY_OUTLET} from './shared';
 import {UrlSegment, UrlSegmentGroup, UrlSerializer, UrlTree} from './url_tree';
 import {last} from './utils/collection';
 import {getOutlet, sortByMatchingOutlets} from './utils/config';
-import {isImmediateMatch, matchWithChecks, noLeftoversInUrl, split} from './utils/config_matching';
+import {isImmediateMatch, MatchResult, matchWithChecks, noLeftoversInUrl, split} from './utils/config_matching';
 import {TreeNode} from './utils/tree';
 
 const NG_DEV_MODE = typeof ngDevMode === 'undefined' || !!ngDevMode;
@@ -30,13 +30,13 @@ function newObservableError(e: unknown): Observable<RouterStateSnapshot> {
 
 export function recognize(
     injector: EnvironmentInjector, rootComponentType: Type<any>|null, config: Routes,
-    urlTree: UrlTree, url: string, urlSerializer: UrlSerializer,
+    urlTree: UrlTree, urlSerializer: UrlSerializer, abortSignal: Observable<void>,
     paramsInheritanceStrategy: ParamsInheritanceStrategy = 'emptyOnly',
     relativeLinkResolution: 'legacy'|'corrected' = 'legacy'): Observable<RouterStateSnapshot> {
   try {
     const result = new Recognizer(
-                       injector, rootComponentType, config, urlTree, url, paramsInheritanceStrategy,
-                       relativeLinkResolution, urlSerializer)
+                       injector, rootComponentType, config, urlTree, paramsInheritanceStrategy,
+                       relativeLinkResolution, urlSerializer, abortSignal)
                        .recognize();
     return from(result).pipe(switchMap(result => {
       if (result === null) {
@@ -55,10 +55,11 @@ export function recognize(
 export class Recognizer {
   constructor(
       private injector: EnvironmentInjector, private rootComponentType: Type<any>|null,
-      private config: Routes, private urlTree: UrlTree, private url: string,
+      private config: Routes, private urlTree: UrlTree,
       private paramsInheritanceStrategy: ParamsInheritanceStrategy,
       private relativeLinkResolution: 'legacy'|'corrected',
-      private readonly urlSerializer: UrlSerializer) {}
+      private readonly urlSerializer: UrlSerializer,
+      private readonly abortSignal: Observable<void>) {}
 
   async recognize(): Promise<RouterStateSnapshot|null> {
     const rootSegmentGroup =
@@ -80,7 +81,8 @@ export class Recognizer {
         {}, PRIMARY_OUTLET, this.rootComponentType, null, this.urlTree.root, -1, {});
 
     const rootNode = new TreeNode<ActivatedRouteSnapshot>(root, children);
-    const routeState = new RouterStateSnapshot(this.url, rootNode);
+    const routeState =
+        new RouterStateSnapshot(this.urlSerializer.serialize(this.urlTree), rootNode);
     this.inheritParamsAndData(routeState._root);
     return routeState;
   }
@@ -186,10 +188,13 @@ export class Recognizer {
           (NG_DEV_MODE ? getCorrectedPathIndexShift(rawSegment) + segments.length :
                          pathIndexShift));
     } else {
-      const result =
+      // TODO: This only aborts a single match. The rest of the recognize algorithm will still run
+      // to completion
+      const result: MatchResult|undefined =
           await matchWithChecks(rawSegment, route, segments, injector, this.urlSerializer)
+              .pipe(takeUntil(this.abortSignal))
               .toPromise();
-      if (!result.matched) {
+      if (!result?.matched) {
         return null;
       }
       consumedSegments = result.consumedSegments;

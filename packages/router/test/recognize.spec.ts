@@ -8,6 +8,7 @@
 
 import {EnvironmentInjector, NgModuleRef} from '@angular/core';
 import {TestBed} from '@angular/core/testing';
+import {Subject} from 'rxjs';
 
 import {Routes} from '../src/models';
 import {Recognizer} from '../src/recognize';
@@ -658,7 +659,8 @@ describe('recognize', async () => {
                              children: [{path: 'b', component: ComponentB}],
                            },
                          ],
-                         tree('/b'), '/b', 'emptyOnly', 'corrected', new DefaultUrlSerializer())
+                         tree('/b'), 'emptyOnly', 'corrected', new DefaultUrlSerializer(),
+                         new Subject<void>())
                          .recognize();
            expect(s).toBeNull();
          });
@@ -832,10 +834,11 @@ async function recognize(
     config: Routes, url: string, paramsInheritanceStrategy: 'emptyOnly'|'always' = 'emptyOnly',
     relativeLinkResolution: 'legacy'|'corrected' = 'legacy'): Promise<RouterStateSnapshot> {
   const serializer = new DefaultUrlSerializer();
-  const result = await new Recognizer(
-                     TestBed.inject(EnvironmentInjector), RootComponent, config, tree(url), url,
-                     paramsInheritanceStrategy, relativeLinkResolution, serializer)
-                     .recognize();
+  const result =
+      await new Recognizer(
+          TestBed.inject(EnvironmentInjector), RootComponent, config, tree(url),
+          paramsInheritanceStrategy, relativeLinkResolution, serializer, new Subject<void>())
+          .recognize();
   expect(result).not.toBeNull();
   return result!;
 }

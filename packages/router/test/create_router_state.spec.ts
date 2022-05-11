@@ -8,6 +8,7 @@
 
 import {EnvironmentInjector} from '@angular/core';
 import {TestBed} from '@angular/core/testing';
+import {Subject} from 'rxjs';
 
 import {createRouterState} from '../src/create_router_state';
 import {Routes} from '../src/models';
@@ -132,10 +133,10 @@ describe('create router state', async () => {
     const current2 = reuseCalls.argsFor(1)[1];
 
     // Routing from '' to 'product/30'
-    expect(current1._routerState.url).toEqual('');
-    expect(future1._routerState.url).toEqual('product/30');
-    expect(current2._routerState.url).toEqual('');
-    expect(future2._routerState.url).toEqual('product/30');
+    expect(current1._routerState.url).toEqual('/');
+    expect(future1._routerState.url).toEqual('/product/30');
+    expect(current2._routerState.url).toEqual('/');
+    expect(future2._routerState.url).toEqual('/product/30');
   });
 });
 
@@ -150,8 +151,8 @@ function advanceNode(node: TreeNode<ActivatedRoute>): void {
 
 async function createState(config: Routes, url: string): Promise<RouterStateSnapshot> {
   return recognize(
-             TestBed.inject(EnvironmentInjector), RootComponent, config, tree(url), url,
-             new DefaultUrlSerializer())
+             TestBed.inject(EnvironmentInjector), RootComponent, config, tree(url),
+             new DefaultUrlSerializer(), new Subject<void>())
       .toPromise();
 }
 
