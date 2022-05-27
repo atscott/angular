@@ -17,7 +17,7 @@ export {DefaultTitleStrategy, TitleStrategy} from './page_title_strategy';
 export {BaseRouteReuseStrategy, DetachedRouteHandle, RouteReuseStrategy} from './route_reuse_strategy';
 export {Navigation, NavigationBehaviorOptions, NavigationExtras, Router, UrlCreationOptions} from './router';
 export {ROUTES} from './router_config_loader';
-export {ExtraOptions, InitialNavigation, provideRoutes, ROUTER_CONFIGURATION, ROUTER_INITIALIZER, RouterModule} from './router_module';
+export {ExtraOptions, InitialNavigation, provideRouter, provideRoutes, ROUTER_CONFIGURATION, ROUTER_INITIALIZER, RouterModule} from './router_module';
 export {ChildrenOutletContexts, OutletContext} from './router_outlet_context';
 export {NoPreloading, PreloadAllModules, PreloadingStrategy, RouterPreloader} from './router_preloader';
 export {ActivatedRoute, ActivatedRouteSnapshot, RouterState, RouterStateSnapshot} from './router_state';

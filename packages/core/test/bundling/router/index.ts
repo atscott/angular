@@ -7,11 +7,13 @@
  */
 import {APP_BASE_HREF} from '@angular/common';
 import {Component, NgModule, OnInit, ɵNgModuleFactory as NgModuleFactory} from '@angular/core';
-import {BrowserModule, platformBrowser} from '@angular/platform-browser';
-import {ActivatedRoute, Router, RouterModule, Routes} from '@angular/router';
+import {bootstrapApplication, BrowserModule, platformBrowser} from '@angular/platform-browser';
+import {ActivatedRoute, provideRouter, Router, RouterLinkWithHref, RouterOutlet, Routes} from '@angular/router';
 
 @Component({
   selector: 'app-list',
+  standalone: true,
+  imports: [RouterLinkWithHref],
   template: `
   <ul>
     <li><a routerLink="/item/1" routerLinkActive="active">List Item 1</a></li>
@@ -25,6 +27,7 @@ class ListComponent {
 
 @Component({
   selector: 'app-item',
+  standalone: true,
   template: `
   Item {{id}}
   <p><button (click)="viewList()">Back to List</button></p>`,
@@ -46,27 +49,22 @@ class ItemComponent implements OnInit {
 
 @Component({
   selector: 'app-root',
+  imports: [RouterOutlet],
+  standalone: true,
   template: `<router-outlet></router-outlet>`,
 })
 class RootComponent {
-  constructor() {}
 }
 
 const ROUTES: Routes = [
-  {path: '', redirectTo: '/list', pathMatch: 'full'}, {path: 'list', component: ListComponent},
-  {path: 'item/:id', component: ItemComponent}
+  {path: '', redirectTo: '/list', pathMatch: 'full'},
+  {path: 'list', component: ListComponent},
+  {path: 'item/:id', component: ItemComponent},
 ];
 
-@NgModule({
-  declarations: [RootComponent, ListComponent, ItemComponent],
-  imports: [BrowserModule, RouterModule.forRoot(ROUTES)],
-  providers: [{provide: APP_BASE_HREF, useValue: ''}]
-})
-class RouteExampleModule {
-  ngDoBootstrap(app: any) {
-    app.bootstrap(RootComponent);
-  }
-}
-
-(window as any).waitForApp = platformBrowser().bootstrapModuleFactory(
-    new NgModuleFactory(RouteExampleModule), {ngZone: 'noop'});
+(window as any).waitForApp = bootstrapApplication(RootComponent, {
+  providers: [
+    provideRouter(ROUTES),
+    {provide: APP_BASE_HREF, useValue: ''},
+  ]
+});

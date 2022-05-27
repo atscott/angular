@@ -27,7 +27,7 @@ function isUrlHandlingStrategy(opts: ExtraOptions|
 export function setupTestingRouterInternal(
     urlSerializer: UrlSerializer, contexts: ChildrenOutletContexts, location: Location,
     compiler: Compiler, injector: Injector, routes: Route[][],
-    opts?: ExtraOptions|UrlHandlingStrategy, urlHandlingStrategy?: UrlHandlingStrategy,
+    opts?: ExtraOptions|UrlHandlingStrategy|null, urlHandlingStrategy?: UrlHandlingStrategy,
     routeReuseStrategy?: RouteReuseStrategy, defaultTitleStrategy?: DefaultTitleStrategy,
     titleStrategy?: TitleStrategy) {
   return setupTestingRouter(
@@ -43,7 +43,7 @@ export function setupTestingRouterInternal(
 export function setupTestingRouter(
     urlSerializer: UrlSerializer, contexts: ChildrenOutletContexts, location: Location,
     compiler: Compiler, injector: Injector, routes: Route[][],
-    opts?: ExtraOptions|UrlHandlingStrategy, urlHandlingStrategy?: UrlHandlingStrategy,
+    opts?: ExtraOptions|UrlHandlingStrategy|null, urlHandlingStrategy?: UrlHandlingStrategy,
     routeReuseStrategy?: RouteReuseStrategy, titleStrategy?: TitleStrategy) {
   const router =
       new Router(null!, urlSerializer, contexts, location, injector, compiler, flatten(routes));
@@ -53,7 +53,7 @@ export function setupTestingRouter(
       router.urlHandlingStrategy = opts;
     } else {
       // Handle ExtraOptions
-      assignExtraOptionsToRouter(opts, router);
+      assignExtraOptionsToRouter(opts ?? {}, router);
     }
   }
 
@@ -112,7 +112,7 @@ export function setupTestingRouter(
         Compiler,
         Injector,
         ROUTES,
-        ROUTER_CONFIGURATION,
+        [ROUTER_CONFIGURATION, new Optional()],
         [UrlHandlingStrategy, new Optional()],
         [RouteReuseStrategy, new Optional()],
         [DefaultTitleStrategy, new Optional()],

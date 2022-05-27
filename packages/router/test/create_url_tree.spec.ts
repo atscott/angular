@@ -15,7 +15,7 @@ import {createUrlTree, createUrlTreeFromSnapshot} from '../src/create_url_tree';
 import {RouterLink} from '../src/directives/router_link';
 import {Routes} from '../src/models';
 import {Router} from '../src/router';
-import {RouterModule, routerNgProbeToken} from '../src/router_module';
+import {RouterModule} from '../src/router_module';
 import {ActivatedRoute, ActivatedRouteSnapshot, advanceActivatedRoute} from '../src/router_state';
 import {Params, PRIMARY_OUTLET} from '../src/shared';
 import {DefaultUrlSerializer, UrlSegment, UrlSegmentGroup, UrlTree} from '../src/url_tree';

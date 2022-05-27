@@ -38,6 +38,7 @@ export abstract class PreloadingStrategy {
  *
  * @publicApi
  */
+@Injectable({providedIn: 'root'})
 export class PreloadAllModules implements PreloadingStrategy {
   preload(route: Route, fn: () => Observable<any>): Observable<any> {
     return fn().pipe(catchError(() => of(null)));
@@ -53,6 +54,7 @@ export class PreloadAllModules implements PreloadingStrategy {
  *
  * @publicApi
  */
+@Injectable({providedIn: 'root'})
 export class NoPreloading implements PreloadingStrategy {
   preload(route: Route, fn: () => Observable<any>): Observable<any> {
     return of(null);
@@ -71,7 +73,7 @@ export class NoPreloading implements PreloadingStrategy {
  *
  * @publicApi
  */
-@Injectable()
+@Injectable({providedIn: 'root'})
 export class RouterPreloader implements OnDestroy {
   private subscription?: Subscription;
 
