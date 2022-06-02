@@ -18,6 +18,9 @@
     "name": "APP_INITIALIZER"
   },
   {
+    "name": "AbortedError"
+  },
+  {
     "name": "AbsoluteRedirect"
   },
   {
@@ -37,6 +40,9 @@
   },
   {
     "name": "ApplicationRef"
+  },
+  {
+    "name": "ApplyRedirects"
   },
   {
     "name": "ArgumentOutOfRangeError"
@@ -675,6 +681,12 @@
     "name": "TakeSubscriber"
   },
   {
+    "name": "TakeUntilOperator"
+  },
+  {
+    "name": "TakeUntilSubscriber"
+  },
+  {
     "name": "TapSubscriber"
   },
   {
@@ -795,9 +807,6 @@
     "name": "_wrapInTimeout"
   },
   {
-    "name": "absoluteRedirect"
-  },
-  {
     "name": "addComponentLogic"
   },
   {
@@ -823,9 +832,6 @@
   },
   {
     "name": "applyProjectionRecursive"
-  },
-  {
-    "name": "applyRedirects2"
   },
   {
     "name": "applyToElementOrContainer"
@@ -1132,6 +1138,9 @@
   },
   {
     "name": "fromArray"
+  },
+  {
+    "name": "fromEvent"
   },
   {
     "name": "generateInitialInputs"
@@ -1524,7 +1533,7 @@
     "name": "joinWithSlash"
   },
   {
-    "name": "last2"
+    "name": "last"
   },
   {
     "name": "leaveDI"
@@ -1626,9 +1635,6 @@
     "name": "noMatch"
   },
   {
-    "name": "noMatch2"
-  },
-  {
     "name": "noSideEffects"
   },
   {
@@ -1669,6 +1675,9 @@
   },
   {
     "name": "pathCompareMap"
+  },
+  {
+    "name": "pipeFromArray"
   },
   {
     "name": "platformBrowser"
@@ -1767,9 +1776,6 @@
     "name": "saveNameToExportMap"
   },
   {
-    "name": "scan"
-  },
-  {
     "name": "scheduleArray"
   },
   {
@@ -1825,6 +1831,9 @@
   },
   {
     "name": "setUpAttributes"
+  },
+  {
+    "name": "setupSubscription"
   },
   {
     "name": "shallowEqual"
@@ -1891,6 +1900,9 @@
   },
   {
     "name": "takeLast"
+  },
+  {
+    "name": "takeUntil"
   },
   {
     "name": "tap"

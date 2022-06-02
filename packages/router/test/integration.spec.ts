@@ -14,7 +14,7 @@ import {By} from '@angular/platform-browser/src/dom/debug/by';
 import {expect} from '@angular/platform-browser/testing/src/matchers';
 import {ActivatedRoute, ActivatedRouteSnapshot, ActivationEnd, ActivationStart, CanActivate, CanDeactivate, ChildActivationEnd, ChildActivationStart, DefaultUrlSerializer, DetachedRouteHandle, Event, GuardsCheckEnd, GuardsCheckStart, Navigation, NavigationCancel, NavigationEnd, NavigationError, NavigationStart, ParamMap, Params, PreloadAllModules, PreloadingStrategy, PRIMARY_OUTLET, Resolve, ResolveEnd, ResolveStart, RouteConfigLoadEnd, RouteConfigLoadStart, Router, RouteReuseStrategy, RouterEvent, RouterLink, RouterLinkWithHref, RouterModule, RouterPreloader, RouterStateSnapshot, RoutesRecognized, RunGuardsAndResolvers, UrlHandlingStrategy, UrlSegmentGroup, UrlSerializer, UrlTree} from '@angular/router';
 import {EMPTY, Observable, Observer, of, Subscription, SubscriptionLike} from 'rxjs';
-import {delay, filter, first, map, mapTo, tap} from 'rxjs/operators';
+import {delay, filter, first, map, mapTo, take, tap} from 'rxjs/operators';
 
 import {forEach} from '../src/utils/collection';
 import {getLoadedRoutes} from '../src/utils/config';
@@ -4513,8 +4513,15 @@ describe('Integration', () => {
            tick(10);
            // The delayed guard should have started
            expect(DelayedGuard.canLoadCalls).toEqual(1);
+
+           let navigationCancel: NavigationCancel;
+           router.events.pipe(filter((e): e is NavigationCancel => e instanceof NavigationCancel))
+               .subscribe((e) => {
+                 navigationCancel = e;
+               });
            router.navigateByUrl('/team/1');
            advance(fixture, 1000);
+           expect(navigationCancel!.reason).toContain('not equal to the current navigation id');
            expect(fixture.nativeElement.innerHTML).toContain('team');
            // The delayed guard should not execute the delayed condition because a new navigation
            // cancels the current one and unsubscribes from intermediate results.
