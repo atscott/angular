@@ -660,7 +660,7 @@ describe('recognize', async () => {
                            },
                          ],
                          tree('/b'), 'emptyOnly', 'corrected', new DefaultUrlSerializer(),
-                         new Subject<void>())
+                         new AbortController().signal)
                          .recognize();
            expect(s).toBeNull();
          });
@@ -834,11 +834,11 @@ async function recognize(
     config: Routes, url: string, paramsInheritanceStrategy: 'emptyOnly'|'always' = 'emptyOnly',
     relativeLinkResolution: 'legacy'|'corrected' = 'legacy'): Promise<RouterStateSnapshot> {
   const serializer = new DefaultUrlSerializer();
-  const result =
-      await new Recognizer(
-          TestBed.inject(EnvironmentInjector), RootComponent, config, tree(url),
-          paramsInheritanceStrategy, relativeLinkResolution, serializer, new Subject<void>())
-          .recognize();
+  const result = await new Recognizer(
+                     TestBed.inject(EnvironmentInjector), RootComponent, config, tree(url),
+                     paramsInheritanceStrategy, relativeLinkResolution, serializer,
+                     new AbortController().signal)
+                     .recognize();
   expect(result).not.toBeNull();
   return result!;
 }

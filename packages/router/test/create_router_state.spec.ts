@@ -152,7 +152,7 @@ function advanceNode(node: TreeNode<ActivatedRoute>): void {
 async function createState(config: Routes, url: string): Promise<RouterStateSnapshot> {
   return recognize(
              TestBed.inject(EnvironmentInjector), RootComponent, config, tree(url),
-             new DefaultUrlSerializer(), new Subject<void>())
+             new DefaultUrlSerializer(), new AbortController().signal)
       .toPromise();
 }
 

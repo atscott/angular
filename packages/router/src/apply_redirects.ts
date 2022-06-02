@@ -7,8 +7,8 @@
  */
 
 import {createEnvironmentInjector, EnvironmentInjector} from '@angular/core';
-import {defer, Observable} from 'rxjs';
-import {map, tap} from 'rxjs/operators';
+import {defer, fromEvent, Observable} from 'rxjs';
+import {map, takeUntil, tap} from 'rxjs/operators';
 
 import {LoadedRouterConfig, Route, Routes} from './models';
 import {runCanLoadGuards} from './operators/check_guards';
@@ -41,10 +41,11 @@ class AbsoluteRedirect {
  */
 export function applyRedirects(
     injector: EnvironmentInjector, configLoader: RouterConfigLoader, urlSerializer: UrlSerializer,
-    urlTree: UrlTree, config: Routes): Observable<UrlTree> {
+    urlTree: UrlTree, config: Routes, abortSignal: AbortSignal): Observable<UrlTree> {
   return defer(
-             () =>
-                 new ApplyRedirects(injector, configLoader, urlSerializer, urlTree, config).apply())
+             () => new ApplyRedirects(
+                       injector, configLoader, urlSerializer, urlTree, config, abortSignal)
+                       .apply())
       .pipe(map(result => {
         if (result instanceof NoMatch) {
           throw noMatchError(result);
@@ -55,10 +56,18 @@ export function applyRedirects(
 
 class ApplyRedirects {
   private allowRedirects: boolean = true;
+  private readonly aborted$ = fromEvent(this.abortSignal, 'abort');
 
   constructor(
       private injector: EnvironmentInjector, private configLoader: RouterConfigLoader,
-      private urlSerializer: UrlSerializer, private urlTree: UrlTree, private config: Routes) {}
+      private urlSerializer: UrlSerializer, private urlTree: UrlTree, private config: Routes,
+      private abortSignal: AbortSignal) {}
+
+  private throwIfAborted() {
+    if (this.abortSignal.aborted) {
+      throw new Error('Aborted');
+    }
+  }
 
   async apply(): Promise<UrlTree|NoMatch> {
     const splitGroup = split(this.urlTree.root, [], [], this.config).segmentGroup;
@@ -241,11 +250,15 @@ class ApplyRedirects {
   private async matchSegmentAgainstRoute(
       injector: EnvironmentInjector, rawSegmentGroup: UrlSegmentGroup, route: Route,
       segments: UrlSegment[], outlet: string): Promise<UrlSegmentGroup|NoMatch> {
+    this.throwIfAborted();
     if (route.path === '**') {
       if (route.loadChildren) {
         const cfg = route._loadedRoutes ?
             {routes: route._loadedRoutes, injector: route._loadedInjector} :
-            await this.configLoader.loadChildren(injector, route).toPromise();
+            await this.configLoader.loadChildren(injector, route)
+                .pipe(takeUntil(this.aborted$))
+                .toPromise();
+        this.throwIfAborted();
         route._loadedRoutes = cfg.routes;
         route._loadedInjector = cfg.injector;
         return new UrlSegmentGroup(segments, {});
@@ -256,7 +269,9 @@ class ApplyRedirects {
 
     const result =
         await matchWithChecks(rawSegmentGroup, route, segments, injector, this.urlSerializer)
+            .pipe(takeUntil(this.aborted$))
             .toPromise();
+    this.throwIfAborted();
     const {matched, consumedSegments, remainingSegments} = result;
     if (!matched) return new NoMatch(rawSegmentGroup);
 
@@ -306,8 +321,10 @@ class ApplyRedirects {
         return {routes: route._loadedRoutes, injector: route._loadedInjector};
       }
 
-      const shouldLoadResult =
-          await runCanLoadGuards(injector, route, segments, this.urlSerializer).toPromise();
+      const shouldLoadResult = await runCanLoadGuards(injector, route, segments, this.urlSerializer)
+                                   .pipe(takeUntil(this.aborted$))
+                                   .toPromise();
+      this.throwIfAborted();
       if (shouldLoadResult) {
         const cfg = await this.configLoader.loadChildren(injector, route).toPromise();
         route._loadedRoutes = cfg.routes;

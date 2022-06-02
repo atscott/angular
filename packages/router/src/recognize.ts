@@ -7,7 +7,7 @@
  */
 
 import {createEnvironmentInjector, EnvironmentInjector, Injector, NgModuleRef, Type} from '@angular/core';
-import {from, Observable, Observer, of} from 'rxjs';
+import {from, fromEvent, Observable, Observer, of} from 'rxjs';
 import {switchMap, takeUntil} from 'rxjs/operators';
 
 import {Data, ResolveData, Route, Routes} from './models';
@@ -30,7 +30,7 @@ function newObservableError(e: unknown): Observable<RouterStateSnapshot> {
 
 export function recognize(
     injector: EnvironmentInjector, rootComponentType: Type<any>|null, config: Routes,
-    urlTree: UrlTree, urlSerializer: UrlSerializer, abortSignal: Observable<void>,
+    urlTree: UrlTree, urlSerializer: UrlSerializer, abortSignal: AbortSignal,
     paramsInheritanceStrategy: ParamsInheritanceStrategy = 'emptyOnly',
     relativeLinkResolution: 'legacy'|'corrected' = 'legacy'): Observable<RouterStateSnapshot> {
   try {
@@ -58,8 +58,13 @@ export class Recognizer {
       private config: Routes, private urlTree: UrlTree,
       private paramsInheritanceStrategy: ParamsInheritanceStrategy,
       private relativeLinkResolution: 'legacy'|'corrected',
-      private readonly urlSerializer: UrlSerializer,
-      private readonly abortSignal: Observable<void>) {}
+      private readonly urlSerializer: UrlSerializer, private readonly abortSignal: AbortSignal) {}
+
+  private throwIfAborted() {
+    if (this.abortSignal.aborted) {
+      throw new Error('Aborted');
+    }
+  }
 
   async recognize(): Promise<RouterStateSnapshot|null> {
     const rootSegmentGroup =
@@ -169,6 +174,7 @@ export class Recognizer {
   async processSegmentAgainstRoute(
       injector: EnvironmentInjector, route: Route, rawSegment: UrlSegmentGroup,
       segments: UrlSegment[], outlet: string): Promise<TreeNode<ActivatedRouteSnapshot>[]|null> {
+    this.throwIfAborted();
     if (route.redirectTo || !isImmediateMatch(route, rawSegment, segments, outlet)) return null;
 
     let snapshot: ActivatedRouteSnapshot;
@@ -192,8 +198,9 @@ export class Recognizer {
       // to completion
       const result: MatchResult|undefined =
           await matchWithChecks(rawSegment, route, segments, injector, this.urlSerializer)
-              .pipe(takeUntil(this.abortSignal))
+              .pipe(takeUntil(fromEvent(this.abortSignal, 'abort')))
               .toPromise();
+      this.throwIfAborted();
       if (!result?.matched) {
         return null;
       }

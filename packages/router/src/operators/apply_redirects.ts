@@ -20,7 +20,8 @@ export function applyRedirects(
     environmentInjector: EnvironmentInjector, configLoader: RouterConfigLoader,
     urlSerializer: UrlSerializer, config: Routes): MonoTypeOperatorFunction<NavigationTransition> {
   return switchMap(
-      t =>
-          applyRedirectsFn(environmentInjector, configLoader, urlSerializer, t.extractedUrl, config)
-              .pipe(map(urlAfterRedirects => ({...t, urlAfterRedirects}))));
+      t => applyRedirectsFn(
+               environmentInjector, configLoader, urlSerializer, t.extractedUrl, config,
+               t.abortSignal.signal)
+               .pipe(map(urlAfterRedirects => ({...t, urlAfterRedirects}))));
 }

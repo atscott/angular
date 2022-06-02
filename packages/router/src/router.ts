@@ -328,7 +328,7 @@ export interface NavigationTransition {
   targetRouterState: RouterState|null;
   guards: Checks;
   guardsResult: boolean|UrlTree|null;
-  abortSignal: Subject<void>;
+  abortSignal: AbortController;
 }
 
 /**
@@ -631,7 +631,7 @@ export class Router {
       targetRouterState: null,
       guards: {canActivateChecks: [], canDeactivateChecks: []},
       guardsResult: null,
-      abortSignal: new Subject<void>(),
+      abortSignal: new AbortController(),
     });
     this.navigations = this.setupNavigations(this.transitions);
 
@@ -1428,9 +1428,10 @@ export class Router {
       targetPageId = 0;
     }
 
-    this.transitions.value.abortSignal.next();
+    this.transitions.value.abortSignal.abort();
     this.setTransition({
       id,
+      abortSignal: new AbortController(),
       targetPageId,
       source,
       restoredState,
