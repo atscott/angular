@@ -461,7 +461,7 @@ describe('applyRedirects', () => {
       });
     });
 
-    it('should load the configuration only once', () => {
+    it('should load the configuration only once', async () => {
       const loadedConfig = {
         routes: [{path: '', component: ComponentB}],
         injector: testModule.injector
@@ -478,18 +478,18 @@ describe('applyRedirects', () => {
 
       const config: Routes = [{path: 'a', loadChildren: jasmine.createSpy('children')}];
 
-      applyRedirects(testModule.injector, <any>loader, serializer, tree('a?k1'), config)
-          .subscribe(r => {});
+      await applyRedirects(testModule.injector, <any>loader, serializer, tree('a?k1'), config)
+          .toPromise();
 
-      applyRedirects(testModule.injector, <any>loader, serializer, tree('a?k2'), config)
-          .subscribe(
-              r => {
-                expectTreeToBe(r, 'a?k2');
-                expect(getLoadedRoutes(config[0])).toBe(loadedConfig.routes);
-              },
-              (e) => {
-                throw 'Should not reach';
-              });
+      try {
+        const r =
+            await applyRedirects(testModule.injector, <any>loader, serializer, tree('a?k2'), config)
+                .toPromise();
+        expectTreeToBe(r, 'a?k2');
+        expect(getLoadedRoutes(config[0])).toBe(loadedConfig.routes);
+      } catch {
+        throw 'Should not reach';
+      }
     });
 
     it('should load the configuration of a wildcard route', () => {
@@ -600,6 +600,7 @@ describe('applyRedirects', () => {
          ];
 
          applyRedirects(testModule.injector, <any>loader, serializer, tree(''), config).subscribe();
+         tick();
          expect(loadCalls).toBe(1);
          tick(100);
          expect(loaded).toEqual(['root']);
@@ -649,32 +650,34 @@ describe('applyRedirects', () => {
          tick(300);
        }));
 
-    it('loads only the first match when two Routes with the same outlet have the same path', () => {
-      const loadedConfig = {
-        routes: [{path: '', component: ComponentA}],
-        injector: testModule.injector
-      };
-      let loadCalls = 0;
-      let loaded: string[] = [];
-      const loader: Pick<RouterConfigLoader, 'loadChildren'> = {
-        loadChildren: (injector: any, p: Route) => {
-          loadCalls++;
-          return of(loadedConfig)
-              .pipe(
-                  tap(() => loaded.push((p.loadChildren as jasmine.Spy).and.identity)),
-              );
-        }
-      };
+    it('loads only the first match when two Routes with the same outlet have the same path',
+       async () => {
+         const loadedConfig = {
+           routes: [{path: '', component: ComponentA}],
+           injector: testModule.injector
+         };
+         let loadCalls = 0;
+         let loaded: string[] = [];
+         const loader: Pick<RouterConfigLoader, 'loadChildren'> = {
+           loadChildren: (injector: any, p: Route) => {
+             loadCalls++;
+             return of(loadedConfig)
+                 .pipe(
+                     tap(() => loaded.push((p.loadChildren as jasmine.Spy).and.identity)),
+                 );
+           }
+         };
 
-      const config: Routes = [
-        {path: 'a', loadChildren: jasmine.createSpy('first')},
-        {path: 'a', loadChildren: jasmine.createSpy('second')}
-      ];
+         const config: Routes = [
+           {path: 'a', loadChildren: jasmine.createSpy('first')},
+           {path: 'a', loadChildren: jasmine.createSpy('second')}
+         ];
 
-      applyRedirects(testModule.injector, <any>loader, serializer, tree('a'), config).subscribe();
-      expect(loadCalls).toBe(1);
-      expect(loaded).toEqual(['first']);
-    });
+         await applyRedirects(testModule.injector, <any>loader, serializer, tree('a'), config)
+             .toPromise();
+         expect(loadCalls).toBe(1);
+         expect(loaded).toEqual(['first']);
+       });
 
     it('should load the configuration of empty root path if the entry is an aux outlet',
        fakeAsync(() => {
