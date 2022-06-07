@@ -7,7 +7,7 @@
  */
 
 import {EnvironmentInjector} from '@angular/core';
-import {defer, EMPTY, fromEvent, Observable, throwError} from 'rxjs';
+import {defer, EMPTY, fromEvent, Observable, Subject, throwError} from 'rxjs';
 import {catchError, map, takeUntil} from 'rxjs/operators';
 
 import {LoadedRouterConfig, Route, Routes} from './models';
@@ -49,7 +49,7 @@ class AbortedError extends Error {
  */
 export function applyRedirects(
     injector: EnvironmentInjector, configLoader: RouterConfigLoader, urlSerializer: UrlSerializer,
-    urlTree: UrlTree, config: Routes, abortSignal: AbortSignal): Observable<UrlTree> {
+    urlTree: UrlTree, config: Routes, abortSignal: Subject<void>): Observable<UrlTree> {
   return defer(
              () => new ApplyRedirects(
                        injector, configLoader, urlSerializer, urlTree, config, abortSignal)
@@ -72,15 +72,15 @@ export function applyRedirects(
 
 class ApplyRedirects {
   private allowRedirects: boolean = true;
-  private readonly aborted$ = fromEvent(this.abortSignal, 'abort');
+  private readonly aborted$ = this.abortSignal.asObservable();
 
   constructor(
       private injector: EnvironmentInjector, private configLoader: RouterConfigLoader,
       private urlSerializer: UrlSerializer, private urlTree: UrlTree, private config: Routes,
-      private abortSignal: AbortSignal) {}
+      private abortSignal: Subject<void>) {}
 
   private throwIfAborted() {
-    if (this.abortSignal.aborted) {
+    if (this.abortSignal.isStopped) {
       throw new AbortedError();
     }
   }

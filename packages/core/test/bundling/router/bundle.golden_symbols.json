@@ -792,9 +792,6 @@
     "name": "_randomChar"
   },
   {
-    "name": "componentDefCount"
-  },
-  {
     "name": "_stripIndexHtml"
   },
   {
@@ -889,6 +886,9 @@
   },
   {
     "name": "compare"
+  },
+  {
+    "name": "componentDefCount"
   },
   {
     "name": "computeStaticStyling"
@@ -1138,9 +1138,6 @@
   },
   {
     "name": "fromArray"
-  },
-  {
-    "name": "fromEvent"
   },
   {
     "name": "generateInitialInputs"
@@ -1831,9 +1828,6 @@
   },
   {
     "name": "setUpAttributes"
-  },
-  {
-    "name": "setupSubscription"
   },
   {
     "name": "shallowEqual"

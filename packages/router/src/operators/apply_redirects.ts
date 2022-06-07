@@ -22,6 +22,6 @@ export function applyRedirects(
   return switchMap(
       t => applyRedirectsFn(
                environmentInjector, configLoader, urlSerializer, t.extractedUrl, config,
-               t.abortController.signal)
+               t.abortController)
                .pipe(map(urlAfterRedirects => ({...t, urlAfterRedirects}))));
 }
