@@ -10,7 +10,7 @@ import {EnvironmentInjector, ProviderToken, runInInjectionContext} from '@angula
 import {EMPTY, from, MonoTypeOperatorFunction, Observable, of, throwError} from 'rxjs';
 import {catchError, concatMap, first, map, mapTo, mergeMap, takeLast, tap} from 'rxjs/operators';
 
-import {ResolveData} from '../models';
+import {RedirectCommand, ResolveData} from '../models';
 import {NavigationTransition} from '../navigation_transition';
 import {ActivatedRouteSnapshot, getInherited, hasStaticTitle, RouterStateSnapshot} from '../router_state';
 import {RouteTitleKey} from '../shared';
@@ -18,6 +18,8 @@ import {getDataKeys, wrapIntoObservable} from '../utils/collection';
 import {getClosestRouteInjector} from '../utils/config';
 import {getTokenOrFunctionIdentity} from '../utils/preactivation';
 import {isEmptyError} from '../utils/type_guards';
+import { redirectingNavigationError } from '../navigation_canceling_error';
+import { DefaultUrlSerializer } from '../url_tree';
 
 export function resolveData(
     paramsInheritanceStrategy: 'emptyOnly'|'always',
@@ -95,6 +97,9 @@ function resolveNode(
       mergeMap(
           key => getResolver(resolve[key], futureARS, futureRSS, injector)
                      .pipe(first(), tap((value: any) => {
+                             if (value instanceof RedirectCommand) {
+                               throw redirectingNavigationError(new DefaultUrlSerializer(), value);
+                             }
                              data[key] = value;
                            }))),
       takeLast(1),
