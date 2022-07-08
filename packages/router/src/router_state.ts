@@ -6,14 +6,13 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {inject, Injectable, Type} from '@angular/core';
+import {Injectable, Type} from '@angular/core';
 import {BehaviorSubject, Observable} from 'rxjs';
 import {map} from 'rxjs/operators';
 
 import {Data, ResolveData, Route} from './models';
-import {Router} from './router';
 import {convertToParamMap, ParamMap, Params, PRIMARY_OUTLET} from './shared';
-import {equalSegments, UrlSegment, UrlSegmentGroup, UrlTree} from './url_tree';
+import {createEmptyUrlTree, equalSegments, UrlSegment, UrlSegmentGroup, UrlTree} from './url_tree';
 import {shallowEqual, shallowEqualArrays} from './utils/collection';
 import {Tree, TreeNode} from './utils/tree';
 
@@ -110,7 +109,7 @@ export function createEmptyStateSnapshot(
  *
  * @publicApi
  */
-@Injectable({providedIn: 'root', useFactory: () => inject(Router).routerState.root})
+@Injectable({providedIn: 'root', useFactory: () => createEmptyState(createEmptyUrlTree(), null)})
 export class ActivatedRoute {
   /** The current snapshot of this route */
   snapshot!: ActivatedRouteSnapshot;

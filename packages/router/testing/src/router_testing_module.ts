@@ -9,7 +9,7 @@
 import {Location, LocationStrategy} from '@angular/common';
 import {MockLocationStrategy, SpyLocation} from '@angular/common/testing';
 import {Compiler, Injector, ModuleWithProviders, NgModule, Optional} from '@angular/core';
-import {ChildrenOutletContexts, DefaultTitleStrategy, ExtraOptions, NoPreloading, PreloadingStrategy, provideRoutes, Route, Router, ROUTER_CONFIGURATION, RouteReuseStrategy, RouterModule, ROUTES, Routes, TitleStrategy, UrlHandlingStrategy, UrlSerializer, ɵassignExtraOptionsToRouter as assignExtraOptionsToRouter, ɵflatten as flatten, ɵprovidePreloading as providePreloading, ɵROUTER_PROVIDERS as ROUTER_PROVIDERS} from '@angular/router';
+import {ChildrenOutletContexts, DefaultTitleStrategy, ExtraOptions, NoPreloading, provideRoutes, Route, Router, ROUTER_CONFIGURATION, RouteReuseStrategy, RouterModule, ROUTES, Routes, TitleStrategy, UrlHandlingStrategy, UrlSerializer, ɵassignExtraOptionsToRouter as assignExtraOptionsToRouter, ɵflatten as flatten, ɵprovidePreloading as providePreloading} from '@angular/router';
 
 import {EXTRA_ROUTER_TESTING_PROVIDERS} from './extra_router_testing_providers';
 
@@ -98,7 +98,6 @@ export function setupTestingRouter(
 @NgModule({
   exports: [RouterModule],
   providers: [
-    ROUTER_PROVIDERS,
     EXTRA_ROUTER_TESTING_PROVIDERS,
     {provide: Location, useClass: SpyLocation},
     {provide: LocationStrategy, useClass: MockLocationStrategy},
