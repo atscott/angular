@@ -13,9 +13,7 @@ import {Unsubscribable} from 'rxjs';
 import {NavigationEnd, NavigationStart, Scroll} from './events';
 import {Router} from './router';
 
-export const ROUTER_SCROLLER = new InjectionToken<RouterScroller>('');
-
-@Injectable()
+@Injectable({providedIn: 'root'})
 export class RouterScroller implements OnDestroy {
   // TODO(issue/24571): remove '!'.
   private routerEventsSubscription!: Unsubscribable;

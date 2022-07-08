@@ -22,7 +22,7 @@ import {Router} from './router';
 import {ExtraOptions, ROUTER_CONFIGURATION} from './router_config';
 import {ROUTES} from './router_config_loader';
 import {PreloadingStrategy, RouterPreloader} from './router_preloader';
-import {ROUTER_SCROLLER, RouterScroller} from './router_scroller';
+import {RouterScroller} from './router_scroller';
 
 const NG_DEV_MODE = typeof ngDevMode === 'undefined' || ngDevMode;
 
@@ -37,8 +37,6 @@ const ROUTER_DIRECTIVES =
  */
 export const ROUTER_FORROOT_GUARD = new InjectionToken<void>(
     NG_DEV_MODE ? 'router duplicate forRoot guard' : 'ROUTER_FORROOT_GUARD');
-
-const ROUTER_PRELOADER = new InjectionToken<RouterPreloader>(NG_DEV_MODE ? 'router preloader' : '');
 
 export function routerNgProbeToken() {
   return new NgProbeToken('Router', Router);
@@ -135,15 +133,15 @@ export class RouterModule {
 
 export function provideRouterScroller(): Provider {
   return {
-    provide: ROUTER_SCROLLER,
+    provide: APP_BOOTSTRAP_LISTENER,
+    multi: true,
     useFactory: () => {
-      const router = inject(Router);
       const viewportScroller = inject(ViewportScroller);
       const config: ExtraOptions = inject(ROUTER_CONFIGURATION);
       if (config.scrollOffset) {
         viewportScroller.setOffset(config.scrollOffset);
       }
-      return new RouterScroller(router, viewportScroller, config);
+      inject(RouterScroller).init();
     },
   };
 }
@@ -206,8 +204,6 @@ export function getBootstrapListener() {
       router.initialNavigation();
     }
 
-    injector.get(ROUTER_PRELOADER, null, InjectFlags.Optional)?.setUpPreloading();
-    injector.get(ROUTER_SCROLLER, null, InjectFlags.Optional)?.init();
     router.resetRootComponentType(ref.componentTypes[0]);
     bootstrapDone.next();
     bootstrapDone.complete();
@@ -374,8 +370,12 @@ function provideTracing(): Provider[] {
 
 export function providePreloading(preloadingStrategy: Type<PreloadingStrategy>): Provider[] {
   return [
-    RouterPreloader,
-    {provide: ROUTER_PRELOADER, useExisting: RouterPreloader},
-    {provide: PreloadingStrategy, useExisting: preloadingStrategy},
+    RouterPreloader, {provide: PreloadingStrategy, useExisting: preloadingStrategy}, {
+      provide: APP_BOOTSTRAP_LISTENER,
+      multi: true,
+      useFactory: () => {
+        inject(RouterPreloader).setUpPreloading();
+      },
+    }
   ];
 }
