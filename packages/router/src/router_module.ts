@@ -58,8 +58,6 @@ export const ROUTER_FORROOT_GUARD = new InjectionToken<void>(
 const ROUTER_PRELOADER = new InjectionToken<RouterPreloader>(NG_DEV_MODE ? 'router preloader' : '');
 
 export const ROUTER_PROVIDERS: Provider[] = [
-  Location,
-  {provide: UrlSerializer, useClass: DefaultUrlSerializer},
   {
     provide: Router,
     useFactory: setupRouter,
@@ -69,9 +67,6 @@ export const ROUTER_PROVIDERS: Provider[] = [
       [UrlHandlingStrategy, new Optional()], [RouteReuseStrategy, new Optional()]
     ]
   },
-  ChildrenOutletContexts,
-  {provide: ActivatedRoute, useFactory: rootRoute, deps: [Router]},
-  RouterConfigLoader,
 ];
 
 export function routerNgProbeToken() {
@@ -100,7 +95,7 @@ export function routerNgProbeToken() {
  * @publicApi
  */
 @NgModule({
-  declarations: ROUTER_DIRECTIVES,
+  imports: ROUTER_DIRECTIVES,
   exports: ROUTER_DIRECTIVES,
 })
 export class RouterModule {
@@ -510,10 +505,6 @@ export function assignExtraOptionsToRouter(opts: ExtraOptions, router: Router): 
   if (opts.canceledNavigationResolution) {
     router.canceledNavigationResolution = opts.canceledNavigationResolution;
   }
-}
-
-export function rootRoute(router: Router): ActivatedRoute {
-  return router.routerState.root;
 }
 
 export function getBootstrapListener() {
