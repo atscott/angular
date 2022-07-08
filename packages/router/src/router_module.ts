@@ -196,7 +196,6 @@ export function getBootstrapListener() {
     }
 
     const router = injector.get(Router);
-    const bootstrapDone = injector.get(BOOTSTRAP_DONE);
 
     // Default case
     if (injector.get(INITIAL_NAVIGATION, null, InjectFlags.Optional) === null) {
@@ -204,8 +203,6 @@ export function getBootstrapListener() {
     }
 
     router.resetRootComponentType(ref.componentTypes[0]);
-    bootstrapDone.next();
-    bootstrapDone.complete();
   };
 }
 
@@ -242,14 +239,22 @@ function provideRouterInitializer(): Provider[] {
  */
 const BOOTSTRAP_DONE =
     new InjectionToken<Subject<void>>(NG_DEV_MODE ? 'bootstrap done indicator' : '', {
-      factory: () => {
-        return new Subject<void>();
-      }
+      providedIn: 'root',
+      factory: () => new Subject<void>(),
     });
 
 function provideEnabledBlockingInitialNavigation(): Provider {
   return [
     {provide: INITIAL_NAVIGATION, useValue: 'enabledBlocking'},
+    {
+      provide: APP_BOOTSTRAP_LISTENER,
+      multi: true,
+      useFactory: () => {
+        const bootstrapDone = inject(BOOTSTRAP_DONE);
+        bootstrapDone.next();
+        bootstrapDone.complete();
+      }
+    },
     {
       provide: APP_INITIALIZER,
       multi: true,
