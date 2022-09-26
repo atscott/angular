@@ -1215,7 +1215,9 @@ export class Router {
     const urlTree = isUrlTree(url) ? url : this.parseUrl(url);
     const mergedTree = this.urlHandlingStrategy.merge(urlTree, this.rawUrlTree);
 
-    return this.scheduleNavigation(mergedTree, 'imperative', null, extras);
+    return this.scheduleNavigation(
+        this.urlSerializer.parse(this.urlSerializer.serialize(mergedTree)), 'imperative', null,
+        extras);
   }
 
   /**

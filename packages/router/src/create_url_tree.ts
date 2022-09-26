@@ -180,13 +180,6 @@ function isCommandWithOutlets(command: any): command is {outlets: {[key: string]
 function tree(
     oldRoot: UrlSegmentGroup, oldSegmentGroup: UrlSegmentGroup, newSegmentGroup: UrlSegmentGroup,
     queryParams: Params|null, fragment: string|null): UrlTree {
-  let qp: any = {};
-  if (queryParams) {
-    forEach(queryParams, (value: any, name: any) => {
-      qp[name] = Array.isArray(value) ? value.map((v: any) => `${v}`) : `${value}`;
-    });
-  }
-
   let rootCandidate: UrlSegmentGroup;
   if (oldRoot === oldSegmentGroup) {
     rootCandidate = newSegmentGroup;
@@ -195,7 +188,7 @@ function tree(
   }
 
   const newRoot = createRoot(squashSegmentGroup(rootCandidate));
-  return new UrlTree(newRoot, qp, fragment);
+  return new UrlTree(newRoot, queryParams ?? {}, fragment);
 }
 
 /**
