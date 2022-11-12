@@ -14,6 +14,10 @@ import {equalArraysOrString, forEach, shallowEqual} from './utils/collection';
 
 const NG_DEV_MODE = typeof ngDevMode === 'undefined' || ngDevMode;
 
+export function createEmptyUrlTree() {
+  return new UrlTree(new UrlSegmentGroup([], {}), {}, null);
+}
+
 /**
  * A set of options which specify how to determine if a `UrlTree` is active, given the `UrlTree`
  * for the current router state.
