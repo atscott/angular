@@ -10,7 +10,7 @@ import {CommonModule, HashLocationStrategy, Location, LocationStrategy} from '@a
 import {provideLocationMocks, SpyLocation} from '@angular/common/testing';
 import {ChangeDetectionStrategy, ChangeDetectorRef, Component, Injectable, NgModule, TemplateRef, Type, ViewChild, ViewContainerRef} from '@angular/core';
 import {ComponentFixture, fakeAsync, TestBed, tick} from '@angular/core/testing';
-import {ChildrenOutletContexts, Resolve, Router, RouterOutlet} from '@angular/router';
+import {ChildrenOutletContexts, Resolve, Router, RouterOutlet, Routes} from '@angular/router';
 import {RouterTestingModule} from '@angular/router/testing';
 import {of} from 'rxjs';
 import {delay, mapTo} from 'rxjs/operators';
@@ -18,6 +18,32 @@ import {delay, mapTo} from 'rxjs/operators';
 import {provideRouter} from '../src/provide_router';
 
 describe('Integration', () => {
+  fit('abcde', async () => {
+    const router = TestBed.inject(Router);
+    const ANALYTICS_HUB_SEARCH_ROUTES: Routes = [
+      {path: 'search', outlet: 'analyticshub', children: [{path: '', component: class {}}]},
+      {path: '**', outlet: 'analyticshub', component: class {}},
+    ];
+    router.resetConfig([
+      {
+        path: '',
+        children: [
+          {
+            path: 'bigquery',
+            component: class {},
+          },
+          ...ANALYTICS_HUB_SEARCH_ROUTES
+        ]
+      },
+    ]);
+    await router.navigateByUrl('bigquery(analyticshub:search)');
+    expect(router.url).toEqual('/bigquery(analyticshub:search)');
+    debugger;
+    await router.navigate(
+        ['/', {outlets: {'analyticshub': ['projects', '123']}}],
+        {relativeTo: router.routerState.root.children[0].children[1].children[0]});
+    expect(router.url).toEqual('/bigquery(analyticshub:projects/123)');
+  });
   describe('routerLinkActive', () => {
     it('should update when the associated routerLinks change - #18469', fakeAsync(() => {
          @Component({
