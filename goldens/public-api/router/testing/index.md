@@ -6,7 +6,7 @@
 
 import { ChildrenOutletContexts } from '@angular/router';
 import { Compiler } from '@angular/core';
-import { ComponentFixture } from '@angular/core/testing';
+import { DebugElement } from '@angular/core';
 import { ExtraOptions } from '@angular/router';
 import * as i0 from '@angular/core';
 import * as i1 from '@angular/router';
@@ -24,20 +24,14 @@ import { UrlHandlingStrategy } from '@angular/router';
 import { UrlSerializer } from '@angular/router';
 
 // @public
-export function navigateForTest(url: string): Promise<{
-    rootFixture: ComponentFixture<{
-        outlet: RouterOutlet;
-    }>;
-    activatedComponent: null | {};
-}>;
-
-// @public
-export function navigateForTest<T>(url: string, requiredRoutedComponentType: Type<T>): Promise<{
-    rootFixture: ComponentFixture<{
-        outlet: RouterOutlet;
-    }>;
-    activatedComponent: T;
-}>;
+export class RouterTestingHarness {
+    detectChanges(): void;
+    static get(initialUrl?: string): Promise<RouterTestingHarness>;
+    navigateByUrl(url: string): Promise<null | {}>;
+    navigateByUrl<T>(url: string, requiredRoutedComponentType: Type<T>): Promise<T>;
+    get routeDebugElement(): DebugElement | null;
+    get routeNativeElement(): HTMLElement | null;
+}
 
 // @public
 export class RouterTestingModule {
