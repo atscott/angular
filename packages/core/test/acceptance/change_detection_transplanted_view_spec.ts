@@ -396,24 +396,15 @@ describe('change detection for transplanted views', () => {
          expect(appComponent.declaration.transplantedViewRefreshCount).toEqual(1);
        });
 
-    it('updates only the declaration view when there is a change to declaration and declaration is marked dirty',
+    it('updates both views when there is a change to declaration and declaration is marked dirty',
        () => {
          appComponent.declaration.name = 'new name';
          appComponent.declaration.changeDetectorRef.markForCheck();
          fixture.detectChanges(false);
 
          const expectedContent =
-             'Insertion(initial)TemplateDeclaration(initial)TemplateContext(initial)Declaration(new name)';
+             'Insertion(initial)TemplateDeclaration(new name)TemplateContext(initial)Declaration(new name)';
          expect(fixture.nativeElement.textContent).toEqual(expectedContent);
-         expect(appComponent.declaration.transplantedViewRefreshCount).toEqual(0);
-
-         // Note here that this second change detection should not be necessary, but is because of
-         // the backwards reference not being fully supported. The assertions below should be true
-         // after the first CD.
-         fixture.detectChanges(false);
-         expect(fixture.nativeElement.textContent)
-             .toEqual(
-                 'Insertion(initial)TemplateDeclaration(new name)TemplateContext(initial)Declaration(new name)');
          expect(appComponent.declaration.transplantedViewRefreshCount).toEqual(1);
        });
 
@@ -431,10 +422,7 @@ describe('change detection for transplanted views', () => {
                  'Name should not update in insertion view because only declaration was marked dirty\n' +
                      'Context name also does not update in the template because the insertion view needs to be' +
                      'checked to update the `ngTemplateOutletContext` input.');
-         // Note here that if backwards references were better supported, we would be able to
-         // refresh the transplanted view in the first `detectChanges` call but because the
-         // insertion point was already checked, we need to call detectChanges again to refresh it.
-         expect(appComponent.declaration.transplantedViewRefreshCount).toEqual(0);
+         expect(appComponent.declaration.transplantedViewRefreshCount).toEqual(1);
 
          fixture.detectChanges(false);
          expect(fixture.nativeElement.textContent)
@@ -461,14 +449,11 @@ describe('change detection for transplanted views', () => {
       expect(appComponent.declaration.transplantedViewRefreshCount).toEqual(0);
     });
 
-    it('should only refresh template once when declaration and insertion are marked dirty', () => {
+    it('should twice if declaration and insertion are marked dirty', () => {
       appComponent.declaration.changeDetectorRef.markForCheck();
       appComponent.insertion.changeDetectorRef.markForCheck();
       fixture.detectChanges(false);
-      expect(appComponent.declaration.transplantedViewRefreshCount)
-          .toEqual(
-              1,
-              'Expected transplanted view to only be refreshed when insertion component is refreshed');
+      expect(appComponent.declaration.transplantedViewRefreshCount).toEqual(2);
     });
   });
 
@@ -546,9 +531,13 @@ describe('change detection for transplanted views', () => {
         const fixture = getFixture(CheckAlwaysDeclaration);
         fixture.detectChanges();
         fixture.componentInstance.onPushInsertionHost!.cdr.detach();
+        fixture.componentInstance.onPushInsertionHost!.cdr.detach();
         fixture.componentInstance.value = 'new';
         fixture.detectChanges();
         expect(fixture.nativeElement.textContent).toEqual('initial');
+        fixture.componentInstance.onPushInsertionHost!.cdr.reattach();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.textContent).toEqual('new');
       });
 
       it('does not refresh OnPush transplants', () => {
@@ -699,6 +688,7 @@ describe('change detection for transplanted views', () => {
         viewRef.detach();
         fixture.detectChanges(false);
         expect(appComponent.transplantedViewRefreshCount).toEqual(0);
+        viewRef.reattach();
         viewRef.reattach();
         fixture.detectChanges(false);
         expect(appComponent.transplantedViewRefreshCount).toEqual(1);

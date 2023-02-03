@@ -16,8 +16,9 @@ import {collectNativeNodes} from './collect_native_nodes';
 import {checkNoChangesInternal, detectChangesInternal, markViewDirty, storeCleanupWithContext} from './instructions/shared';
 import {CONTAINER_HEADER_OFFSET, VIEW_REFS} from './interfaces/container';
 import {isLContainer} from './interfaces/type_checks';
-import {CONTEXT, FLAGS, LView, LViewFlags, PARENT, TVIEW} from './interfaces/view';
+import {CONTEXT, FLAGS, LView, LViewFlags, PARENT, TRANSPLANTED_VIEWS_TO_REFRESH, TVIEW} from './interfaces/view';
 import {destroyLView, detachView, renderDetachView} from './node_manipulation';
+import {updateTransplantedViewCount} from './util/view_utils';
 
 
 
@@ -186,6 +187,13 @@ export class ViewRef<T> implements viewEngine_EmbeddedViewRef<T>, viewEngine_Int
    * ```
    */
   detach(): void {
+    // If previously attached and was marked for refresh or had a child that needed refresh, we need
+    // to update parent counters
+    if (this._lView[FLAGS] & LViewFlags.Attached && this._lView[PARENT] &&
+        (this._lView[FLAGS] & LViewFlags.RefreshTransplantedView ||
+         this._lView[TRANSPLANTED_VIEWS_TO_REFRESH] > 0)) {
+      updateTransplantedViewCount(this._lView[PARENT], -1)
+    }
     this._lView[FLAGS] &= ~LViewFlags.Attached;
   }
 
@@ -246,6 +254,13 @@ export class ViewRef<T> implements viewEngine_EmbeddedViewRef<T>, viewEngine_Int
    * ```
    */
   reattach(): void {
+    // If previously detached and this is marked for refresh or has a child that needs refresh, need
+    // to update parent counters
+    if (!(this._lView[FLAGS] & LViewFlags.Attached) && this._lView[PARENT] &&
+        (this._lView[FLAGS] & LViewFlags.RefreshTransplantedView ||
+         this._lView[TRANSPLANTED_VIEWS_TO_REFRESH] > 0)) {
+      updateTransplantedViewCount(this._lView[PARENT], 1)
+    }
     this._lView[FLAGS] |= LViewFlags.Attached;
   }
 

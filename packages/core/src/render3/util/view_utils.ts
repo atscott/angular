@@ -170,11 +170,13 @@ export function resetPreOrderHookFlags(lView: LView) {
  *  or
  *  2. counter goes from 1 to 0, indicating there are no more descendant views to refresh
  */
-export function updateTransplantedViewCount(lContainer: LContainer, amount: 1|- 1) {
+export function updateTransplantedViewCount(lContainer: LContainer|LView, amount: 1|- 1) {
   lContainer[TRANSPLANTED_VIEWS_TO_REFRESH] += amount;
   let viewOrContainer: LView|LContainer = lContainer;
   let parent: LView|LContainer|null = lContainer[PARENT];
   while (parent !== null &&
+         // stop counting when we hit a detached view
+         (!isLView(viewOrContainer) || viewAttachedToChangeDetector(viewOrContainer)) &&
          ((amount === 1 && viewOrContainer[TRANSPLANTED_VIEWS_TO_REFRESH] === 1) ||
           (amount === -1 && viewOrContainer[TRANSPLANTED_VIEWS_TO_REFRESH] === 0))) {
     parent[TRANSPLANTED_VIEWS_TO_REFRESH] += amount;

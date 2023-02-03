@@ -475,6 +475,9 @@ export function refreshView<T>(
   } finally {
     leaveView();
   }
+  if (lView[TRANSPLANTED_VIEWS_TO_REFRESH] > 0) {
+    refreshContainsDirtyView(lView);
+  }
 }
 
 function executeTemplate<T>(
@@ -1586,7 +1589,8 @@ function markTransplantedViewsForRefresh(lView: LView) {
       ngDevMode && assertLContainer(insertionLContainer);
       // We don't want to increment the counter if the moved LView was already marked for
       // refresh.
-      if ((movedLView[FLAGS] & LViewFlags.RefreshTransplantedView) === 0) {
+      if ((movedLView[FLAGS] & LViewFlags.RefreshTransplantedView) === 0 &&
+          viewAttachedToChangeDetector(movedLView)) {
         updateTransplantedViewCount(insertionLContainer, 1);
       }
       // Note, it is possible that the `movedViews` is tracking views that are transplanted *and*
@@ -1627,36 +1631,43 @@ function refreshComponent(hostLView: LView, componentHostIdx: number): void {
  * @param lView The lView which contains descendant transplanted views that need to be refreshed.
  */
 function refreshContainsDirtyView(lView: LView) {
-  for (let lContainer = getFirstLContainer(lView); lContainer !== null;
-       lContainer = getNextLContainer(lContainer)) {
-    for (let i = CONTAINER_HEADER_OFFSET; i < lContainer.length; i++) {
-      const embeddedLView = lContainer[i];
-      if (viewAttachedToChangeDetector(embeddedLView)) {
-        if (embeddedLView[FLAGS] & LViewFlags.RefreshTransplantedView) {
-          const embeddedTView = embeddedLView[TVIEW];
-          ngDevMode && assertDefined(embeddedTView, 'TView must be allocated');
-          refreshView(
-              embeddedTView, embeddedLView, embeddedTView.template, embeddedLView[CONTEXT]!);
+  let tries = 0;
+  do {
+    tries++;
+    for (let lContainer = getFirstLContainer(lView); lContainer !== null;
+         lContainer = getNextLContainer(lContainer)) {
+      for (let i = CONTAINER_HEADER_OFFSET; i < lContainer.length; i++) {
+        const embeddedLView = lContainer[i];
+        if (viewAttachedToChangeDetector(embeddedLView)) {
+          if (embeddedLView[FLAGS] & LViewFlags.RefreshTransplantedView) {
+            const embeddedTView = embeddedLView[TVIEW];
+            ngDevMode && assertDefined(embeddedTView, 'TView must be allocated');
+            refreshView(
+                embeddedTView, embeddedLView, embeddedTView.template, embeddedLView[CONTEXT]!);
 
-        } else if (embeddedLView[TRANSPLANTED_VIEWS_TO_REFRESH] > 0) {
-          refreshContainsDirtyView(embeddedLView);
+          } else if (embeddedLView[TRANSPLANTED_VIEWS_TO_REFRESH] > 0) {
+            refreshContainsDirtyView(embeddedLView);
+          }
         }
       }
     }
-  }
 
-  const tView = lView[TVIEW];
-  // Refresh child component views.
-  const components = tView.components;
-  if (components !== null) {
-    for (let i = 0; i < components.length; i++) {
-      const componentView = getComponentLViewByIndex(components[i], lView);
-      // Only attached components that are CheckAlways or OnPush and dirty should be refreshed
-      if (viewAttachedToChangeDetector(componentView) &&
-          componentView[TRANSPLANTED_VIEWS_TO_REFRESH] > 0) {
-        refreshContainsDirtyView(componentView);
+    const tView = lView[TVIEW];
+    // Refresh child component views.
+    const components = tView.components;
+    if (components !== null) {
+      for (let i = 0; i < components.length; i++) {
+        const componentView = getComponentLViewByIndex(components[i], lView);
+        // Only attached components that are CheckAlways or OnPush and dirty should be refreshed
+        if (viewAttachedToChangeDetector(componentView) &&
+            componentView[TRANSPLANTED_VIEWS_TO_REFRESH] > 0) {
+          refreshContainsDirtyView(componentView);
+        }
       }
     }
+  } while (lView[TRANSPLANTED_VIEWS_TO_REFRESH] > 0 && tries < 10);
+  if (tries > 9) {
+    throw new Error('Infinite change detection');
   }
 }
 
