@@ -8,6 +8,7 @@
 
 import './util/ng_jit_mode';
 
+import {ClassProvider, InjectFlags, TypeProvider, ValueProvider} from '@angular/core';
 import {merge, Observable, Observer, Subscription} from 'rxjs';
 import {share} from 'rxjs/operators';
 
@@ -15,6 +16,7 @@ import {ApplicationInitStatus} from './application_init';
 import {APP_BOOTSTRAP_LISTENER, PLATFORM_INITIALIZER} from './application_tokens';
 import {getCompilerFacade, JitCompilerUsage} from './compiler/compiler_facade';
 import {Console} from './console';
+import {makeEnvironmentProviders} from './di';
 import {Injectable} from './di/injectable';
 import {InjectionToken} from './di/injection_token';
 import {Injector} from './di/injector';
@@ -38,9 +40,10 @@ import {isStandalone} from './render3/definition';
 import {assertStandaloneComponentType} from './render3/errors';
 import {setLocaleId} from './render3/i18n/i18n_locale_id';
 import {setJitOptions} from './render3/jit/jit_options';
-import {createEnvironmentInjector, NgModuleFactory as R3NgModuleFactory} from './render3/ng_module_ref';
+import {createEnvironmentInjector, EnvironmentNgModuleRefAdapter, NgModuleFactory as R3NgModuleFactory} from './render3/ng_module_ref';
 import {publishDefaultGlobalUtils as _publishDefaultGlobalUtils} from './render3/util/global_utils';
 import {TESTABILITY} from './testability/testability';
+import {flatten} from './util/array_utils';
 import {isPromise} from './util/lang';
 import {scheduleMicroTask} from './util/microtask';
 import {stringify} from './util/stringify';
@@ -176,6 +179,21 @@ export function runPlatformInitializers(injector: Injector): void {
   }
 }
 
+const zoneOptionToken = new InjectionToken<ZoneOptions>(NG_DEV_MODE ? 'zone options' : '');
+
+/**
+ *
+ * @param options
+ *
+ * @publicApi
+ */
+export function provideNgZoneWithOptions(options: ZoneOptions): EnvironmentProviders {
+  // TODO: we probably want to limit this to just being called in bootstrapApplication
+  // That said, this is the same problem as we have with APP_INITIALIZER and BOOTSTRAP_LISTENER
+  // where they do nothing if provided somewhere other than the bootstrap.
+  return makeEnvironmentProviders([{provide: zoneOptionToken, useValue: options}]);
+}
+
 /**
  * Internal create application API that implements the core application creation logic and optional
  * bootstrap logic.
@@ -198,20 +216,31 @@ export function internalCreateApplication(config: {
     assertStandaloneComponentType(rootComponent);
   }
 
+  // Create root application injector based on a set of providers configured at the platform
+  // bootstrap level as well as providers passed to the bootstrap call by a user.
   const platformInjector = createOrReusePlatformInjector(platformProviders as StaticProvider[]);
 
-  const ngZone = getNgZone('zone.js', getNgZoneOptions());
+  let ngZone = getNgZone('zone.js', getNgZoneOptions());
+  const allAppProviders = [
+    {provide: NgZone, useFactory: () => ngZone},
+    provideNgZoneWithOptions({}),
+    ...(appProviders || []),
+  ];
+
+  const environmentNgModuleRefAdapter = new EnvironmentNgModuleRefAdapter(allAppProviders, {
+    parent: platformInjector as EnvironmentInjector,
+    source: 'Environment Injector',
+    runEnvironmentInitializers: false
+  });
+  const envInjector = environmentNgModuleRefAdapter.injector;
+
+  const userProvidedZoneOptions = envInjector.get(zoneOptionToken, null, {optional: true});
+  if (userProvidedZoneOptions) {
+    ngZone = getNgZone(userProvidedZoneOptions.ngZone, getNgZoneOptions(userProvidedZoneOptions));
+  }
 
   return ngZone.run(() => {
-    // Create root application injector based on a set of providers configured at the platform
-    // bootstrap level as well as providers passed to the bootstrap call by a user.
-    const allAppProviders = [
-      {provide: NgZone, useValue: ngZone},  //
-      ...(appProviders || []),              //
-    ];
-
-    const envInjector = createEnvironmentInjector(
-        allAppProviders, platformInjector as EnvironmentInjector, 'Environment Injector');
+    environmentNgModuleRefAdapter.deferredInjectorInitializersResolvers?.();
 
     const exceptionHandler: ErrorHandler|null = envInjector.get(ErrorHandler, null);
     if (NG_DEV_MODE && !exceptionHandler) {
@@ -353,7 +382,7 @@ export function getPlatform(): PlatformRef|null {
  *
  * @publicApi
  */
-export interface BootstrapOptions {
+export interface ZoneOptions {
   /**
    * Optionally specify which `NgZone` should be used.
    *
@@ -406,6 +435,13 @@ export interface BootstrapOptions {
    */
   ngZoneRunCoalescing?: boolean;
 }
+
+/**
+ * Provides additional options to the bootstrapping process.
+ *
+ * @publicApi
+ */
+export interface BootstrapOptions extends ZoneOptions {}
 
 /**
  * The Angular platform is the entry point for Angular on a web page.
