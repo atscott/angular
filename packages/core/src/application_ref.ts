@@ -14,7 +14,7 @@ import {ApplicationInitStatus} from './application_init';
 import {PLATFORM_INITIALIZER} from './application_tokens';
 import {getCompilerFacade, JitCompilerUsage} from './compiler/compiler_facade';
 import {Console} from './console';
-import {ENVIRONMENT_INITIALIZER, inject} from './di';
+import {ENVIRONMENT_INITIALIZER, inject, makeEnvironmentProviders} from './di';
 import {Injectable} from './di/injectable';
 import {InjectionToken} from './di/injection_token';
 import {Injector} from './di/injector';
@@ -213,7 +213,7 @@ export function internalCreateApplication(config: {
   // Create root application injector based on a set of providers configured at the platform
   // bootstrap level as well as providers passed to the bootstrap call by a user.
   const allAppProviders = [
-    provideNgZoneChangeDetection(new NgZone(getNgZoneOptions())),
+    provideZoneChangeDetection(),
     ...(appProviders || []),
   ];
   const adapter = new EnvironmentNgModuleRefAdapter({
@@ -226,7 +226,7 @@ export function internalCreateApplication(config: {
   const ngZone = envInjector.get(NgZone);
 
   // Ensure the application hasn't provided a different NgZone in its own providers
-  if (NG_DEV_MODE && envInjector.get(NG_ZONE_DEV_MODE) !== ngZone) {
+  if (NG_DEV_MODE && envInjector.get(PROVIDED_NG_ZONE) !== ngZone) {
     // TODO: convert to runtime error
     throw new Error('Providing `NgZone` directly in the providers is not supported.');
   }
@@ -369,20 +369,11 @@ export function getPlatform(): PlatformRef|null {
 }
 
 /**
- * Provides additional options to the bootstrapping process.
- *
  * @publicApi
+ *
+ * @see provideZoneChangeDetection
  */
-export interface BootstrapOptions {
-  /**
-   * Optionally specify which `NgZone` should be used.
-   *
-   * - Provide your own `NgZone` instance.
-   * - `zone.js` - Use default `NgZone` which requires `Zone.js`.
-   * - `noop` - Use `NoopNgZone` which does nothing.
-   */
-  ngZone?: NgZone|'zone.js'|'noop';
-
+export interface NgZoneOptions {
   /**
    * Optionally specify coalescing event change detections or not.
    * Consider the following case.
@@ -428,6 +419,22 @@ export interface BootstrapOptions {
 }
 
 /**
+ * Provides additional options to the bootstrapping process.
+ *
+ * @publicApi
+ */
+export interface BootstrapOptions extends NgZoneOptions {
+  /**
+   * Optionally specify which `NgZone` should be used.
+   *
+   * - Provide your own `NgZone` instance.
+   * - `zone.js` - Use default `NgZone` which requires `Zone.js`.
+   * - `noop` - Use `NoopNgZone` which does nothing.
+   */
+  ngZone?: NgZone|'zone.js'|'noop';
+}
+
+/**
  * The Angular platform is the entry point for Angular on a web page.
  * Each page has exactly one platform. Services (such as reflection) which are common
  * to every Angular application running on the page are bound in its scope.
@@ -470,16 +477,34 @@ export class PlatformRef {
                   provide: ENVIRONMENT_INITIALIZER,
                   multi: true,
                   useFactory: () => {
-                    if (NG_DEV_MODE && inject(ErrorHandler, {optional: true}) === null) {
+                    if (!NG_DEV_MODE) {
+                      return () => {};
+                    }
+                    if (inject(ErrorHandler, {optional: true}) === null) {
                       throw new RuntimeError(
                           RuntimeErrorCode.ERROR_HANDLER_NOT_FOUND,
                           ngDevMode &&
                               'No ErrorHandler. Is platform module (BrowserModule) included?');
                     }
+                    if (inject(PROVIDED_NG_ZONE, {optional: true}) !== null) {
+                      // We cannot support the `provideZoneChangeDetection` in
+                      // `bootstrapModuleFactory` because the provider function requires getting the
+                      // NgZone implementation from DI. We have no way of delaying the run of
+                      // environment initializers in the module so we cannot create the injector
+                      // without being inside an NgZone.run (meaning we need to get NgZone without
+                      // the injector).
+                      // TODO(atscott): Should be a runtime error
+                      throw new Error(
+                          'bootstrapModule does not support `provideZoneChangeDetection`. Use `BootstrapOptions` instead.');
+                    }
                     return () => {};
                   },
                 },
-                ...provideNgZoneChangeDetection(ngZone)
+                // We specifically call the internal one rather than the public API because
+                // we don't want the dev mode token. For `bootstrapModuleFactory`, we check
+                // for the existence of this token and throw an error if it's provided because
+                // `provideZoneChangeDetection` is not compatible (see above).
+                ...internalProvideZoneChangeDetection(ngZone)
               ]);
       const exceptionHandler = moduleRef.injector.get(ErrorHandler);
       ngZone.runOutsideAngular(() => {
@@ -595,7 +620,7 @@ export class PlatformRef {
 }
 
 // Set of options recognized by the NgZone.
-interface NgZoneOptions {
+interface InternalNgZoneOptions {
   enableLongStackTrace: boolean;
   shouldCoalesceEventChangeDetection: boolean;
   shouldCoalesceRunChangeDetection: boolean;
@@ -604,7 +629,7 @@ interface NgZoneOptions {
 // Transforms a set of `BootstrapOptions` (supported by the NgModule-based bootstrap APIs) ->
 // `NgZoneOptions` that are recognized by the NgZone constructor. Passing no options will result in
 // a set of default options returned.
-function getNgZoneOptions(options?: BootstrapOptions): NgZoneOptions {
+function getNgZoneOptions(options?: NgZoneOptions): InternalNgZoneOptions {
   return {
     enableLongStackTrace: typeof ngDevMode === 'undefined' ? false : !!ngDevMode,
     shouldCoalesceEventChangeDetection: options?.ngZoneEventCoalescing ?? false,
@@ -613,7 +638,7 @@ function getNgZoneOptions(options?: BootstrapOptions): NgZoneOptions {
 }
 
 function getNgZone(
-    ngZoneToUse: NgZone|'zone.js'|'noop' = 'zone.js', options: NgZoneOptions): NgZone {
+    ngZoneToUse: NgZone|'zone.js'|'noop' = 'zone.js', options: InternalNgZoneOptions): NgZone {
   if (ngZoneToUse === 'noop') {
     return new NoopNgZone();
   }
@@ -1174,11 +1199,10 @@ export class NgZoneChangeDetectionScheduler {
  * Internal token used to provide verify that the NgZone in DI is the same as the one provided with
  * `provideNgZoneChangeDetection`.
  */
-const NG_ZONE_DEV_MODE = new InjectionToken<NgZone>(NG_DEV_MODE ? 'NG_ZONE token' : '');
+const PROVIDED_NG_ZONE = new InjectionToken<NgZone>(NG_DEV_MODE ? 'NG_ZONE token' : '');
 
-export function provideNgZoneChangeDetection(ngZone: NgZone): StaticProvider[] {
+export function internalProvideZoneChangeDetection(ngZone: NgZone): StaticProvider[] {
   return [
-    NG_DEV_MODE ? {provide: NG_ZONE_DEV_MODE, useValue: ngZone} : [],
     {provide: NgZone, useValue: ngZone},
     {
       provide: ENVIRONMENT_INITIALIZER,
@@ -1191,4 +1215,30 @@ export function provideNgZoneChangeDetection(ngZone: NgZone): StaticProvider[] {
     {provide: INTERNAL_APPLICATION_ERROR_HANDLER, useFactory: ngZoneApplicationErrorHandlerFactory},
     {provide: IS_STABLE, useFactory: isStableFactory},
   ];
+}
+
+/**
+ * Provides `NgZone`-based change detection for the application.
+ *
+ * `NgZone` is already provided in applications by default. This provider allows you to configure
+ * options like `ngZoneEventCoalescing` in the `NgZone`.
+ *
+ * @usageNotes
+ * ```typescript=
+ * bootstrapApplication(MyApp, {providers: [
+ *   provideZoneChangeDetection({ngZoneEventCoalescing: true}),
+ * ]});
+ * ```
+ *
+ * @publicApi
+ * @see bootstrapApplication
+ * @see NgZoneOptions
+ */
+export function provideZoneChangeDetection(options?: NgZoneOptions): EnvironmentProviders {
+  const zone = new NgZone(getNgZoneOptions(options));
+  const zoneProviders = internalProvideZoneChangeDetection(zone);
+  return makeEnvironmentProviders([
+    NG_DEV_MODE ? {provide: PROVIDED_NG_ZONE, useValue: zone} : [],
+    zoneProviders,
+  ]);
 }

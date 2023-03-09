@@ -120,10 +120,8 @@ export interface AttributeDecorator {
 }
 
 // @public
-export interface BootstrapOptions {
+export interface BootstrapOptions extends NgZoneOptions {
     ngZone?: NgZone | 'zone.js' | 'noop';
-    ngZoneEventCoalescing?: boolean;
-    ngZoneRunCoalescing?: boolean;
 }
 
 // @public
@@ -1130,6 +1128,9 @@ export type Provider = TypeProvider | ValueProvider | ClassProvider | Constructo
 
 // @public
 export type ProviderToken<T> = Type<T> | AbstractType<T> | InjectionToken<T>;
+
+// @public
+export function provideZoneChangeDetection(options?: NgZoneOptions): EnvironmentProviders;
 
 // @public
 export interface Query {
