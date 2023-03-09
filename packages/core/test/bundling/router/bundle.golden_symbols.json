@@ -474,9 +474,6 @@
     "name": "NgZone"
   },
   {
-    "name": "NgZoneChangeDetectionScheduler"
-  },
-  {
     "name": "NoMatch"
   },
   {
@@ -523,6 +520,9 @@
   },
   {
     "name": "PRIMARY_OUTLET"
+  },
+  {
+    "name": "PROVIDED_NG_ZONE"
   },
   {
     "name": "ParamsAsMap"
@@ -970,9 +970,6 @@
   },
   {
     "name": "configureViewWithDirective"
-  },
-  {
-    "name": "connectableObservableDescriptor"
   },
   {
     "name": "containsSegmentGroup"
@@ -1563,9 +1560,6 @@
     "name": "isScheduler"
   },
   {
-    "name": "isStableFactory"
-  },
-  {
     "name": "isTemplateNode"
   },
   {
@@ -1686,9 +1680,6 @@
     "name": "ngOnChangesSetInput"
   },
   {
-    "name": "ngZoneApplicationErrorHandlerFactory"
-  },
-  {
     "name": "noLeftoversInUrl"
   },
   {
@@ -1750,12 +1741,6 @@
   },
   {
     "name": "profiler"
-  },
-  {
-    "name": "promise"
-  },
-  {
-    "name": "provideNgZoneChangeDetection"
   },
   {
     "name": "redirectIfUrlTree"
@@ -1888,9 +1873,6 @@
   },
   {
     "name": "shallowEqual"
-  },
-  {
-    "name": "shareSubjectFactory"
   },
   {
     "name": "shimStylesContent"

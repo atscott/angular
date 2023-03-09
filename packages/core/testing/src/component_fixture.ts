@@ -111,6 +111,7 @@ export class ComponentFixture<T> {
   }
 
   private _tick(checkNoChanges: boolean) {
+    debugger;
     this.changeDetectorRef.detectChanges();
     if (checkNoChanges) {
       this.checkNoChanges();

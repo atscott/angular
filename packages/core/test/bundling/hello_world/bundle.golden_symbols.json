@@ -24,6 +24,9 @@
     "name": "BLOOM_MASK"
   },
   {
+    "name": "BehaviorSubject"
+  },
+  {
     "name": "BrowserDomAdapter"
   },
   {
@@ -654,6 +657,9 @@
     "name": "internalImportProvidersFrom"
   },
   {
+    "name": "internalProvideZoneChangeDetection"
+  },
+  {
     "name": "invokeHostBindingsInCreationMode"
   },
   {
@@ -778,9 +784,6 @@
   },
   {
     "name": "promise"
-  },
-  {
-    "name": "provideNgZoneChangeDetection"
   },
   {
     "name": "refCount"

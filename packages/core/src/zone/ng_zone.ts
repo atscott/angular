@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {merge, Observable, Observer, Subscription} from 'rxjs';
+import {BehaviorSubject, merge, Observable, Observer, Subscription} from 'rxjs';
 import {share} from 'rxjs/operators';
 
 import {inject, InjectionToken} from '../di';
@@ -520,10 +520,7 @@ export class NoopNgZone implements NgZone {
 export const IS_STABLE =
     new InjectionToken<Observable<boolean>>(ngDevMode ? 'isStable Observable' : '', {
       providedIn: 'root',
-      // TODO(atscott): Replace this with a suitable default like `new
-      // BehaviorSubject(true).asObservable`. Again, long term this won't exist on ApplicationRef at
-      // all but until we can remove it, we need a default value zoneless.
-      factory: isStableFactory,
+      factory: () => new BehaviorSubject(true),
     });
 
 export function isStableFactory() {

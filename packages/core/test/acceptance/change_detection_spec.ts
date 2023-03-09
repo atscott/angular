@@ -8,7 +8,7 @@
 
 
 import {CommonModule} from '@angular/common';
-import {ApplicationRef, ChangeDetectionStrategy, ChangeDetectorRef, Component, ComponentFactoryResolver, ComponentRef, Directive, DoCheck, EmbeddedViewRef, ErrorHandler, EventEmitter, Input, NgModule, OnInit, Output, QueryList, TemplateRef, Type, ViewChild, ViewChildren, ViewContainerRef} from '@angular/core';
+import {ApplicationRef, ChangeDetectionStrategy, ChangeDetectorRef, Component, ComponentFactoryResolver, ComponentRef, Directive, DoCheck, EmbeddedViewRef, ErrorHandler, EventEmitter, Input, NgModule, OnInit, Output, provideZoneChangeDetection, QueryList, TemplateRef, Type, ViewChild, ViewChildren, ViewContainerRef} from '@angular/core';
 import {ComponentFixture, fakeAsync, TestBed, tick} from '@angular/core/testing';
 import {expect} from '@angular/platform-browser/testing/src/matchers';
 import {BehaviorSubject} from 'rxjs';
@@ -53,7 +53,10 @@ describe('change detection', () => {
     });
 
     it('should detect changes for embedded views attached to ApplicationRef', () => {
-      TestBed.configureTestingModule({declarations: [TestCmpt, ViewManipulation]});
+      TestBed.configureTestingModule({
+        declarations: [TestCmpt, ViewManipulation],
+        providers: [provideZoneChangeDetection()],
+      });
       const fixture = TestBed.createComponent(TestCmpt);
       const vm = fixture.debugElement.childNodes[0].references['vm'] as ViewManipulation;
 

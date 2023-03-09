@@ -213,7 +213,7 @@ export function internalCreateApplication(config: {
   // Create root application injector based on a set of providers configured at the platform
   // bootstrap level as well as providers passed to the bootstrap call by a user.
   const allAppProviders = [
-    provideZoneChangeDetection(),
+    {provide: NgZone, useValue: new NoopNgZone()},
     ...(appProviders || []),
   ];
   const adapter = new EnvironmentNgModuleRefAdapter({
@@ -226,7 +226,8 @@ export function internalCreateApplication(config: {
   const ngZone = envInjector.get(NgZone);
 
   // Ensure the application hasn't provided a different NgZone in its own providers
-  if (NG_DEV_MODE && envInjector.get(PROVIDED_NG_ZONE) !== ngZone) {
+  if (NG_DEV_MODE && !(ngZone instanceof NoopNgZone) &&
+      envInjector.get(PROVIDED_NG_ZONE, {optional: true}) !== ngZone) {
     // TODO: convert to runtime error
     throw new Error('Providing `NgZone` directly in the providers is not supported.');
   }
@@ -1197,7 +1198,7 @@ export class NgZoneChangeDetectionScheduler {
 
 /**
  * Internal token used to provide verify that the NgZone in DI is the same as the one provided with
- * `provideNgZoneChangeDetection`.
+ * `provideZoneChangeDetection`.
  */
 const PROVIDED_NG_ZONE = new InjectionToken<NgZone>(NG_DEV_MODE ? 'NG_ZONE token' : '');
 

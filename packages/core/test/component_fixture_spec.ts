@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {Component, Injectable, Input} from '@angular/core';
+import {Component, Injectable, Input, provideZoneChangeDetection} from '@angular/core';
 import {ComponentFixtureAutoDetect, ComponentFixtureNoNgZone, TestBed, waitForAsync, withModule} from '@angular/core/testing';
 import {dispatchEvent} from '@angular/platform-browser/testing/src/browser_util';
 import {expect} from '@angular/platform-browser/testing/src/matchers';
@@ -105,7 +105,8 @@ class NestedAsyncTimeoutComp {
         declarations: [
           AutoDetectComp, AsyncComp, AsyncTimeoutComp, NestedAsyncTimeoutComp, AsyncChangeComp,
           MyIfComp, SimpleComp, AsyncChildComp
-        ]
+        ],
+        providers: [provideZoneChangeDetection()]
       });
     }));
 

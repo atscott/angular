@@ -36,6 +36,9 @@
     "name": "BROWSER_MODULE_PROVIDERS_MARKER"
   },
   {
+    "name": "BehaviorSubject"
+  },
+  {
     "name": "BrowserDomAdapter"
   },
   {
@@ -840,6 +843,9 @@
     "name": "internalImportProvidersFrom"
   },
   {
+    "name": "internalProvideZoneChangeDetection"
+  },
+  {
     "name": "invertObject"
   },
   {
@@ -1009,9 +1015,6 @@
   },
   {
     "name": "promise"
-  },
-  {
-    "name": "provideNgZoneChangeDetection"
   },
   {
     "name": "refCount"

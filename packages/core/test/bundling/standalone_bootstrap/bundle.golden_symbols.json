@@ -27,6 +27,9 @@
     "name": "BROWSER_MODULE_PROVIDERS"
   },
   {
+    "name": "BehaviorSubject"
+  },
+  {
     "name": "BrowserDomAdapter"
   },
   {
@@ -61,12 +64,6 @@
   },
   {
     "name": "ComponentRef2"
-  },
-  {
-    "name": "ConnectableObservable"
-  },
-  {
-    "name": "ConnectableSubscriber"
   },
   {
     "name": "DEFAULT_LOCALE_ID"
@@ -183,18 +180,6 @@
     "name": "MOVED_VIEWS"
   },
   {
-    "name": "MapOperator"
-  },
-  {
-    "name": "MapSubscriber"
-  },
-  {
-    "name": "MergeMapOperator"
-  },
-  {
-    "name": "MergeMapSubscriber"
-  },
-  {
     "name": "NAMESPACE_URIS"
   },
   {
@@ -273,9 +258,6 @@
     "name": "NgZone"
   },
   {
-    "name": "NgZoneChangeDetectionScheduler"
-  },
-  {
     "name": "NodeInjector"
   },
   {
@@ -309,16 +291,13 @@
     "name": "PRESERVE_HOST_CONTENT"
   },
   {
+    "name": "PROVIDED_NG_ZONE"
+  },
+  {
     "name": "R3Injector"
   },
   {
     "name": "REMOVE_STYLES_ON_COMPONENT_DESTROY"
-  },
-  {
-    "name": "RefCountOperator"
-  },
-  {
-    "name": "RefCountSubscriber"
   },
   {
     "name": "RendererFactory2"
@@ -352,12 +331,6 @@
   },
   {
     "name": "SimpleChange"
-  },
-  {
-    "name": "SimpleInnerSubscriber"
-  },
-  {
-    "name": "SimpleOuterSubscriber"
   },
   {
     "name": "StandaloneService"
@@ -516,16 +489,10 @@
     "name": "configureViewWithDirective"
   },
   {
-    "name": "connectableObservableDescriptor"
-  },
-  {
     "name": "convertToBitFlags"
   },
   {
     "name": "createElementRef"
-  },
-  {
-    "name": "createEnvironmentInjector"
   },
   {
     "name": "createInjector"
@@ -702,9 +669,6 @@
     "name": "getSimpleChangesStore"
   },
   {
-    "name": "getSymbolIterator"
-  },
-  {
     "name": "getTNodeFromLView"
   },
   {
@@ -762,9 +726,6 @@
     "name": "isArray"
   },
   {
-    "name": "isArrayLike"
-  },
-  {
     "name": "isComponentDef"
   },
   {
@@ -783,19 +744,10 @@
     "name": "isLView"
   },
   {
-    "name": "isObject"
-  },
-  {
     "name": "isPositive"
   },
   {
     "name": "isPromise"
-  },
-  {
-    "name": "isPromise2"
-  },
-  {
-    "name": "isStableFactory"
   },
   {
     "name": "isTemplateNode"
@@ -805,9 +757,6 @@
   },
   {
     "name": "isValueProvider"
-  },
-  {
-    "name": "iterator"
   },
   {
     "name": "leaveDI"
@@ -837,9 +786,6 @@
     "name": "mergeHostAttrs"
   },
   {
-    "name": "mergeMap"
-  },
-  {
     "name": "nativeAppendChild"
   },
   {
@@ -853,9 +799,6 @@
   },
   {
     "name": "ngOnChangesSetInput"
-  },
-  {
-    "name": "ngZoneApplicationErrorHandlerFactory"
   },
   {
     "name": "nonNull"
@@ -880,15 +823,6 @@
   },
   {
     "name": "profiler"
-  },
-  {
-    "name": "promise"
-  },
-  {
-    "name": "provideNgZoneChangeDetection"
-  },
-  {
-    "name": "refCount"
   },
   {
     "name": "refreshComponent"
@@ -933,9 +867,6 @@
     "name": "saveNameToExportMap"
   },
   {
-    "name": "scheduleArray"
-  },
-  {
     "name": "searchTokensOnInjector"
   },
   {
@@ -966,9 +897,6 @@
     "name": "setUpAttributes"
   },
   {
-    "name": "shareSubjectFactory"
-  },
-  {
     "name": "shimStylesContent"
   },
   {
@@ -982,12 +910,6 @@
   },
   {
     "name": "stringifyForError"
-  },
-  {
-    "name": "subscribeTo"
-  },
-  {
-    "name": "subscribeToArray"
   },
   {
     "name": "throwProviderNotFoundError"

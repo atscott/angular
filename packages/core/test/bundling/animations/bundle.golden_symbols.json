@@ -99,6 +99,9 @@
     "name": "BaseAnimationRenderer"
   },
   {
+    "name": "BehaviorSubject"
+  },
+  {
     "name": "BrowserAnimationBuilder"
   },
   {
@@ -1089,6 +1092,9 @@
     "name": "internalImportProvidersFrom"
   },
   {
+    "name": "internalProvideZoneChangeDetection"
+  },
+  {
     "name": "interpolateParams"
   },
   {
@@ -1312,9 +1318,6 @@
   },
   {
     "name": "promise"
-  },
-  {
-    "name": "provideNgZoneChangeDetection"
   },
   {
     "name": "refCount"

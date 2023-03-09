@@ -1322,7 +1322,9 @@ describe('TestBed', () => {
   });
 
   it('should be able to override the ErrorHandler via an import', () => {
-    class CustomErrorHandler {}
+    class CustomErrorHandler {
+      handleError() {}
+    }
 
     @NgModule({providers: [{provide: ErrorHandler, useClass: CustomErrorHandler}]})
     class ProvidesErrorHandler {

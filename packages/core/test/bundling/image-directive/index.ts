@@ -6,9 +6,9 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {Component, importProvidersFrom} from '@angular/core';
+import {Component, provideZoneChangeDetection} from '@angular/core';
 import {bootstrapApplication, provideProtractorTestingSupport} from '@angular/platform-browser';
-import {RouterModule} from '@angular/router';
+import {provideRouter, RouterOutlet} from '@angular/router';
 
 import {BasicComponent} from './e2e/basic/basic';
 import {FillModeFailingComponent, FillModePassingComponent} from './e2e/fill-mode/fill-mode';
@@ -21,7 +21,7 @@ import {PlaygroundComponent} from './playground';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterModule],
+  imports: [RouterOutlet],
   template: '<router-outlet></router-outlet>',
 })
 export class RootComponent {
@@ -46,6 +46,7 @@ const ROUTES = [
 bootstrapApplication(RootComponent, {
   providers: [
     provideProtractorTestingSupport(),  //
-    importProvidersFrom(RouterModule.forRoot(ROUTES))
+    provideRouter(ROUTES),
+    provideZoneChangeDetection(),
   ],
 });
