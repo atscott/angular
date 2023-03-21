@@ -6,12 +6,13 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {EnvironmentProviders, inject, InjectionToken, makeEnvironmentProviders, Provider} from '@angular/core';
+import {ApplicationRef, EnvironmentProviders, inject, InjectionToken, makeEnvironmentProviders, Provider, ɵTransferState as TransferState} from '@angular/core';
 
 import {HttpBackend, HttpHandler} from './backend';
 import {HttpClient} from './client';
 import {HTTP_INTERCEPTOR_FNS, HttpInterceptorFn, HttpInterceptorHandler, legacyInterceptorFnFactory} from './interceptor';
 import {jsonpCallbackContext, JsonpCallbackContext, JsonpClientBackend, jsonpInterceptorFn} from './jsonp';
+import {transferCacheInterceptorFn} from './transfer_cache';
 import {HttpXhrBackend} from './xhr';
 import {HttpXsrfCookieExtractor, HttpXsrfTokenExtractor, XSRF_COOKIE_NAME, XSRF_ENABLED, XSRF_HEADER_NAME, xsrfInterceptorFn} from './xsrf';
 
@@ -27,6 +28,7 @@ export enum HttpFeatureKind {
   NoXsrfProtection,
   JsonpSupport,
   RequestsMadeViaParent,
+  TransferCache,
 }
 
 /**
@@ -61,6 +63,7 @@ function makeHttpFeature<KindT extends HttpFeatureKind>(
  * @see withNoXsrfProtection
  * @see withJsonpSupport
  * @see withRequestsMadeViaParent
+ * @see withTransferCache
  */
 export function provideHttpClient(...features: HttpFeature<HttpFeatureKind>[]):
     EnvironmentProviders {
@@ -230,6 +233,29 @@ export function withRequestsMadeViaParent(): HttpFeature<HttpFeatureKind.Request
         }
         return handlerFromParent;
       },
+    },
+  ]);
+}
+
+/**
+ * Configures the current `HttpClient` instance to cache requests.
+ *
+ * By default, when using server rendering requests are performated twice once on the server and
+ * other one on the browser.
+ *
+ * When this option is enabled, requests done on the server are cached and reused during the
+ * bootstrapping of the application in the browser thus avoiding duplicate requests and reducing
+ * load time.
+ *
+ * @see provideHttpClient
+ */
+export function withTransferCache(): HttpFeature<HttpFeatureKind.TransferCache> {
+  return makeHttpFeature(HttpFeatureKind.TransferCache, [
+    {
+      provide: HTTP_INTERCEPTOR_FNS,
+      useValue: transferCacheInterceptorFn,
+      multi: true,
+      deps: [TransferState, ApplicationRef]
     },
   ]);
 }

@@ -9,12 +9,13 @@
 import {DOCUMENT, XhrFactory} from '@angular/common';
 import {HTTP_INTERCEPTORS, HttpClient, HttpClientModule, HttpEvent, HttpHandler, HttpInterceptor, HttpRequest, JsonpClientBackend} from '@angular/common/http';
 import {HttpClientTestingModule, HttpTestingController, provideHttpClientTesting} from '@angular/common/http/testing';
-import {createEnvironmentInjector, EnvironmentInjector, inject, InjectionToken, PLATFORM_ID, Provider} from '@angular/core';
+import {ApplicationRef, createEnvironmentInjector, EnvironmentInjector, inject, InjectionToken, PLATFORM_ID, Provider} from '@angular/core';
+import {makeStateKey, TransferState} from '@angular/core/src/transfer_state';
 import {TestBed} from '@angular/core/testing';
-import {EMPTY, Observable} from 'rxjs';
+import {EMPTY, Observable, of} from 'rxjs';
 
 import {HttpInterceptorFn} from '../src/interceptor';
-import {provideHttpClient, withInterceptors, withInterceptorsFromDi, withJsonpSupport, withNoXsrfProtection, withRequestsMadeViaParent, withXsrfConfiguration} from '../src/provider';
+import {provideHttpClient, withInterceptors, withInterceptorsFromDi, withJsonpSupport, withNoXsrfProtection, withRequestsMadeViaParent, withTransferCache, withXsrfConfiguration} from '../src/provider';
 
 describe('provideHttp', () => {
   beforeEach(() => {
@@ -386,6 +387,35 @@ describe('provideHttp', () => {
       expect(req.request.headers.get('X-Tag')).toEqual('alpha,beta');
       req.flush('');
     });
+  });
+
+  describe('transferCacheInterceptor', () => {
+    it('should not be enabled by default', () => {
+      TestBed.configureTestingModule({
+        providers: [
+          provideHttpClient(),
+          provideHttpClientTesting(),
+        ],
+      });
+    });
+
+    it('should store HTTP in `TransferState` when using `withTransferCache()` and application is not stable',
+       () => {
+         TestBed.configureTestingModule({
+           providers: [
+             {provide: ApplicationRef, useValue: {isStable: of(false)}},
+             provideHttpClient(withTransferCache()),
+             provideHttpClientTesting(),
+           ],
+         });
+
+         const url = '/test';
+         TestBed.inject(HttpClient).get(url).subscribe();
+         TestBed.inject(HttpTestingController).expectOne(url).flush('foo');
+         const key = makeStateKey('G.J./test?');
+         const transferState = TestBed.inject(TransferState);
+         expect(transferState.get(key, null)).toEqual(jasmine.objectContaining({body: 'foo'}));
+       });
   });
 });
 

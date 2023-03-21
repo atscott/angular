@@ -1749,7 +1749,9 @@ export enum HttpFeatureKind {
     // (undocumented)
     NoXsrfProtection = 3,
     // (undocumented)
-    RequestsMadeViaParent = 5
+    RequestsMadeViaParent = 5,
+    // (undocumented)
+    TransferCache = 6
 }
 
 // @public
