@@ -16,8 +16,8 @@ import {HttpRequest} from './request';
 import {HttpEvent, HttpResponse} from './response';
 
 interface TransferHttpResponse {
-  body?: any;
-  headers?: Record<string, string[]>;
+  body: any;
+  headers: Record<string, string[]>;
   status?: number;
   statusText?: string;
   url?: string;
@@ -32,15 +32,20 @@ const ALLOWED_METHODS = ['GET', 'HEAD'];
 export function transferCacheInterceptorFn(
     req: HttpRequest<unknown>, next: HttpHandlerFn): Observable<HttpEvent<unknown>> {
   const appRef = inject(ApplicationRef);
-  // Stop using the cache if the application has stabilized, indicating initial rendering is
-  // complete.
+
   let isCacheActive = true;
-  appRef.isStable.pipe(filter((isStable) => isStable), take(1))
-      .subscribe((stable) => {
-        isCacheActive = !stable;
+  appRef.isStable
+      .pipe(
+          filter((isStable) => isStable),
+          take(1),
+          )
+      .subscribe(() => {
+        isCacheActive = false;
       })
       .unsubscribe();
 
+  // Stop using the cache if the application has stabilized, indicating initial rendering
+  // is complete.
   if (!isCacheActive || !ALLOWED_METHODS.includes(req.method)) {
     // Cache is no longer active or method is not HEAD or GET.
     // Pass the request through.
@@ -49,10 +54,10 @@ export function transferCacheInterceptorFn(
 
   const transferState = inject(TransferState);
   const storeKey = makeCacheKey(req);
+  const response = transferState.get(storeKey, null);
 
-  if (transferState.hasKey(storeKey)) {
+  if (response) {
     // Request found in cache. Respond using it.
-    const response = transferState.get(storeKey, {});
     let body: ArrayBuffer|Blob|string|undefined = response.body;
 
     switch (response.responseType) {
@@ -105,12 +110,33 @@ function getHeadersMap(headers: HttpHeaders): Record<string, string[]> {
   return headersMap;
 }
 
-export function makeCacheKey(request: HttpRequest<any>): StateKey<TransferHttpResponse> {
+function makeCacheKey(request: HttpRequest<any>): StateKey<TransferHttpResponse> {
   // make the params encoded same as a url so it's easy to identify
   const {params, method, responseType, url} = request;
   const encodedParams = params.keys().sort().map((k) => `${k}=${params.getAll(k)}`).join('&');
-  const key = method.charAt(0) + '.' + responseType.charAt(0).toUpperCase() + '.' + url + '?' +
-      encodedParams;
+  const key = method + '.' + responseType + '.' + url + '?' + encodedParams;
 
-  return makeStateKey(key);
+  const hash = generateHash(key);
+
+  return makeStateKey(hash);
+}
+
+/**
+ * A method that returns a hash representation of a string using a variant of DJB2 hash
+ * algorithm.
+ *
+ * This is the same hashing logic that is used to generate component ids.
+ */
+function generateHash(value: string): string {
+  let hash = 0;
+
+  for (const char of value) {
+    hash = Math.imul(31, hash) + char.charCodeAt(0) << 0;
+  }
+
+  // Force positive number hash.
+  // 2147483647 = equivalent of Integer.MAX_VALUE.
+  hash += 2147483647 + 1;
+
+  return hash.toString();
 }

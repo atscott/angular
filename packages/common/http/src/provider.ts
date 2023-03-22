@@ -240,10 +240,10 @@ export function withRequestsMadeViaParent(): HttpFeature<HttpFeatureKind.Request
 /**
  * Configures the current `HttpClient` instance to cache requests.
  *
- * By default, when using server rendering requests are performated twice once on the server and
+ * By default, when using server rendering, requests are performed twice: once on the server and
  * other one on the browser.
  *
- * When this option is enabled, requests done on the server are cached and reused during the
+ * When this option is enabled, requests performed on the server are cached and reused during the
  * bootstrapping of the application in the browser thus avoiding duplicate requests and reducing
  * load time.
  *

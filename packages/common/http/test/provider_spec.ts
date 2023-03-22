@@ -409,10 +409,9 @@ describe('provideHttp', () => {
            ],
          });
 
-         const url = '/test';
-         TestBed.inject(HttpClient).get(url).subscribe();
-         TestBed.inject(HttpTestingController).expectOne(url).flush('foo');
-         const key = makeStateKey('G.J./test?');
+         TestBed.inject(HttpClient).get('/test').subscribe();
+         TestBed.inject(HttpTestingController).expectOne('/test').flush('foo');
+         const key = makeStateKey('432906284');
          const transferState = TestBed.inject(TransferState);
          expect(transferState.get(key, null)).toEqual(jasmine.objectContaining({body: 'foo'}));
        });

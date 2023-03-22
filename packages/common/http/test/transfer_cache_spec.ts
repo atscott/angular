@@ -11,53 +11,11 @@ import {makeStateKey, TransferState} from '@angular/core/src/transfer_state';
 import {TestBed} from '@angular/core/testing';
 import {BehaviorSubject} from 'rxjs';
 
-import {HttpClient, HttpParams, HttpRequest, provideHttpClient} from '../public_api';
+import {HttpClient, provideHttpClient} from '../public_api';
 import {withTransferCache} from '../src/provider';
-import {makeCacheKey} from '../src/transfer_cache';
 import {HttpTestingController, provideHttpClientTesting} from '../testing';
 
 describe('TransferCache', () => {
-  describe('makeCacheKey', () => {
-    it('should encode url params', () => {
-      const key = makeCacheKey(new HttpRequest('GET', 'https://google.com/api', {
-        responseType: 'text',
-        params: new HttpParams().append('foo', 'bar'),
-      }));
-
-      expect(key).toEqual('G.T.https://google.com/api?foo=bar');
-    });
-
-    it('should sort the keys by unicode points', () => {
-      const key = makeCacheKey(new HttpRequest('GET', 'https://google.com/api', {
-        responseType: 'text',
-        params: new HttpParams().append('b', 'foo').append('a', 'bar'),
-      }));
-
-      expect(key).toEqual('G.T.https://google.com/api?a=bar&b=foo');
-    });
-
-    it('should make equal keys if order of params changes', () => {
-      const key1 = makeCacheKey(new HttpRequest('GET', 'https://google.com/api', {
-        responseType: 'text',
-        params: new HttpParams().append('b', 'foo').append('a', 'bar'),
-      }));
-      const key2 = makeCacheKey(new HttpRequest('GET', 'https://google.com/api', {
-        responseType: 'text',
-        params: new HttpParams().append('b', 'foo').append('a', 'bar'),
-      }));
-      expect(key1).toEqual(key2);
-    });
-
-    it('should encode arrays in url params', () => {
-      const key = makeCacheKey(new HttpRequest('GET', 'https://google.com/api', {
-        responseType: 'text',
-        params: new HttpParams().append('b', 'xyz').append('a', 'foo').append('a', 'bar'),
-      }));
-
-      expect(key).toEqual('G.T.https://google.com/api?a=foo,bar&b=xyz');
-    });
-  });
-
   describe('withTransferCache', () => {
     let isStable: BehaviorSubject<boolean>;
 
@@ -87,7 +45,7 @@ describe('TransferCache', () => {
     it('should store HTTP calls in cache when using `withTransferHttpCache()` and application is not stable',
        () => {
          makeRequestAndExpectOne('/test', 'foo');
-         const key = makeStateKey('G.J./test?');
+         const key = makeStateKey('432906284');
          const transferState = TestBed.inject(TransferState);
          expect(transferState.get(key, null)).toEqual(jasmine.objectContaining({body: 'foo'}));
        });
@@ -102,7 +60,7 @@ describe('TransferCache', () => {
 
       const transferState = TestBed.inject(TransferState);
       expect(JSON.parse(transferState.toJson()) as Record<string, unknown>).toEqual({
-        'G.J./test-1?': {
+        '3706062792': {
           'body': 'foo',
           'headers': {},
           'status': 200,
@@ -110,7 +68,7 @@ describe('TransferCache', () => {
           'url': '/test-1',
           'responseType': 'json'
         },
-        'G.J./test-2?': {
+        '3706062823': {
           'body': 'buzz',
           'headers': {},
           'status': 200,
