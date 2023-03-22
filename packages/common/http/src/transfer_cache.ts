@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {ApplicationRef, inject, ɵmakeStateKey as makeStateKey, ɵStateKey as StateKey, ɵTransferState as TransferState} from '@angular/core';
+import {ApplicationRef, inject, InjectionToken, ɵmakeStateKey as makeStateKey, ɵStateKey as StateKey, ɵTransferState as TransferState} from '@angular/core';
 import {Observable, of} from 'rxjs';
 import {filter, take, tap} from 'rxjs/operators';
 
@@ -24,6 +24,9 @@ interface TransferHttpResponse {
   responseType?: HttpRequest<unknown>['responseType'];
 }
 
+
+export const CACHE_STATE = new InjectionToken<{isCacheActive: boolean}>('');
+
 /**
  * A list of allowed HTTP methods to cache.
  */
@@ -31,19 +34,7 @@ const ALLOWED_METHODS = ['GET', 'HEAD'];
 
 export function transferCacheInterceptorFn(
     req: HttpRequest<unknown>, next: HttpHandlerFn): Observable<HttpEvent<unknown>> {
-  const appRef = inject(ApplicationRef);
-
-  let isCacheActive = true;
-  appRef.isStable
-      .pipe(
-          filter((isStable) => isStable),
-          take(1),
-          )
-      .subscribe(() => {
-        isCacheActive = false;
-      })
-      .unsubscribe();
-
+  const {isCacheActive} = inject(CACHE_STATE);
   // Stop using the cache if the application has stabilized, indicating initial rendering
   // is complete.
   if (!isCacheActive || !ALLOWED_METHODS.includes(req.method)) {

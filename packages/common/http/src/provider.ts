@@ -6,13 +6,14 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {ApplicationRef, EnvironmentProviders, inject, InjectionToken, makeEnvironmentProviders, Provider, ɵTransferState as TransferState} from '@angular/core';
+import {ApplicationRef, DestroyRef, ENVIRONMENT_INITIALIZER, EnvironmentProviders, inject, InjectionToken, makeEnvironmentProviders, Provider, ɵTransferState as TransferState} from '@angular/core';
+import {filter, take} from 'rxjs/operators';
 
 import {HttpBackend, HttpHandler} from './backend';
 import {HttpClient} from './client';
 import {HTTP_INTERCEPTOR_FNS, HttpInterceptorFn, HttpInterceptorHandler, legacyInterceptorFnFactory} from './interceptor';
 import {jsonpCallbackContext, JsonpCallbackContext, JsonpClientBackend, jsonpInterceptorFn} from './jsonp';
-import {transferCacheInterceptorFn} from './transfer_cache';
+import {CACHE_STATE, transferCacheInterceptorFn} from './transfer_cache';
 import {HttpXhrBackend} from './xhr';
 import {HttpXsrfCookieExtractor, HttpXsrfTokenExtractor, XSRF_COOKIE_NAME, XSRF_ENABLED, XSRF_HEADER_NAME, xsrfInterceptorFn} from './xsrf';
 
@@ -256,6 +257,28 @@ export function withTransferCache(): HttpFeature<HttpFeatureKind.TransferCache> 
       useValue: transferCacheInterceptorFn,
       multi: true,
       deps: [TransferState, ApplicationRef]
+    },
+    {provide: CACHE_STATE, useValue: {isCacheActive: true}},
+    {
+      provide: ENVIRONMENT_INITIALIZER,
+      multi: true,
+      useFactory: () => {
+        const appRef = inject(ApplicationRef);
+        const destroyRef = inject(DestroyRef);
+        const cacheState = inject(CACHE_STATE);
+
+        return () => {
+          const subscription = appRef.isStable
+                                   .pipe(
+                                       filter((isStable) => isStable),
+                                       take(1),
+                                       )
+                                   .subscribe(() => {
+                                     cacheState.isCacheActive = false;
+                                   });
+          destroyRef.onDestroy(() => subscription.unsubscribe());
+        };
+      }
     },
   ]);
 }
