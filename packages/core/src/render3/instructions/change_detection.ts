@@ -39,9 +39,6 @@ export function detectChangesInternal<T>(
     while ((lView[FLAGS] & LViewFlags.RefreshView || lView[DESCENDANT_VIEWS_TO_REFRESH] > 0) &&
            retries < 100) {
       retries++;
-      if (retries === 5) {
-        debugger;
-      }
       detectChangesInView(lView, ChangeDetectionMode.Targeted);
     }
     if (retries === 100) {
