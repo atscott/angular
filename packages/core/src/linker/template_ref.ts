@@ -14,6 +14,7 @@ import {createLView} from '../render3/instructions/shared';
 import {TContainerNode, TNode, TNodeType} from '../render3/interfaces/node';
 import {DECLARATION_LCONTAINER, FLAGS, LView, LViewFlags, QUERIES, TView} from '../render3/interfaces/view';
 import {getCurrentTNode, getLView} from '../render3/state';
+import {markViewForRefresh} from '../render3/util/view_utils';
 import {ViewRef as R3_ViewRef} from '../render3/view_ref';
 import {assertDefined} from '../util/assert';
 
@@ -139,6 +140,11 @@ const R3TemplateRef = class TemplateRef<T> extends ViewEngineTemplateRef<T> {
     }
 
     renderView(embeddedTView, embeddedLView, context);
+
+    if (isSignalView) {
+      // Newly created component views must be marked for check.
+      markViewForRefresh(embeddedLView);
+    }
 
     return new R3_ViewRef<T>(embeddedLView);
   }
