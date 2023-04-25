@@ -49,7 +49,7 @@ import {enterView, getCurrentTNode, getLView, leaveView} from './state';
 import {computeStaticStyling} from './styling/static_styling';
 import {mergeHostAttrs, setUpAttributes} from './util/attrs_utils';
 import {stringifyForError} from './util/stringify_utils';
-import {getComponentLViewByIndex, getNativeByTNode, getTNode} from './util/view_utils';
+import {getComponentLViewByIndex, getNativeByTNode, getTNode, markViewForRefresh} from './util/view_utils';
 import {RootViewRef, ViewRef} from './view_ref';
 
 export class ComponentFactoryResolver extends AbstractComponentFactoryResolver {
@@ -280,6 +280,11 @@ export class ComponentFactory<T> extends AbstractComponentFactory<T> {
       leaveView();
     }
 
+
+    if (this.componentDef.signals) {
+      // Newly created component views must be marked for check.
+      markViewForRefresh(rootLView);
+    }
     return new ComponentRef(
         this.componentType, component, createElementRef(tElementNode, rootLView), rootLView,
         tElementNode);
@@ -409,6 +414,10 @@ function createRootComponentView(
   }
 
   addToViewTree(rootView, componentView);
+
+  if (rootComponentDef.signals) {
+    markViewForRefresh(componentView);
+  }
 
   // Store component view at node index, with node as the HOST
   return rootView[tNode.index] = componentView;

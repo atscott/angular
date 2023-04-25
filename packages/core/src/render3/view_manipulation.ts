@@ -18,6 +18,7 @@ import {TNode} from './interfaces/node';
 import {RComment, RElement} from './interfaces/renderer_dom';
 import {DECLARATION_LCONTAINER, FLAGS, LView, LViewFlags, QUERIES, RENDERER, T_HOST, TVIEW} from './interfaces/view';
 import {addViewToDOM, destroyLView, detachView, getBeforeNodeForView, insertView, nativeParentNode} from './node_manipulation';
+import {markViewForRefresh} from './util/view_utils';
 
 export function createAndRenderEmbeddedLView<T>(
     declarationLView: LView<unknown>, templateTNode: TNode, context: T,
@@ -44,6 +45,11 @@ export function createAndRenderEmbeddedLView<T>(
 
   // execute creation mode of a view
   renderView(embeddedTView, embeddedLView, context);
+
+  if (isSignalView) {
+    // Newly created component views must be marked for check.
+    markViewForRefresh(embeddedLView);
+  }
 
   return embeddedLView;
 }

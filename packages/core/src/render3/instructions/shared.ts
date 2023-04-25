@@ -47,7 +47,7 @@ import {NO_CHANGE} from '../tokens';
 import {mergeHostAttrs} from '../util/attrs_utils';
 import {INTERPOLATION_DELIMITER} from '../util/misc_utils';
 import {renderStringify} from '../util/stringify_utils';
-import {getComponentLViewByIndex, getNativeByIndex, getNativeByTNode, resetPreOrderHookFlags, unwrapLView} from '../util/view_utils';
+import {getComponentLViewByIndex, getNativeByIndex, getNativeByTNode, markViewForRefresh, resetPreOrderHookFlags, unwrapLView} from '../util/view_utils';
 
 import {selectIndexInternal} from './advance';
 import {ɵɵdirectiveInject} from './di';
@@ -1245,6 +1245,10 @@ function addComponentLogic<T>(lView: LView, hostTNode: TElementNode, def: Compon
   // Component view will always be created before any injected LContainers,
   // so this is a regular element, wrap it with the component view
   lView[hostTNode.index] = componentView;
+
+  if (def.signals) {
+    markViewForRefresh(componentView);
+  }
 }
 
 export function elementAttributeInternal(
