@@ -6,6 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
+import {RuntimeError, RuntimeErrorCode} from '../../errors';
 import {assertDefined, assertEqual} from '../../util/assert';
 import {assertLContainer} from '../assert';
 import {getComponentViewByInstance} from '../context_discovery';
@@ -15,7 +16,7 @@ import {ComponentTemplate, RenderFlags} from '../interfaces/definition';
 import {CONTEXT, ENVIRONMENT, FLAGS, HAS_CHILD_VIEWS_TO_REFRESH, InitPhaseState, LView, LViewFlags, PARENT, TVIEW, TView} from '../interfaces/view';
 import {enterView, isInCheckNoChangesMode, leaveView, setBindingIndex, setIsInCheckNoChangesMode} from '../state';
 import {getFirstLContainer, getNextLContainer} from '../util/view_traversal_utils';
-import {getComponentLViewByIndex, isCreationMode, markAncestorsForTraversal, markViewForRefresh, resetPreOrderHookFlags, viewAttachedToChangeDetector} from '../util/view_utils';
+import {getComponentLViewByIndex, isCreationMode, markAncestorsForTraversal, markViewForRefresh, resetPreOrderHookFlags, updateAncestorTraversalFlagsOnAttach, viewAttachedToChangeDetector} from '../util/view_utils';
 
 import {executeTemplate, executeViewQueryFn, handleError, processHostBindingOpCodes, refreshContentQueries} from './shared';
 
@@ -37,6 +38,21 @@ export function detectChangesInternal<T>(
 
   try {
     refreshView(tView, lView, tView.template, context);
+    let retries = 0;
+    // If after running change detection, this view still needs to be refreshed or there are
+    // descendants views that need to be refreshed due to re-dirtying during the change detection
+    // run, detect changes on the view again. We run change detection in `Targeted` mode to only
+    // refresh views with the `RefreshView` flag.
+    while (lView[FLAGS] & LViewFlags.RefreshView || lView[HAS_CHILD_VIEWS_TO_REFRESH]) {
+      if (retries === 100) {
+        throw new RuntimeError(
+            RuntimeErrorCode.INFINITE_CHANGE_DETECTION, ngDevMode && 'Infinite change detection.');
+      }
+      retries++;
+      // Even if this view is detached, we still detect changes in targeted mode because this was
+      // the root of the change detection run.
+      detectChangesInView(lView, ChangeDetectionMode.Targeted);
+    }
   } catch (error) {
     if (notifyErrorHandler) {
       handleError(lView, error);
