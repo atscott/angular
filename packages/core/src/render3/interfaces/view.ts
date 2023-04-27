@@ -33,10 +33,14 @@ import {TDeferBlockDetails} from './defer';
 export const HOST = 0;
 export const TVIEW = 1;
 export const FLAGS = 2;
+
+// Shared with LContainer
 export const PARENT = 3;
 export const NEXT = 4;
-export const DESCENDANT_VIEWS_TO_REFRESH = 5;
+export const HAS_CHILD_VIEWS_TO_REFRESH = 5;
 export const T_HOST = 6;
+// End shared with LContainer
+
 export const CLEANUP = 7;
 export const CONTEXT = 8;
 export const INJECTOR = 9;
@@ -56,6 +60,7 @@ export const ON_DESTROY_HOOKS = 21;
 export const HYDRATION = 22;
 export const REACTIVE_TEMPLATE_CONSUMER = 23;
 export const REACTIVE_HOST_BINDING_CONSUMER = 24;
+
 /**
  * Size of LView's header. Necessary to adjust for it when setting slots.
  *
@@ -319,12 +324,11 @@ export interface LView<T = unknown> extends Array<any> {
   [PREORDER_HOOK_FLAGS]: PreOrderHookFlags;
 
   /**
-   * The number of direct transplanted views which need a refresh or have descendants themselves
-   * that need a refresh but have not marked their ancestors as Dirty. This tells us that during
-   * change detection we should still descend to find those children to refresh, even if the parents
-   * are not `Dirty`/`CheckAlways`.
+   * Indicates that this LView has a view underneath it that needs to be refreshed during change
+   * detection. This flag indicates that even if this view is not dirty itself, we still need to
+   * traverse its children during change detection.
    */
-  [DESCENDANT_VIEWS_TO_REFRESH]: number;
+  [HAS_CHILD_VIEWS_TO_REFRESH]: boolean;
 
   /** Unique ID of the view. Used for `__ngContext__` lookups in the `LView` registry. */
   [ID]: number;
@@ -424,8 +428,8 @@ export const enum LViewFlags {
   /**
    * Whether this moved LView was needs to be refreshed. Similar to the Dirty flag, but used for
    * transplanted and signal views where the parent/ancestor views are not marked dirty as well.
-   * i.e. "Refresh just this view". Used in conjunction with the DESCENDANT_VIEWS_TO_REFRESH
-   * counter.
+   * i.e. "Refresh just this view". Used in conjunction with the HAS_CHILD_VIEWS_TO_REFRESH
+   * flag.
    */
   RefreshView = 1 << 10,
 
