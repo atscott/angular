@@ -6,6 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
+import {RuntimeError, RuntimeErrorCode} from '../../errors';
 import {assertDefined, assertEqual} from '../../util/assert';
 import {assertLContainer} from '../assert';
 import {getComponentViewByInstance} from '../context_discovery';
@@ -31,6 +32,22 @@ export function detectChangesInternal<T>(
   if (!checkNoChangesMode && rendererFactory.begin) rendererFactory.begin();
   try {
     refreshView(tView, lView, tView.template, context);
+    let retries = 0;
+    // If after running change detection, this view still needs to be refreshed or there are
+    // descendants views that need to be refreshed due to re-dirtying during the change detection
+    // run, detect changes on the view again.
+    while ((lView[FLAGS] & LViewFlags.RefreshView || lView[DESCENDANT_VIEWS_TO_REFRESH] > 0) &&
+           retries < 100) {
+      retries++;
+      if (retries === 5) {
+        debugger;
+      }
+      detectChangesInView(lView, ChangeDetectionMode.Targeted);
+    }
+    if (retries === 100) {
+      throw new RuntimeError(
+          RuntimeErrorCode.INFINITE_CHANGE_DETECTION, ngDevMode && 'Infinite change detection.');
+    }
   } catch (error) {
     if (notifyErrorHandler) {
       handleError(lView, error);

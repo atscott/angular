@@ -765,9 +765,6 @@
     "name": "cleanUpView"
   },
   {
-    "name": "clearViewRefreshFlag"
-  },
-  {
     "name": "coerceToBoolean"
   },
   {
@@ -1674,10 +1671,19 @@
     "name": "updateMicroTaskStatus"
   },
   {
+    "name": "updateViewRefreshCountersBeforeAttach"
+  },
+  {
+    "name": "updateViewRefreshCountersBeforeDetach"
+  },
+  {
     "name": "updateViewsToRefresh"
   },
   {
     "name": "urlParsingNode"
+  },
+  {
+    "name": "viewAttachedToChangeDetector"
   },
   {
     "name": "walkProviderTree"

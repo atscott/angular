@@ -588,9 +588,6 @@
     "name": "cleanUpView"
   },
   {
-    "name": "clearViewRefreshFlag"
-  },
-  {
     "name": "collectNativeNodes"
   },
   {
@@ -1209,10 +1206,16 @@
     "name": "updateMicroTaskStatus"
   },
   {
+    "name": "updateViewRefreshCountersBeforeDetach"
+  },
+  {
     "name": "updateViewsToRefresh"
   },
   {
     "name": "urlParsingNode"
+  },
+  {
+    "name": "viewAttachedToChangeDetector"
   },
   {
     "name": "walkProviderTree"

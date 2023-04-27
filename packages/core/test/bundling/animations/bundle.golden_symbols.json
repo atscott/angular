@@ -774,9 +774,6 @@
     "name": "cleanUpView"
   },
   {
-    "name": "clearViewRefreshFlag"
-  },
-  {
     "name": "cloakAndComputeStyles"
   },
   {
@@ -1527,10 +1524,16 @@
     "name": "updateMicroTaskStatus"
   },
   {
+    "name": "updateViewRefreshCountersBeforeDetach"
+  },
+  {
     "name": "updateViewsToRefresh"
   },
   {
     "name": "urlParsingNode"
+  },
+  {
+    "name": "viewAttachedToChangeDetector"
   },
   {
     "name": "visitDslNode"
