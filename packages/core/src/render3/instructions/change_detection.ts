@@ -127,6 +127,10 @@ export function refreshView<T>(
   ngDevMode && assertEqual(isCreationMode(lView), false, 'Should be run in update mode');
   const flags = lView[FLAGS];
   if ((flags & LViewFlags.Destroyed) === LViewFlags.Destroyed) return;
+  const isSignalView = lView[FLAGS] & LViewFlags.SignalView;
+  if (isSignalView) {
+    clearViewRefreshFlag(lView);
+  }
 
   // Check no changes mode is a dev only mode used to verify that bindings have not changed
   // since they were assigned. We do not want to execute lifecycle hooks in that mode.
@@ -243,7 +247,9 @@ export function refreshView<T>(
     if (!isInCheckNoChangesPass) {
       lView[FLAGS] &= ~(LViewFlags.Dirty | LViewFlags.FirstLViewPass);
     }
-    clearViewRefreshFlag(lView);
+    if (!isSignalView) {
+      clearViewRefreshFlag(lView);
+    }
   } finally {
     leaveView();
   }
