@@ -171,7 +171,10 @@ export function refreshView<T>(
     // insertion points. This is needed to avoid the situation where the template is defined in this
     // `LView` but its declaration appears after the insertion component.
     markTransplantedViewsForRefresh(lView);
-    detectChangesInEmbeddedViews(lView, ChangeDetectionMode.BugToForceRefreshAndIgnoreViewFlags);
+    detectChangesInEmbeddedViews(
+        lView,
+        isSignalView ? ChangeDetectionMode.Global :
+                       ChangeDetectionMode.BugToForceRefreshAndIgnoreViewFlags);
 
     // Content query results must be refreshed before content hooks are called.
     if (tView.contentQueries !== null) {
@@ -325,7 +328,9 @@ function detectChangesInView(lView: LView, mode: ChangeDetectionMode) {
   if ((lView[FLAGS] & (LViewFlags.CheckAlways | LViewFlags.Dirty) &&
        mode === ChangeDetectionMode.Global) ||
       lView[FLAGS] & LViewFlags.RefreshView ||
-      mode === ChangeDetectionMode.BugToForceRefreshAndIgnoreViewFlags) {
+      // Prevent bug from happening with signal views
+      (mode === ChangeDetectionMode.BugToForceRefreshAndIgnoreViewFlags &&
+       !(lView[FLAGS] & LViewFlags.SignalView))) {
     refreshView(tView, lView, tView.template, lView[CONTEXT]);
   } else if (lView[FLAGS] & LViewFlags.SignalView) {
     detectChangesInChildren(lView, mode);
