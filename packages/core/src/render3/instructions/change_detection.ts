@@ -324,14 +324,20 @@ function detectChangesInView(lView: LView, mode: ChangeDetectionMode) {
       lView[FLAGS] & LViewFlags.RefreshView ||
       mode === ChangeDetectionMode.BugToForceRefreshAndIgnoreViewFlags) {
     refreshView(tView, lView, tView.template, lView[CONTEXT]);
+  } else if (lView[FLAGS] & LViewFlags.SignalView) {
+    detectChangesInChildren(lView, mode);
   } else if (lView[DESCENDANT_VIEWS_TO_REFRESH] > 0) {
-    detectChangesInEmbeddedViews(lView, ChangeDetectionMode.Targeted);
+    detectChangesInChildren(lView, ChangeDetectionMode.Targeted);
+  }
+}
 
-    const tView = lView[TVIEW];
-    const components = tView.components;
-    if (components !== null) {
-      detectChangesInChildComponents(lView, components, ChangeDetectionMode.Targeted);
-    }
+function detectChangesInChildren(lView: LView, mode: ChangeDetectionMode) {
+  detectChangesInEmbeddedViews(lView, mode);
+
+  const tView = lView[TVIEW];
+  const components = tView.components;
+  if (components !== null) {
+    detectChangesInChildComponents(lView, components, mode);
   }
 }
 
