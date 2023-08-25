@@ -22,7 +22,7 @@ To create a component using the CLI, enter the following at the command line whe
 
 <code-example format="shell" language="shell">
 
-ng generate component first
+ng generate component first --standalone
 
 </code-example>
 
@@ -31,7 +31,7 @@ Here, the new name is `second`.
 
 <code-example format="shell" language="shell">
 
-ng generate component second
+ng generate component second --standalone
 
 </code-example>
 
@@ -725,4 +725,4 @@ When using `RouterModule.forRoot`, this is configured with the `useHash: true` i
 
 <!-- end links -->
 
-@reviewed 2023-10-24
+@reviewed 2023-10-26
