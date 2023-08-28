@@ -225,6 +225,13 @@ export type LoadChildren = LoadChildrenCallback;
  */
 export type QueryParamsHandling = 'merge' | 'preserve' | '';
 
+export type RedirectFunction = (
+  redirectData: Pick<
+    ActivatedRouteSnapshot,
+    'routeConfig' | 'url' | 'params' | 'queryParams' | 'fragment' | 'data' | 'outlet'
+  >,
+) => string | UrlTree;
+
 /**
  * A policy for when to run guards and resolvers on a route.
  *
@@ -537,13 +544,17 @@ export interface Route {
   _loadedComponent?: Type<unknown>;
 
   /**
-   * A URL to redirect to when the path matches.
+   * A URL or function that returns a URL to redirect to when the path matches.
    *
-   * Absolute if the URL begins with a slash (/), otherwise relative to the path URL.
+   * Absolute if the URL begins with a slash (/) or the function returns a `UrlTree`, otherwise
+   * relative to the path URL.
+   *
+   * The `RedirectFunction` is run in an injection context so it can call `inject` to get any
+   * required dependencies.
    *
    * When not present, router does not redirect.
    */
-  redirectTo?: string;
+  redirectTo?: string | RedirectFunction;
   /**
    * Name of a `RouterOutlet` object where the component can be placed
    * when the path matches.

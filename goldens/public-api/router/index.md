@@ -655,7 +655,7 @@ export interface Route {
     path?: string;
     pathMatch?: 'prefix' | 'full';
     providers?: Array<Provider | EnvironmentProviders>;
-    redirectTo?: string;
+    redirectTo?: string | RedirectFunction;
     resolve?: ResolveData;
     runGuardsAndResolvers?: RunGuardsAndResolvers;
     title?: string | Type<Resolve<string>> | ResolveFn<string>;
