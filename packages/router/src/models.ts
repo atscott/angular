@@ -6,7 +6,14 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {EnvironmentInjector, EnvironmentProviders, NgModuleFactory, Provider, ProviderToken, Type} from '@angular/core';
+import {
+  EnvironmentInjector,
+  EnvironmentProviders,
+  NgModuleFactory,
+  Provider,
+  ProviderToken,
+  Type,
+} from '@angular/core';
 import {Observable} from 'rxjs';
 
 import {ActivatedRouteSnapshot, RouterStateSnapshot} from './router_state';
@@ -36,7 +43,7 @@ import {UrlSegment, UrlSegmentGroup, UrlTree} from './url_tree';
  * @see {@link NavigationBehaviorOptions}
  * @see {@link RouterConfigOptions}
  */
-export type OnSameUrlNavigation = 'reload'|'ignore';
+export type OnSameUrlNavigation = 'reload' | 'ignore';
 
 /**
  * The `InjectionToken` and `@Injectable` classes for guards and resolvers are deprecated in favor
@@ -55,7 +62,7 @@ export type OnSameUrlNavigation = 'reload'|'ignore';
  * @see {@link core/inject}
  * @publicApi
  */
-export type DeprecatedGuard = ProviderToken<any>|any;
+export type DeprecatedGuard = ProviderToken<any> | any;
 
 /**
  * Represents a route configuration for the Router service.
@@ -105,8 +112,11 @@ export type UrlMatchResult = {
  *
  * @publicApi
  */
-export type UrlMatcher = (segments: UrlSegment[], group: UrlSegmentGroup, route: Route) =>
-    UrlMatchResult|null;
+export type UrlMatcher = (
+  segments: UrlSegment[],
+  group: UrlSegmentGroup,
+  route: Route,
+) => UrlMatchResult | null;
 
 /**
  *
@@ -117,7 +127,7 @@ export type UrlMatcher = (segments: UrlSegment[], group: UrlSegmentGroup, route:
  * @publicApi
  */
 export type Data = {
-  [key: string|symbol]: any
+  [key: string | symbol]: any;
 };
 
 /**
@@ -129,7 +139,7 @@ export type Data = {
  * @publicApi
  */
 export type ResolveData = {
-  [key: string|symbol]: ResolveFn<unknown>|DeprecatedGuard
+  [key: string | symbol]: ResolveFn<unknown> | DeprecatedGuard;
 };
 
 /**
@@ -183,9 +193,14 @@ export interface DefaultExport<T> {
  * @see {@link Route#loadChildren}
  * @publicApi
  */
-export type LoadChildrenCallback = () => Type<any>|NgModuleFactory<any>|Routes|
-    Observable<Type<any>|Routes|DefaultExport<Type<any>>|DefaultExport<Routes>>|
-    Promise<NgModuleFactory<any>|Type<any>|Routes|DefaultExport<Type<any>>|DefaultExport<Routes>>;
+export type LoadChildrenCallback = () =>
+  | Type<any>
+  | NgModuleFactory<any>
+  | Routes
+  | Observable<Type<any> | Routes | DefaultExport<Type<any>> | DefaultExport<Routes>>
+  | Promise<
+      NgModuleFactory<any> | Type<any> | Routes | DefaultExport<Type<any>> | DefaultExport<Routes>
+    >;
 
 /**
  *
@@ -208,7 +223,14 @@ export type LoadChildren = LoadChildrenCallback;
  * @see {@link RouterLink}
  * @publicApi
  */
-export type QueryParamsHandling = 'merge'|'preserve'|'';
+export type QueryParamsHandling = 'merge' | 'preserve' | '';
+
+export type RedirectFunction = (
+  redirectData: Pick<
+    ActivatedRouteSnapshot,
+    'routeConfig' | 'url' | 'params' | 'queryParams' | 'fragment' | 'data' | 'outlet'
+  >,
+) => string | UrlTree;
 
 /**
  * A policy for when to run guards and resolvers on a route.
@@ -229,8 +251,12 @@ export type QueryParamsHandling = 'merge'|'preserve'|'';
  * @publicApi
  */
 export type RunGuardsAndResolvers =
-    'pathParamsChange'|'pathParamsOrQueryParamsChange'|'paramsChange'|'paramsOrQueryParamsChange'|
-    'always'|((from: ActivatedRouteSnapshot, to: ActivatedRouteSnapshot) => boolean);
+  | 'pathParamsChange'
+  | 'pathParamsOrQueryParamsChange'
+  | 'paramsChange'
+  | 'paramsOrQueryParamsChange'
+  | 'always'
+  | ((from: ActivatedRouteSnapshot, to: ActivatedRouteSnapshot) => boolean);
 
 /**
  * A configuration object that defines a single route.
@@ -464,7 +490,7 @@ export interface Route {
    *
    * @see {@link TitleStrategy}
    */
-  title?: string|Type<Resolve<string>>|ResolveFn<string>;
+  title?: string | Type<Resolve<string>> | ResolveFn<string>;
 
   /**
    * The path to match against. Cannot be used together with a custom `matcher` function.
@@ -493,7 +519,7 @@ export interface Route {
    * to the redirect destination, creating an endless loop.
    *
    */
-  pathMatch?: 'prefix'|'full';
+  pathMatch?: 'prefix' | 'full';
   /**
    * A custom URL-matching function. Cannot be used together with `path`.
    */
@@ -507,8 +533,10 @@ export interface Route {
   /**
    * An object specifying a lazy-loaded component.
    */
-  loadComponent?: () => Type<unknown>| Observable<Type<unknown>|DefaultExport<Type<unknown>>>|
-      Promise<Type<unknown>|DefaultExport<Type<unknown>>>;
+  loadComponent?: () =>
+    | Type<unknown>
+    | Observable<Type<unknown> | DefaultExport<Type<unknown>>>
+    | Promise<Type<unknown> | DefaultExport<Type<unknown>>>;
   /**
    * Filled for routes `loadComponent` once the component is loaded.
    * @internal
@@ -516,13 +544,17 @@ export interface Route {
   _loadedComponent?: Type<unknown>;
 
   /**
-   * A URL to redirect to when the path matches.
+   * A URL or function that returns a URL to redirect to when the path matches.
    *
-   * Absolute if the URL begins with a slash (/), otherwise relative to the path URL.
+   * Absolute if the URL begins with a slash (/) or the function returns a `UrlTree`, otherwise
+   * relative to the path URL.
+   *
+   * The `RedirectFunction` is run in an injection context so it can call `inject` to get any
+   * required dependencies.
    *
    * When not present, router does not redirect.
    */
-  redirectTo?: string;
+  redirectTo?: string | RedirectFunction;
   /**
    * Name of a `RouterOutlet` object where the component can be placed
    * when the path matches.
@@ -536,7 +568,7 @@ export interface Route {
    * When using a function rather than DI tokens, the function can call `inject` to get any required
    * dependencies. This `inject` call must be done in a synchronous context.
    */
-  canActivate?: Array<CanActivateFn|DeprecatedGuard>;
+  canActivate?: Array<CanActivateFn | DeprecatedGuard>;
   /**
    * An array of `CanMatchFn` or DI tokens used to look up `CanMatch()`
    * handlers, in order to determine if the current user is allowed to
@@ -545,7 +577,7 @@ export interface Route {
    * When using a function rather than DI tokens, the function can call `inject` to get any required
    * dependencies. This `inject` call must be done in a synchronous context.
    */
-  canMatch?: Array<CanMatchFn|DeprecatedGuard>;
+  canMatch?: Array<CanMatchFn | DeprecatedGuard>;
   /**
    * An array of `CanActivateChildFn` or DI tokens used to look up `CanActivateChild()` handlers,
    * in order to determine if the current user is allowed to activate
@@ -554,7 +586,7 @@ export interface Route {
    * When using a function rather than DI tokens, the function can call `inject` to get any required
    * dependencies. This `inject` call must be done in a synchronous context.
    */
-  canActivateChild?: Array<CanActivateChildFn|DeprecatedGuard>;
+  canActivateChild?: Array<CanActivateChildFn | DeprecatedGuard>;
   /**
    * An array of `CanDeactivateFn` or DI tokens used to look up `CanDeactivate()`
    * handlers, in order to determine if the current user is allowed to
@@ -563,7 +595,7 @@ export interface Route {
    * When using a function rather than DI tokens, the function can call `inject` to get any required
    * dependencies. This `inject` call must be done in a synchronous context.
    */
-  canDeactivate?: Array<CanDeactivateFn<any>|DeprecatedGuard>;
+  canDeactivate?: Array<CanDeactivateFn<any> | DeprecatedGuard>;
   /**
    * An array of `CanLoadFn` or DI tokens used to look up `CanLoad()`
    * handlers, in order to determine if the current user is allowed to
@@ -573,7 +605,7 @@ export interface Route {
    * dependencies. This `inject` call must be done in a synchronous context.
    * @deprecated Use `canMatch` instead
    */
-  canLoad?: Array<CanLoadFn|DeprecatedGuard>;
+  canLoad?: Array<CanLoadFn | DeprecatedGuard>;
   /**
    * Additional developer-defined data provided to the component via
    * `ActivatedRoute`. By default, no additional data is passed.
@@ -620,7 +652,7 @@ export interface Route {
    * route also has a `loadChildren` function which returns an `NgModuleRef`, this injector will be
    * used as the parent of the lazy loaded module.
    */
-  providers?: Array<Provider|EnvironmentProviders>;
+  providers?: Array<Provider | EnvironmentProviders>;
 
   /**
    * Injector created from the static route providers
@@ -643,7 +675,7 @@ export interface Route {
 
 export interface LoadedRouterConfig {
   routes: Route[];
-  injector: EnvironmentInjector|undefined;
+  injector: EnvironmentInjector | undefined;
 }
 
 /**
@@ -704,8 +736,10 @@ export interface LoadedRouterConfig {
  * @see {@link CanActivateFn}
  */
 export interface CanActivate {
-  canActivate(route: ActivatedRouteSnapshot, state: RouterStateSnapshot):
-      Observable<boolean|UrlTree>|Promise<boolean|UrlTree>|boolean|UrlTree;
+  canActivate(
+    route: ActivatedRouteSnapshot,
+    state: RouterStateSnapshot,
+  ): Observable<boolean | UrlTree> | Promise<boolean | UrlTree> | boolean | UrlTree;
 }
 
 /**
@@ -728,8 +762,10 @@ export interface CanActivate {
  * @publicApi
  * @see {@link Route}
  */
-export type CanActivateFn = (route: ActivatedRouteSnapshot, state: RouterStateSnapshot) =>
-    Observable<boolean|UrlTree>|Promise<boolean|UrlTree>|boolean|UrlTree;
+export type CanActivateFn = (
+  route: ActivatedRouteSnapshot,
+  state: RouterStateSnapshot,
+) => Observable<boolean | UrlTree> | Promise<boolean | UrlTree> | boolean | UrlTree;
 
 /**
  * @description
@@ -794,8 +830,10 @@ export type CanActivateFn = (route: ActivatedRouteSnapshot, state: RouterStateSn
  * @see {@link CanActivateChildFn}
  */
 export interface CanActivateChild {
-  canActivateChild(childRoute: ActivatedRouteSnapshot, state: RouterStateSnapshot):
-      Observable<boolean|UrlTree>|Promise<boolean|UrlTree>|boolean|UrlTree;
+  canActivateChild(
+    childRoute: ActivatedRouteSnapshot,
+    state: RouterStateSnapshot,
+  ): Observable<boolean | UrlTree> | Promise<boolean | UrlTree> | boolean | UrlTree;
 }
 
 /**
@@ -813,8 +851,10 @@ export interface CanActivateChild {
  * @publicApi
  * @see {@link Route}
  */
-export type CanActivateChildFn = (childRoute: ActivatedRouteSnapshot, state: RouterStateSnapshot) =>
-    Observable<boolean|UrlTree>|Promise<boolean|UrlTree>|boolean|UrlTree;
+export type CanActivateChildFn = (
+  childRoute: ActivatedRouteSnapshot,
+  state: RouterStateSnapshot,
+) => Observable<boolean | UrlTree> | Promise<boolean | UrlTree> | boolean | UrlTree;
 
 /**
  * @description
@@ -878,9 +918,11 @@ export type CanActivateChildFn = (childRoute: ActivatedRouteSnapshot, state: Rou
  */
 export interface CanDeactivate<T> {
   canDeactivate(
-      component: T, currentRoute: ActivatedRouteSnapshot, currentState: RouterStateSnapshot,
-      nextState: RouterStateSnapshot): Observable<boolean|UrlTree>|Promise<boolean|UrlTree>|boolean
-      |UrlTree;
+    component: T,
+    currentRoute: ActivatedRouteSnapshot,
+    currentState: RouterStateSnapshot,
+    nextState: RouterStateSnapshot,
+  ): Observable<boolean | UrlTree> | Promise<boolean | UrlTree> | boolean | UrlTree;
 }
 
 /**
@@ -898,10 +940,12 @@ export interface CanDeactivate<T> {
  * @publicApi
  * @see {@link Route}
  */
-export type CanDeactivateFn<T> =
-    (component: T, currentRoute: ActivatedRouteSnapshot, currentState: RouterStateSnapshot,
-     nextState: RouterStateSnapshot) =>
-        Observable<boolean|UrlTree>|Promise<boolean|UrlTree>|boolean|UrlTree;
+export type CanDeactivateFn<T> = (
+  component: T,
+  currentRoute: ActivatedRouteSnapshot,
+  currentState: RouterStateSnapshot,
+  nextState: RouterStateSnapshot,
+) => Observable<boolean | UrlTree> | Promise<boolean | UrlTree> | boolean | UrlTree;
 
 /**
  * @description
@@ -969,8 +1013,10 @@ export type CanDeactivateFn<T> =
  * @see {@link CanMatchFn}
  */
 export interface CanMatch {
-  canMatch(route: Route, segments: UrlSegment[]):
-      Observable<boolean|UrlTree>|Promise<boolean|UrlTree>|boolean|UrlTree;
+  canMatch(
+    route: Route,
+    segments: UrlSegment[],
+  ): Observable<boolean | UrlTree> | Promise<boolean | UrlTree> | boolean | UrlTree;
 }
 
 /**
@@ -988,8 +1034,10 @@ export interface CanMatch {
  * @publicApi
  * @see {@link Route}
  */
-export type CanMatchFn = (route: Route, segments: UrlSegment[]) =>
-    Observable<boolean|UrlTree>|Promise<boolean|UrlTree>|boolean|UrlTree;
+export type CanMatchFn = (
+  route: Route,
+  segments: UrlSegment[],
+) => Observable<boolean | UrlTree> | Promise<boolean | UrlTree> | boolean | UrlTree;
 
 /**
  * @description
@@ -1089,7 +1137,10 @@ export type CanMatchFn = (route: Route, segments: UrlSegment[]) =>
  * @see {@link ResolveFn}
  */
 export interface Resolve<T> {
-  resolve(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): Observable<T>|Promise<T>|T;
+  resolve(
+    route: ActivatedRouteSnapshot,
+    state: RouterStateSnapshot,
+  ): Observable<T> | Promise<T> | T;
 }
 
 /**
@@ -1133,8 +1184,10 @@ export interface Resolve<T> {
  * @publicApi
  * @see {@link Route}
  */
-export type ResolveFn<T> = (route: ActivatedRouteSnapshot, state: RouterStateSnapshot) =>
-    Observable<T>|Promise<T>|T;
+export type ResolveFn<T> = (
+  route: ActivatedRouteSnapshot,
+  state: RouterStateSnapshot,
+) => Observable<T> | Promise<T> | T;
 
 /**
  * @description
@@ -1191,8 +1244,10 @@ export type ResolveFn<T> = (route: ActivatedRouteSnapshot, state: RouterStateSna
  * @deprecated Use {@link CanMatchFn} instead
  */
 export interface CanLoad {
-  canLoad(route: Route, segments: UrlSegment[]):
-      Observable<boolean|UrlTree>|Promise<boolean|UrlTree>|boolean|UrlTree;
+  canLoad(
+    route: Route,
+    segments: UrlSegment[],
+  ): Observable<boolean | UrlTree> | Promise<boolean | UrlTree> | boolean | UrlTree;
 }
 
 /**
@@ -1204,9 +1259,10 @@ export interface CanLoad {
  * @see {@link CanMatchFn}
  * @deprecated Use `Route.canMatch` and `CanMatchFn` instead
  */
-export type CanLoadFn = (route: Route, segments: UrlSegment[]) =>
-    Observable<boolean|UrlTree>|Promise<boolean|UrlTree>|boolean|UrlTree;
-
+export type CanLoadFn = (
+  route: Route,
+  segments: UrlSegment[],
+) => Observable<boolean | UrlTree> | Promise<boolean | UrlTree> | boolean | UrlTree;
 
 /**
  * @description
