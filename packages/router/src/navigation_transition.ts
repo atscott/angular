@@ -6,8 +6,9 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
+
 import {EnvironmentInjector, inject, Injectable, Type} from '@angular/core';
-import {BehaviorSubject, combineLatest, EMPTY, Observable, of, Subject} from 'rxjs';
+import {BehaviorSubject, combineLatest, EMPTY, from, Observable, of, Subject} from 'rxjs';
 import {catchError, defaultIfEmpty, filter, finalize, map, switchMap, take, takeUntil, tap} from 'rxjs/operators';
 
 import {createRouterState} from './create_router_state';
@@ -30,6 +31,7 @@ import {Params} from './shared';
 import {UrlHandlingStrategy} from './url_handling_strategy';
 import {isUrlTree, UrlSerializer, UrlTree} from './url_tree';
 import {Checks, getAllRouteGuards} from './utils/preactivation';
+import {TRANSITION_HELPER} from './utils/view_transition';
 
 
 
@@ -253,6 +255,7 @@ export interface NavigationTransition {
   targetRouterState: RouterState|null;
   guards: Checks;
   guardsResult: boolean|UrlTree|null;
+  viewTransition?: ViewTransition
 }
 
 /**
@@ -297,6 +300,7 @@ export class NavigationTransitions {
   private readonly options = inject(ROUTER_CONFIGURATION, {optional: true}) || {};
   private readonly paramsInheritanceStrategy =
       this.options.paramsInheritanceStrategy || 'emptyOnly';
+  private readonly createTransition = inject(TRANSITION_HELPER, {optional: true});
 
   navigationId = 0;
   get hasRequestedNavigation() {
@@ -602,6 +606,16 @@ export class NavigationTransitions {
 
                          switchTap(() => this.afterPreactivation()),
 
+                         switchMap(() => {
+                           const viewTransitionInfo =
+                               this.createTransition?.(this.environmentInjector);
+                           overallTransitionState.viewTransition = viewTransitionInfo?.transition;
+                           return viewTransitionInfo ?
+                               from(viewTransitionInfo.viewTransitionStarted)
+                                   .pipe(map(() => overallTransitionState)) :
+                               of(overallTransitionState);
+                         }),
+
                          map((t: NavigationTransition) => {
                            const targetRouterState = createRouterState(
                                router.routeReuseStrategy, t.targetSnapshot!, t.currentRouterState);
@@ -637,6 +651,10 @@ export class NavigationTransitions {
                              completed = true;
                            }
                          }),
+
+                         switchTap(
+                             () => overallTransitionState.viewTransition?.updateCallbackDone ??
+                                 of(void 0)),
 
                          // There used to be a lot more logic happening directly within the
                          // transition Observable. Some of this logic has been refactored out to
