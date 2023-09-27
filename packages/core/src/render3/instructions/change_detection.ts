@@ -10,13 +10,13 @@ import {RuntimeError, RuntimeErrorCode} from '../../errors';
 import {assertDefined, assertEqual} from '../../util/assert';
 import {assertLContainer} from '../assert';
 import {getComponentViewByInstance} from '../context_discovery';
-import {executeCheckHooks, executeInitAndCheckHooks, incrementInitPhaseFlags} from '../hooks';
+import {callHookInternal, executeCheckHooks, executeInitAndCheckHooks, incrementInitPhaseFlags} from '../hooks';
 import {CONTAINER_HEADER_OFFSET, HAS_TRANSPLANTED_VIEWS, LContainer, MOVED_VIEWS} from '../interfaces/container';
-import {ComponentTemplate, RenderFlags} from '../interfaces/definition';
-import {CONTEXT, ENVIRONMENT, FLAGS, HAS_CHILD_VIEWS_TO_REFRESH, InitPhaseState, LView, LViewFlags, PARENT, TVIEW, TView} from '../interfaces/view';
+import {ComponentTemplate, DirectiveDef, RenderFlags} from '../interfaces/definition';
+import {CONTEXT, ENVIRONMENT, FLAGS, HAS_CHILD_VIEWS_TO_REFRESH, InitPhaseState, LView, LViewFlags, PARENT, TVIEW, TView, TViewType} from '../interfaces/view';
 import {enterView, isInCheckNoChangesMode, leaveView, setBindingIndex, setIsInCheckNoChangesMode} from '../state';
 import {getFirstLContainer, getNextLContainer} from '../util/view_traversal_utils';
-import {getComponentLViewByIndex, isCreationMode, markAncestorsForTraversal, markViewForRefresh, resetPreOrderHookFlags, updateAncestorTraversalFlagsOnAttach, viewAttachedToChangeDetector} from '../util/view_utils';
+import {getComponentLViewByIndex, isCreationMode, markAncestorsForTraversal, markViewForRefresh, resetPreOrderHookFlags, viewAttachedToChangeDetector} from '../util/view_utils';
 
 import {executeTemplate, executeViewQueryFn, handleError, processHostBindingOpCodes, refreshContentQueries} from './shared';
 
@@ -136,7 +136,6 @@ export function refreshView<T>(
   !isInCheckNoChangesPass && lView[ENVIRONMENT].effectManager?.flush();
 
   enterView(lView);
-  lView[HAS_CHILD_VIEWS_TO_REFRESH] = false;
   try {
     resetPreOrderHookFlags(lView);
 
@@ -245,7 +244,6 @@ export function refreshView<T>(
     if (!isInCheckNoChangesPass) {
       lView[FLAGS] &= ~(LViewFlags.Dirty | LViewFlags.FirstLViewPass);
     }
-    lView[FLAGS] &= ~LViewFlags.RefreshView;
   } catch (e) {
     /**
      * If refreshing a view causes an error, we need to remark the ancestors as needing traversal
@@ -333,12 +331,25 @@ function detectChangesInViewIfAttached(lView: LView, mode: ChangeDetectionMode) 
 function detectChangesInView(lView: LView, mode: ChangeDetectionMode) {
   const tView = lView[TVIEW];
   const flags = lView[FLAGS];
+  const hasChildViewsToRefresh = lView[HAS_CHILD_VIEWS_TO_REFRESH];
+
+  lView[HAS_CHILD_VIEWS_TO_REFRESH] = false;
+  lView[FLAGS] &= ~LViewFlags.RefreshView;
   if ((flags & (LViewFlags.CheckAlways | LViewFlags.Dirty) &&
        mode === ChangeDetectionMode.Global) ||
       flags & LViewFlags.RefreshView) {
     refreshView(tView, lView, tView.template, lView[CONTEXT]);
-  } else if (lView[HAS_CHILD_VIEWS_TO_REFRESH]) {
-    lView[HAS_CHILD_VIEWS_TO_REFRESH] = false;
+    // If we're running in targeted mode, that means the host view must not have been refreshed
+    // because when that happens, it descends into children in `Global` mode.
+    const isInCheckNoChangesPass = ngDevMode && isInCheckNoChangesMode();
+    if (!isInCheckNoChangesPass && mode === ChangeDetectionMode.Targeted && tView.type === TViewType.Component) {
+      // TODO: Is the component itself always the first item in the registry?
+      const hook = tView.directiveRegistry![0].type.prototype.ngAfterViewChecked;
+      if (hook !== undefined) {
+        callHookInternal(lView[CONTEXT], hook);
+      }
+    }
+  } else if (hasChildViewsToRefresh) {
     detectChangesInEmbeddedViews(lView, ChangeDetectionMode.Targeted);
     const components = tView.components;
     if (components !== null) {

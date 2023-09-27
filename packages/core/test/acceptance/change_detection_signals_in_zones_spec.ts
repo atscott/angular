@@ -6,11 +6,12 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {NgIf} from '@angular/common';
+import {NgFor, NgIf} from '@angular/common';
 import {ChangeDetectionStrategy, Component, Input, ViewChild} from '@angular/core';
 import {TestBed} from '@angular/core/testing';
 
-import {signal} from '../../src/signals';
+import {ChangeDetectorRef} from '../../src/change_detection';
+import {signal, untracked} from '../../src/signals';
 
 describe('CheckAlways components', () => {
   it('can read a signal', () => {
@@ -57,6 +58,84 @@ describe('CheckAlways components', () => {
     value.set('new');
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent.trim()).toBe('new');
+  });
+
+  it('continues to refresh views until none are dirty', () => {
+    const aVal = signal('initial');
+    const bVal = signal('initial');
+    let updateAValDuringAChangeDetection = false;
+    @Component({
+      template: '{{val()}}',
+      standalone: true,
+      selector: 'a-comp',
+    })
+    class A {
+      val = aVal;
+    }
+    @Component({
+      template: '{{val()}}',
+      standalone: true,
+      selector: 'b-comp',
+    })
+    class B {
+      val = bVal;
+      ngAfterViewChecked() {
+        if (updateAValDuringAChangeDetection) {
+          aVal.set('new');
+        }
+      }
+    }
+
+    @Component({template: '<a-comp />-<b-comp />', standalone: true, imports: [A, B]})
+    class App {
+    }
+
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.innerText).toContain('initial-initial');
+
+    bVal.set('new');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.innerText).toContain('initial-new');
+
+    updateAValDuringAChangeDetection = true;
+    bVal.set('newer');
+    fixture.detectChanges(false);
+    expect(fixture.nativeElement.innerText).toContain('new-newer');
+  });
+
+  it('refreshes root view until it is no longer dirty', () => {
+    const val = signal(0);
+    let incrementAfterCheckedUntil = 0;
+    @Component({
+      template: '',
+      selector: 'child',
+      standalone: true,
+    })
+    class Child {
+      ngDoCheck() {
+        // Update signal in parent view every time we check the child view
+        // (ExpressionChangedAfterItWasCheckedError but not for signals)
+        if (untracked(val) < incrementAfterCheckedUntil) {
+          val.update(v => ++v);
+        }
+      }
+    }
+    @Component({template: '{{val()}}<child />', standalone: true, imports: [Child]})
+    class App {
+      val = val;
+    }
+
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges(false);
+    expect(fixture.nativeElement.innerText).toContain('0');
+
+    incrementAfterCheckedUntil = 10;
+    fixture.detectChanges(false);
+    expect(fixture.nativeElement.innerText).toContain('10');
+
+    incrementAfterCheckedUntil = Number.MAX_SAFE_INTEGER;
+    expect(() => fixture.detectChanges()).toThrowError(/Infinite/);
   });
 });
 
@@ -340,4 +419,200 @@ describe('OnPush components with signals', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.outerHTML).not.toContain('blue');
   });
+
+  it('does not refresh view if signal marked dirty but did not change', () => {
+    const val = signal('initial', {equal: () => true});
+
+    @Component({
+      template: '{{val()}}{{incrementChecks()}}',
+      standalone: true,
+      changeDetection: ChangeDetectionStrategy.OnPush,
+    })
+    class App {
+      val = val;
+      templateExecutions = 0;
+      incrementChecks() {
+        this.templateExecutions++;
+      }
+    }
+
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    expect(fixture.componentInstance.templateExecutions).toBe(1);
+    expect(fixture.nativeElement.innerText).toContain('initial');
+
+    val.set('new');
+    fixture.detectChanges();
+    expect(fixture.componentInstance.templateExecutions).toBe(1);
+    expect(fixture.nativeElement.innerText).toContain('initial');
+  });
+
+  describe('embedded views', () => {
+    it('with a single signal, single view', () => {
+      @Component({
+        selector: 'signal-component',
+        changeDetection: ChangeDetectionStrategy.OnPush,
+        standalone: true,
+        imports: [NgIf],
+        template: `<div *ngIf="true"> {{value()}} </div>`,
+      })
+      class SignalComponent {
+        value = signal('initial');
+      }
+
+      const fixture = TestBed.createComponent(SignalComponent);
+      fixture.detectChanges();
+      fixture.componentInstance.value.set('new');
+      fixture.detectChanges();
+      expect(trim(fixture.nativeElement.textContent)).toEqual('new');
+    });
+
+    it('with a single signal, multiple views', () => {
+      @Component({
+        selector: 'signal-component',
+        changeDetection: ChangeDetectionStrategy.OnPush,
+        standalone: true,
+        imports: [NgFor],
+        template: `<div *ngFor="let i of [1,2,3]"> {{value()}} </div>`,
+      })
+      class SignalComponent {
+        value = signal('initial');
+      }
+
+      const fixture = TestBed.createComponent(SignalComponent);
+      fixture.detectChanges();
+      fixture.componentInstance.value.set('new');
+      fixture.detectChanges();
+      expect(trim(fixture.nativeElement.textContent)).toEqual('new new new');
+    });
+
+
+    it('does not execute view template if signal not updated or marked dirty', () => {
+      @Component({
+        selector: 'signal-component',
+        changeDetection: ChangeDetectionStrategy.OnPush,
+        standalone: true,
+        imports: [NgIf],
+        template: `
+          {{componentSignal()}}
+          <div *ngIf="true"> {{incrementExecutions()}} </div>
+        `,
+      })
+      class SignalComponent {
+        embeddedViewExecutions = 0;
+        componentSignal = signal('initial');
+        incrementExecutions() {
+          this.embeddedViewExecutions++;
+          return '';
+        }
+      }
+
+      const fixture = TestBed.createComponent(SignalComponent);
+      fixture.detectChanges(false);
+      expect(fixture.componentInstance.embeddedViewExecutions).toEqual(1);
+
+      fixture.componentInstance.componentSignal.set('new');
+      fixture.detectChanges(false);
+      expect(trim(fixture.nativeElement.textContent)).toEqual('new');
+      // OnPush/Default components are checked as a whole so the embedded view is also checked again
+      expect(fixture.componentInstance.embeddedViewExecutions).toEqual(2);
+    });
+
+
+    it('re-executes deep embedded template if signal updates', () => {
+      @Component({
+        selector: 'signal-component',
+        standalone: true,
+        changeDetection: ChangeDetectionStrategy.OnPush,
+        imports: [NgIf],
+        template: `
+          <div *ngIf="true"> 
+            <div *ngIf="true"> 
+              <div *ngIf="true"> 
+                {{value()}} 
+              </div>
+            </div>
+          </div>
+        `,
+      })
+      class SignalComponent {
+        value = signal('initial');
+      }
+
+      const fixture = TestBed.createComponent(SignalComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.value.set('new')
+      fixture.detectChanges();
+      expect(trim(fixture.nativeElement.textContent)).toEqual('new');
+    });
+  });
+
+  describe('shielded by non-dirty OnPush', () => {
+    @Component({
+      selector: 'signal-component',
+      changeDetection: ChangeDetectionStrategy.OnPush,
+      standalone: true,
+      template: `{{value()}}`,
+    })
+    class SignalComponent {
+      value = signal('initial');
+      afterViewCheckedRuns = 0;
+      constructor(readonly cdr: ChangeDetectorRef) {}
+      ngAfterViewChecked() {
+        this.afterViewCheckedRuns++;
+      }
+    }
+
+    @Component({
+      selector: 'on-push-parent',
+      template: `<signal-component></signal-component>{{incrementChecks()}}`,
+      changeDetection: ChangeDetectionStrategy.OnPush,
+      standalone: true,
+      imports: [SignalComponent],
+    })
+    class OnPushParent {
+      @ViewChild(SignalComponent) signalChild!: SignalComponent;
+      viewExecutions = 0;
+
+      constructor(readonly cdr: ChangeDetectorRef) {}
+      incrementChecks() {
+        this.viewExecutions++;
+      }
+    }
+
+    it('refreshes when signal changes, but does not refresh non-dirty parent', () => {
+      const fixture = TestBed.createComponent(OnPushParent);
+      fixture.detectChanges();
+      expect(fixture.componentInstance.viewExecutions).toEqual(1);
+      fixture.componentInstance.signalChild.value.set('new');
+      fixture.detectChanges();
+      expect(fixture.componentInstance.viewExecutions).toEqual(1);
+      expect(trim(fixture.nativeElement.textContent)).toEqual('new');
+    });
+
+    it('does not refresh when detached', () => {
+      const fixture = TestBed.createComponent(OnPushParent);
+      fixture.detectChanges();
+      fixture.componentInstance.signalChild.value.set('new');
+      fixture.componentInstance.signalChild.cdr.detach();
+      fixture.detectChanges();
+      expect(trim(fixture.nativeElement.textContent)).toEqual('initial');
+    });
+
+    it('runs afterViewChecked hooks even though parent view was not dirty (those hooks are executed by the parent)',
+       () => {
+         const fixture = TestBed.createComponent(OnPushParent);
+         fixture.detectChanges();
+         fixture.componentInstance.signalChild.value.set('new');
+         fixture.detectChanges();
+         expect(trim(fixture.nativeElement.textContent)).toEqual('new');
+         expect(fixture.componentInstance.signalChild.afterViewCheckedRuns).toBe(2);
+       });
+  });
 });
+
+
+function trim(text: string|null): string {
+  return text ? text.replace(/[\s\n]+/gm, ' ').trim() : '';
+}

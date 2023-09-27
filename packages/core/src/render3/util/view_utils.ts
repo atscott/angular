@@ -7,13 +7,15 @@
  */
 
 import {RuntimeError, RuntimeErrorCode} from '../../errors';
-import {assertGreaterThan, assertGreaterThanOrEqual, assertIndexInRange, assertLessThan} from '../../util/assert';
-import {assertTNode, assertTNodeForLView} from '../assert';
+import {assertDefined, assertGreaterThan, assertGreaterThanOrEqual, assertIndexInRange, assertLessThan} from '../../util/assert';
+import {assertLContainer, assertTNode, assertTNodeForLView} from '../assert';
 import {LContainer, TYPE} from '../interfaces/container';
 import {TConstants, TNode} from '../interfaces/node';
 import {RNode} from '../interfaces/renderer_dom';
-import {isLContainer, isLView} from '../interfaces/type_checks';
-import {FLAGS, HAS_CHILD_VIEWS_TO_REFRESH, HEADER_OFFSET, HOST, LView, LViewFlags, ON_DESTROY_HOOKS, PARENT, PREORDER_HOOK_FLAGS, PreOrderHookFlags, TData, TView} from '../interfaces/view';
+import {isLContainer, isLView, isRootView} from '../interfaces/type_checks';
+import {DECLARATION_COMPONENT_VIEW, FLAGS, HAS_CHILD_VIEWS_TO_REFRESH, HEADER_OFFSET, HOST, LView, LViewFlags, ON_DESTROY_HOOKS, PARENT, PREORDER_HOOK_FLAGS, PreOrderHookFlags, TData, TView} from '../interfaces/view';
+
+import {getLViewParent} from './view_traversal_utils';
 
 
 
@@ -210,6 +212,14 @@ export function markAncestorsForTraversal(lView: LView) {
       }
     }
     parent = parent[PARENT];
+  }
+}
+
+export function markViewDirtyFromSignal(lView: LView): void {
+  const declarationComponentView = lView[DECLARATION_COMPONENT_VIEW];
+  declarationComponentView[FLAGS] |= LViewFlags.RefreshView;
+  if (viewAttachedToChangeDetector(declarationComponentView)) {
+    markAncestorsForTraversal(declarationComponentView);
   }
 }
 

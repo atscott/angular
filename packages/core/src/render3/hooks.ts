@@ -244,7 +244,7 @@ function callHooks(
  * - it is called in the non-reactive context;
  * - profiling data are registered.
  */
-function callHookInternal(directive: any, hook: () => void) {
+export function callHookInternal(directive: any, hook: () => void) {
   profiler(ProfilerEvent.LifecycleHookStart, directive, hook);
   const prevConsumer = setActiveConsumer(null);
   try {

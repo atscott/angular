@@ -11,6 +11,7 @@ import {assertDefined, assertEqual} from '../util/assert';
 
 import {markViewDirty} from './instructions/mark_view_dirty';
 import {LView, REACTIVE_HOST_BINDING_CONSUMER, REACTIVE_TEMPLATE_CONSUMER} from './interfaces/view';
+import {markViewDirtyFromSignal} from './util/view_utils';
 
 let currentConsumer: ReactiveLViewConsumer|null = null;
 export interface ReactiveLViewConsumer extends ReactiveNode {
@@ -65,7 +66,7 @@ const REACTIVE_LVIEW_CONSUMER_NODE = {
         assertDefined(
             node.lView,
             'Updating a signal during template or host binding execution is not allowed.');
-    markViewDirty(node.lView!);
+    markViewDirtyFromSignal(node.lView!);
   },
   lView: null,
 };
