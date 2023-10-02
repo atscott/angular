@@ -65,7 +65,7 @@ const REACTIVE_LVIEW_CONSUMER_NODE: ReactiveLViewConsumer = {
         assertDefined(
             node.lView,
             'Updating a signal during template or host binding execution is not allowed.');
-    markViewDirty(node.lView!);
+    markViewDirty(node.lView!, true);
   },
   lView: null,
 };

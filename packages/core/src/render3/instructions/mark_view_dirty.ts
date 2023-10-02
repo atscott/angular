@@ -7,8 +7,10 @@
  */
 
 import {isRootView} from '../interfaces/type_checks';
-import {FLAGS, LView, LViewFlags} from '../interfaces/view';
+import {FLAGS, LView, LViewFlags, TRAVERSED_AT} from '../interfaces/view';
 import {getLViewParent} from '../util/view_traversal_utils';
+
+import {getTraverseId} from './change_detection';
 
 /**
  * Marks current view and all ancestors dirty.
@@ -21,9 +23,13 @@ import {getLViewParent} from '../util/view_traversal_utils';
  * @param lView The starting LView to mark dirty
  * @returns the root LView
  */
-export function markViewDirty(lView: LView): LView|null {
+export function markViewDirty(lView: LView, fromSignal = false): LView|null {
   while (lView) {
-    lView[FLAGS] |= LViewFlags.Dirty;
+    if (fromSignal && lView[TRAVERSED_AT] === getTraverseId()) {
+      lView[FLAGS] |= LViewFlags.DirtyAfterTraversal;
+    } else {
+      lView[FLAGS] |= LViewFlags.Dirty;
+    }
     const parent = getLViewParent(lView);
     // Stop traversing up as soon as you find a root view that wasn't attached to any container
     if (isRootView(lView) && !parent) {

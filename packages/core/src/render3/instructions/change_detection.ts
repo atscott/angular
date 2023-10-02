@@ -6,13 +6,14 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
+import {RuntimeError, RuntimeErrorCode} from '../../errors';
 import {assertDefined, assertEqual} from '../../util/assert';
 import {assertLContainer} from '../assert';
 import {getComponentViewByInstance} from '../context_discovery';
 import {executeCheckHooks, executeInitAndCheckHooks, incrementInitPhaseFlags} from '../hooks';
 import {CONTAINER_HEADER_OFFSET, HAS_TRANSPLANTED_VIEWS, LContainer, MOVED_VIEWS} from '../interfaces/container';
 import {ComponentTemplate, RenderFlags} from '../interfaces/definition';
-import {CONTEXT, DESCENDANT_VIEWS_TO_REFRESH, ENVIRONMENT, FLAGS, InitPhaseState, LView, LViewFlags, PARENT, TVIEW, TView} from '../interfaces/view';
+import {CONTEXT, DESCENDANT_VIEWS_TO_REFRESH, ENVIRONMENT, FLAGS, InitPhaseState, LView, LViewFlags, PARENT, TRAVERSED_AT, TVIEW, TView} from '../interfaces/view';
 import {enterView, isInCheckNoChangesMode, leaveView, setBindingIndex, setIsInCheckNoChangesMode} from '../state';
 import {getFirstLContainer, getNextLContainer} from '../util/view_traversal_utils';
 import {clearViewRefreshFlag, getComponentLViewByIndex, isCreationMode, markViewForRefresh, resetPreOrderHookFlags, viewAttachedToChangeDetector} from '../util/view_utils';
@@ -36,7 +37,25 @@ export function detectChangesInternal<T>(
   }
 
   try {
+    traverseId++;
+    lView[TRAVERSED_AT] = traverseId;
     refreshView(tView, lView, tView.template, context);
+    let retries = 0;
+    // If after running change detection, this view still needs to be refreshed or there are
+    // descendants views that need to be refreshed due to re-dirtying during the change detection
+    // run, detect changes on the view again. We run change detection in `Targeted` mode to only
+    // refresh views with the `RefreshView` flag.
+    while (lView[FLAGS] & LViewFlags.DirtyAfterTraversal) {
+      traverseId++;
+      if (retries === 100) {
+        throw new RuntimeError(
+            RuntimeErrorCode.INFINITE_CHANGE_DETECTION, ngDevMode && 'Infinite change detection.');
+      }
+      retries++;
+      // Even if this view is detached, we still detect changes in targeted mode because this was
+      // the root of the change detection run.
+      detectChangesInView(lView, ChangeDetectionMode.Global);
+    }
   } catch (error) {
     if (notifyErrorHandler) {
       handleError(lView, error);
@@ -96,6 +115,7 @@ const enum ChangeDetectionMode {
    * flag are refreshed.
    */
   Targeted,
+  Traverse,
 }
 
 /**
@@ -282,6 +302,12 @@ function detectChangesInComponent(
   detectChangesInView(componentView, mode);
 }
 
+let traverseId = 1;
+
+export function getTraverseId() {
+  return traverseId;
+}
+
 /**
  * Visits a view as part of change detection traversal.
  *
@@ -302,15 +328,21 @@ function detectChangesInView(lView: LView, mode: ChangeDetectionMode) {
 
   const tView = lView[TVIEW];
   const flags = lView[FLAGS];
-  if ((flags & (LViewFlags.CheckAlways | LViewFlags.Dirty) &&
+
+  lView[FLAGS] &= ~LViewFlags.DirtyAfterTraversal;
+  lView[TRAVERSED_AT] = traverseId;
+
+  if ((flags & (LViewFlags.CheckAlways | LViewFlags.Dirty | LViewFlags.DirtyAfterTraversal) &&
        mode === ChangeDetectionMode.Global) ||
       flags & LViewFlags.RefreshView) {
     refreshView(tView, lView, tView.template, lView[CONTEXT]);
-  } else if (lView[DESCENDANT_VIEWS_TO_REFRESH] > 0) {
-    detectChangesInEmbeddedViews(lView, ChangeDetectionMode.Targeted);
+  } else {
+    mode = lView[DESCENDANT_VIEWS_TO_REFRESH] > 0 ? ChangeDetectionMode.Targeted :
+                                                    ChangeDetectionMode.Traverse;
+    detectChangesInEmbeddedViews(lView, mode);
     const components = tView.components;
     if (components !== null) {
-      detectChangesInChildComponents(lView, components, ChangeDetectionMode.Targeted);
+      detectChangesInChildComponents(lView, components, mode);
     }
   }
 }

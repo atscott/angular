@@ -56,6 +56,7 @@ export const ON_DESTROY_HOOKS = 21;
 export const HYDRATION = 22;
 export const REACTIVE_TEMPLATE_CONSUMER = 23;
 export const REACTIVE_HOST_BINDING_CONSUMER = 24;
+export const TRAVERSED_AT = 25;
 /**
  * Size of LView's header. Necessary to adjust for it when setting slots.
  *
@@ -63,7 +64,7 @@ export const REACTIVE_HOST_BINDING_CONSUMER = 24;
  * instruction index into `LView` index. All other indexes should be in the `LView` index space and
  * there should be no need to refer to `HEADER_OFFSET` anywhere else.
  */
-export const HEADER_OFFSET = 25;
+export const HEADER_OFFSET = 26;
 
 
 // This interface replaces the real LView interface if it is an arg or a
@@ -436,17 +437,24 @@ export const enum LViewFlags {
   SignalView = 1 << 12,
 
   /**
+   * The view was dirtied again during change detection after it was already traversed passed
+   * (backwards/non-unidirectional data flow/dirty). This flag is only set when a reactive template
+   * consumer is notified of signal updates.
+   */
+  DirtyAfterTraversal = 1 << 13,
+
+  /**
    * Index of the current init phase on last 21 bits
    */
-  IndexWithinInitPhaseIncrementer = 1 << 13,
+  IndexWithinInitPhaseIncrementer = 1 << 14,
   /**
    * This is the count of the bits the 1 was shifted above (base 10)
    */
-  IndexWithinInitPhaseShift = 13,
+  IndexWithinInitPhaseShift = 14,
 
   // Subtracting 1 gives all 1s to the right of the initial shift
   // So `(1 << 3) - 1` would give 3 1s: 1 << 3 = 0b01000, subtract 1 = 0b00111
-  IndexWithinInitPhaseReset = (1 << 13) - 1,
+  IndexWithinInitPhaseReset = (1 << 14) - 1,
 }
 
 /**
