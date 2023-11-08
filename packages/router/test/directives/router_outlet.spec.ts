@@ -7,7 +7,7 @@
  */
 
 import {CommonModule, NgForOf} from '@angular/common';
-import {Component, Input, Type} from '@angular/core';
+import {Component, Input, signal, Type} from '@angular/core';
 import {ComponentFixture, fakeAsync, TestBed, tick} from '@angular/core/testing';
 import {provideRouter, Router, RouterModule, RouterOutlet, withComponentInputBinding} from '@angular/router/src';
 import {RouterTestingHarness} from '@angular/router/testing';
@@ -327,11 +327,15 @@ describe('component input binding', () => {
 
   it('Should have inputs available to all outlets after navigation', async () => {
     @Component({
-      template: '{{myInput}}',
+      template: '{{_myInput()}}',
       standalone: true,
     })
     class MyComponent {
-      @Input() myInput?: string;
+      _myInput = signal('');
+      @Input()
+      set myInput(v: string) {
+        this._myInput.set(v);
+      }
     }
 
     @Component({

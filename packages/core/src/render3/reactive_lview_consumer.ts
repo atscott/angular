@@ -8,7 +8,7 @@
 
 import {REACTIVE_NODE, ReactiveNode} from '@angular/core/primitives/signals';
 
-import {LView, REACTIVE_TEMPLATE_CONSUMER} from './interfaces/view';
+import {ENVIRONMENT, LView, REACTIVE_TEMPLATE_CONSUMER} from './interfaces/view';
 import {markAncestorsForTraversal} from './util/view_utils';
 
 let freeConsumers: ReactiveLViewConsumer[] = [];
@@ -46,7 +46,10 @@ const REACTIVE_LVIEW_CONSUMER_NODE: Omit<ReactiveLViewConsumer, 'lView'|'slot'> 
   ...REACTIVE_NODE,
   consumerIsAlwaysLive: true,
   consumerMarkedDirty: (node: ReactiveLViewConsumer) => {
-    markAncestorsForTraversal(node.lView!);
+    const root = markAncestorsForTraversal(node.lView!);
+    const scheduler = node.lView![ENVIRONMENT].cdScheduler;
+    debugger;
+    scheduler?.scheduleCD(root);
   },
   consumerOnSignalRead(this: ReactiveLViewConsumer): void {
     this.lView![REACTIVE_TEMPLATE_CONSUMER] = this;

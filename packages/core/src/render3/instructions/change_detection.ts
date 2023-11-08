@@ -29,7 +29,7 @@ import {executeTemplate, executeViewQueryFn, handleError, processHostBindingOpCo
 const MAXIMUM_REFRESH_RERUNS = 100;
 
 export function detectChangesInternal<T>(
-    tView: TView, lView: LView, context: T, notifyErrorHandler = true) {
+    tView: TView, lView: LView, context: T, notifyErrorHandler = true, forceRootRefresh = true) {
   const environment = lView[ENVIRONMENT];
   const rendererFactory = environment.rendererFactory;
   const afterRenderEventManager = environment.afterRenderEventManager;
@@ -45,7 +45,7 @@ export function detectChangesInternal<T>(
   }
 
   try {
-    refreshView(tView, lView, tView.template, context);
+    forceRootRefresh && refreshView(tView, lView, tView.template, context);
     detectChangesInViewWhileDirty(lView);
   } catch (error) {
     if (notifyErrorHandler) {

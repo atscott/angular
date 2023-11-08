@@ -6,8 +6,8 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {AsyncPipe} from '@angular/common';
 import {Component, inject} from '@angular/core';
+import {toSignal} from '@angular/core/rxjs-interop';
 import {TestBed} from '@angular/core/testing';
 import {ActivatedRoute, provideRouter, Router} from '@angular/router';
 import {RouterTestingHarness} from '@angular/router/testing';
@@ -64,8 +64,9 @@ describe('navigateForTest', () => {
   });
 
   it('can observe param changes on routed component with second navigation', async () => {
-    @Component({standalone: true, template: '{{(route.params | async)?.id}}', imports: [AsyncPipe]})
+    @Component({standalone: true, template: '{{params()?.id}}'})
     class TestCmp {
+      params = toSignal(this.route.params, {requireSync: true});
       constructor(readonly route: ActivatedRoute) {}
     }
 

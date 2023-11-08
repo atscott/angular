@@ -17,9 +17,11 @@ import {ɵɵdefineInjectable} from '../../di/interface/defs';
 import {ErrorHandler} from '../../error_handler';
 import type {ViewRef} from '../view_ref';
 import {DestroyRef} from '../../linker/destroy_ref';
-import {FLAGS, LViewFlags, EFFECTS_TO_SCHEDULE} from '../interfaces/view';
+import {FLAGS, LViewFlags, EFFECTS_TO_SCHEDULE, LView, TVIEW, CONTEXT} from '../interfaces/view';
 
 import {assertNotInReactiveContext} from './asserts';
+import {detectChangesInternal} from '../instructions/change_detection';
+import {NgZone} from '@angular/core';
 
 
 /**
@@ -137,6 +139,73 @@ export class ZoneAwareQueueingScheduler implements EffectScheduler, FlushableEff
     token: ZoneAwareQueueingScheduler,
     providedIn: 'root',
     factory: () => new ZoneAwareQueueingScheduler(),
+  });
+}
+
+const resolvedPromise = Promise.resolve();
+
+export class ZoneAwareCDScheduler {
+  private queuedCDRootCount = 0;
+  private queue = new Set<LView>();
+  flushPending = false;
+  runningFlush = false;
+  private zone = inject(NgZone);
+
+  private scheduleFlush() {
+    if (this.flushPending || this.runningFlush) {
+      return;
+    }
+    this.flushPending = true;
+    resolvedPromise.then(() => {
+      if (!this.flushPending) {
+        return;
+      }
+      this.flush();
+    });
+  }
+
+  scheduleCD(cdRoot: LView): void {
+    if (this.queue.has(cdRoot)) {
+      return;
+    }
+    this.queuedCDRootCount++;
+    this.queue.add(cdRoot);
+    this.scheduleFlush();
+  }
+
+  /**
+   * Run all scheduled effects.
+   *
+   * Execution order of effects within the same zone is guaranteed to be FIFO, but there is no
+   * ordering guarantee between effects scheduled in different zones.
+   */
+  flush(): void {
+    this.flushPending = false;
+    this.runningFlush = true;
+    while (this.queuedCDRootCount > 0) {
+      this.zone.run(() => this.flushQueue(this.queue));
+    }
+    this.runningFlush = false;
+    // TODO: afterRender hooks & checkNoChanges
+  }
+
+  private flushQueue(queue: Set<LView>): void {
+    let processed = new Set<LView>();
+    for (const lView of queue) {
+      processed.add(lView);
+      detectChangesInternal(lView[TVIEW], lView, lView[CONTEXT], true, false);
+    }
+    for (const view of processed) {
+      queue.delete(view);
+      this.queuedCDRootCount--;
+    }
+  }
+
+  /** @nocollapse */
+  static ɵprov = /** @pureOrBreakMyCode */ ɵɵdefineInjectable({
+    token: ZoneAwareCDScheduler,
+    providedIn: 'root',
+    factory: () => new ZoneAwareCDScheduler(),
   });
 }
 

@@ -12,7 +12,7 @@ import {DehydratedView} from '../../hydration/interfaces';
 import {SchemaMetadata} from '../../metadata/schema';
 import {Sanitizer} from '../../sanitization/sanitizer';
 import type {ReactiveLViewConsumer} from '../reactive_lview_consumer';
-import type {FlushableEffectRunner} from '../reactivity/effect';
+import type {FlushableEffectRunner, ZoneAwareCDScheduler} from '../reactivity/effect';
 import type {AfterRenderEventManager} from '../after_render_hooks';
 
 import {LContainer} from './container';
@@ -372,6 +372,8 @@ export interface LViewEnvironment {
 
   /** Container for after render hooks */
   afterRenderEventManager: AfterRenderEventManager|null;
+
+  cdScheduler: ZoneAwareCDScheduler|null;
 }
 
 /** Flags associated with an LView (saved in LView[FLAGS]) */

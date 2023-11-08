@@ -142,7 +142,7 @@ export class RouterTestingHarness {
     afterNextNavigation(TestBed.inject(Router), resolveFn);
     await router.navigateByUrl(url);
     await redirectTrackingPromise;
-    this.fixture.detectChanges();
+    // this.fixture.detectChanges();
     const outlet = (this.fixture.componentInstance as RootCmp).outlet;
     // The outlet might not be activated if the user is testing a navigation for a guard that
     // rejects

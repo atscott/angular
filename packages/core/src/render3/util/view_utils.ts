@@ -219,26 +219,35 @@ export function updateAncestorTraversalFlagsOnAttach(lView: LView) {
  * This is done by setting the `HAS_CHILD_VIEWS_TO_REFRESH` flag up to the root, stopping when the
  * flag is already `true` or the `lView` is detached.
  */
-export function markAncestorsForTraversal(lView: LView) {
+export function markAncestorsForTraversal(lView: LView): LView {
+  let setFlags = true;
+  let lastLView = lView;
   let parent = lView[PARENT];
   while (parent !== null) {
     // We stop adding markers to the ancestors once we reach one that already has the marker. This
     // is to avoid needlessly traversing all the way to the root when the marker already exists.
     if ((isLContainer(parent) && parent[HAS_CHILD_VIEWS_TO_REFRESH] ||
          (isLView(parent) && parent[FLAGS] & LViewFlags.HasChildViewsToRefresh))) {
-      break;
+      setFlags = false;
     }
 
-    if (isLContainer(parent)) {
-      parent[HAS_CHILD_VIEWS_TO_REFRESH] = true;
-    } else {
-      parent[FLAGS] |= LViewFlags.HasChildViewsToRefresh;
-      if (!viewAttachedToChangeDetector(parent)) {
-        break;
+    if (setFlags) {
+      if (isLContainer(parent)) {
+        parent[HAS_CHILD_VIEWS_TO_REFRESH] = true;
+      } else {
+        parent[FLAGS] |= LViewFlags.HasChildViewsToRefresh;
+      }
+    }
+    if (isLView(parent)) {
+      lastLView = parent;
+      if (!viewAttachedToChangeDetector(lastLView)) {
+        return lastLView;
       }
     }
     parent = parent[PARENT];
   }
+  // Got to the top without reaching a detached view. The last LView encountered is the root of CD
+  return lastLView;
 }
 
 /**

@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {ChangeDetectorRef, ComponentRef, Directive, EnvironmentInjector, EventEmitter, inject, Injectable, InjectionToken, Injector, Input, OnDestroy, OnInit, Output, reflectComponentType, SimpleChanges, ViewContainerRef, ɵRuntimeError as RuntimeError,} from '@angular/core';
+import {ChangeDetectorRef, ComponentRef, Directive, EnvironmentInjector, EventEmitter, inject, Injectable, InjectionToken, Injector, Input, OnDestroy, OnInit, Output, reflectComponentType, signal, SimpleChanges, ViewContainerRef, ɵRuntimeError as RuntimeError,} from '@angular/core';
 import {combineLatest, of, Subscription} from 'rxjs';
 import {switchMap} from 'rxjs/operators';
 
@@ -165,8 +165,11 @@ export interface RouterOutletContract {
   selector: 'router-outlet',
   exportAs: 'outlet',
   standalone: true,
+  // make sure this outlet is refreshed any time there is an activation/deactivation
+  host: {'[attr.nonsense]': 'outletVersion() && false'}
 })
 export class RouterOutlet implements OnDestroy, OnInit, RouterOutletContract {
+  outletVersion = signal(0);
   private activated: ComponentRef<any>|null = null;
   /** @internal */
   get activatedComponentRef(): ComponentRef<any>|null {
@@ -303,6 +306,7 @@ export class RouterOutlet implements OnDestroy, OnInit, RouterOutletContract {
     this.activated = null;
     this._activatedRoute = null;
     this.detachEvents.emit(cmp.instance);
+    this.outletVersion.update(v => v + 1);
     return cmp;
   }
 
@@ -310,6 +314,7 @@ export class RouterOutlet implements OnDestroy, OnInit, RouterOutletContract {
    * Called when the `RouteReuseStrategy` instructs to re-attach a previously detached subtree
    */
   attach(ref: ComponentRef<any>, activatedRoute: ActivatedRoute) {
+    this.outletVersion.update(v => v + 1);
     this.activated = ref;
     this._activatedRoute = activatedRoute;
     this.location.insert(ref.hostView);
@@ -324,6 +329,7 @@ export class RouterOutlet implements OnDestroy, OnInit, RouterOutletContract {
       this.activated = null;
       this._activatedRoute = null;
       this.deactivateEvents.emit(c);
+      this.outletVersion.update(v => v + 1);
     }
   }
 
@@ -351,6 +357,7 @@ export class RouterOutlet implements OnDestroy, OnInit, RouterOutletContract {
     this.changeDetector.markForCheck();
     this.inputBinder?.bindActivatedRouteToOutletComponent(this);
     this.activateEvents.emit(this.activated.instance);
+    this.outletVersion.update(v => v + 1);
   }
 }
 
