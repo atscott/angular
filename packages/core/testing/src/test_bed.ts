@@ -37,6 +37,7 @@ import {
   ɵsetUnknownElementStrictMode as setUnknownElementStrictMode,
   ɵsetUnknownPropertyStrictMode as setUnknownPropertyStrictMode,
   ɵstringify as stringify,
+  ɵZoneAwareCDScheduler as ZoneAwareCDScheduler,
   ɵZoneAwareQueueingScheduler as ZoneAwareQueueingScheduler,
 } from '@angular/core';
 
@@ -636,9 +637,14 @@ export class TestBedImpl implements TestBed {
       const componentRef =
           componentFactory.create(Injector.NULL, [], `#${rootElId}`, this.testModuleRef);
       return new ComponentFixture<any>(
-          componentRef, ngZone, this.inject(ZoneAwareQueueingScheduler, null), autoDetect);
+          componentRef, ngZone, this.inject(ZoneAwareCDScheduler),
+          this.inject(ZoneAwareQueueingScheduler, null), autoDetect);
     };
     const fixture = ngZone ? ngZone.run(initComponent) : initComponent();
+    // NgZone.run would instantly trigger CD...
+    if (!(ngZone instanceof NgZone) && autoDetect) {
+      fixture.detectChanges();
+    }
     this._activeFixtures.push(fixture);
     return fixture;
   }

@@ -48,8 +48,7 @@ const REACTIVE_LVIEW_CONSUMER_NODE: Omit<ReactiveLViewConsumer, 'lView'|'slot'> 
   consumerMarkedDirty: (node: ReactiveLViewConsumer) => {
     const root = markAncestorsForTraversal(node.lView!);
     const scheduler = node.lView![ENVIRONMENT].cdScheduler;
-    debugger;
-    scheduler?.scheduleCD(root);
+    scheduler?.scheduleCD({root, targeted: true});
   },
   consumerOnSignalRead(this: ReactiveLViewConsumer): void {
     this.lView![REACTIVE_TEMPLATE_CONSUMER] = this;

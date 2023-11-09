@@ -22,6 +22,7 @@ import {FLAGS, LViewFlags, EFFECTS_TO_SCHEDULE, LView, TVIEW, CONTEXT} from '../
 import {assertNotInReactiveContext} from './asserts';
 import {detectChangesInternal} from '../instructions/change_detection';
 import {NgZone} from '@angular/core';
+import {BehaviorSubject, ReplaySubject} from 'rxjs';
 
 
 /**
@@ -146,16 +147,20 @@ const resolvedPromise = Promise.resolve();
 
 export class ZoneAwareCDScheduler {
   private queuedCDRootCount = 0;
-  private queue = new Set<LView>();
-  flushPending = false;
-  runningFlush = false;
+  private queue = new Map<LView, boolean>();
+  private flushPending = false;
+  private runningFlush = false;
   private zone = inject(NgZone);
 
+  isStable = new BehaviorSubject<boolean>(false);
+
   private scheduleFlush() {
+    debugger;
     if (this.flushPending || this.runningFlush) {
       return;
     }
     this.flushPending = true;
+    this.isStable.next(false);
     resolvedPromise.then(() => {
       if (!this.flushPending) {
         return;
@@ -164,12 +169,15 @@ export class ZoneAwareCDScheduler {
     });
   }
 
-  scheduleCD(cdRoot: LView): void {
-    if (this.queue.has(cdRoot)) {
+  scheduleCD(options: {root: LView, targeted: boolean}): void {
+    if (this.queue.has(options.root)) {
+      if (!options.targeted) {
+        this.queue.set(options.root, false);
+      }
       return;
     }
     this.queuedCDRootCount++;
-    this.queue.add(cdRoot);
+    this.queue.set(options.root, options.targeted);
     this.scheduleFlush();
   }
 
@@ -180,23 +188,25 @@ export class ZoneAwareCDScheduler {
    * ordering guarantee between effects scheduled in different zones.
    */
   flush(): void {
+    debugger;
     this.flushPending = false;
     this.runningFlush = true;
     while (this.queuedCDRootCount > 0) {
-      this.zone.run(() => this.flushQueue(this.queue));
+      this.zone.run(() => this.flushQueue());
     }
+    this.isStable.next(true);
     this.runningFlush = false;
     // TODO: afterRender hooks & checkNoChanges
   }
 
-  private flushQueue(queue: Set<LView>): void {
+  private flushQueue(): void {
     let processed = new Set<LView>();
-    for (const lView of queue) {
+    for (const [lView, targeted] of this.queue.entries()) {
       processed.add(lView);
-      detectChangesInternal(lView[TVIEW], lView, lView[CONTEXT], true, false);
+      detectChangesInternal(lView[TVIEW], lView, lView[CONTEXT], true, !targeted);
     }
     for (const view of processed) {
-      queue.delete(view);
+      this.queue.delete(view);
       this.queuedCDRootCount--;
     }
   }

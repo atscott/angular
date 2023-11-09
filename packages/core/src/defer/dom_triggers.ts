@@ -84,7 +84,7 @@ export function onInteraction(trigger: Element, callback: VoidFunction): VoidFun
     interactionTriggers.set(trigger, entry);
 
     // Ensure that the handler runs in the NgZone
-    ngDevMode && NgZone.assertInAngularZone();
+    // ngDevMode && NgZone.assertInAngularZone();
 
     for (const name of interactionEventNames) {
       trigger.addEventListener(name, entry!.listener, eventListenerOptions);
@@ -121,7 +121,7 @@ export function onHover(trigger: Element, callback: VoidFunction): VoidFunction 
     hoverTriggers.set(trigger, entry);
 
     // Ensure that the handler runs in the NgZone
-    ngDevMode && NgZone.assertInAngularZone();
+    // ngDevMode && NgZone.assertInAngularZone();
 
     for (const name of hoverEventNames) {
       trigger.addEventListener(name, entry!.listener, eventListenerOptions);

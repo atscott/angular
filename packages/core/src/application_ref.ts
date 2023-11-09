@@ -9,8 +9,8 @@
 import './util/ng_jit_mode';
 
 import {setThrowInvalidWriteToSignalError} from '@angular/core/primitives/signals';
-import {Observable, of, Subscription} from 'rxjs';
-import {distinctUntilChanged, first, share, switchMap} from 'rxjs/operators';
+import {combineLatest, merge, Observable, of, Subscription} from 'rxjs';
+import {distinctUntilChanged, first, map, share, switchMap, withLatestFrom} from 'rxjs/operators';
 
 import {ApplicationInitStatus} from './application_init';
 import {PLATFORM_INITIALIZER} from './application_tokens';
@@ -43,6 +43,7 @@ import {assertStandaloneComponentType} from './render3/errors';
 import {setLocaleId} from './render3/i18n/i18n_locale_id';
 import {setJitOptions} from './render3/jit/jit_options';
 import {createNgModuleRefWithProviders, EnvironmentNgModuleRefAdapter, NgModuleFactory as R3NgModuleFactory} from './render3/ng_module_ref';
+import {ZoneAwareCDScheduler} from './render3/reactivity/effect';
 import {publishDefaultGlobalUtils as _publishDefaultGlobalUtils} from './render3/util/global_utils';
 import {ViewRef as InternalViewRef} from './render3/view_ref';
 import {TESTABILITY} from './testability/testability';
@@ -848,13 +849,19 @@ export class ApplicationRef {
    */
   public readonly components: ComponentRef<any>[] = [];
 
+  private cdScheduler = inject(ZoneAwareCDScheduler);
   /**
    * Returns an Observable that indicates when the application is stable or unstable.
    */
   public readonly isStable: Observable<boolean> =
       inject(InitialRenderPendingTasks)
           .hasPendingTasks.pipe(
-              switchMap(hasPendingTasks => hasPendingTasks ? of(false) : this.zoneIsStable),
+              switchMap(
+                  hasPendingTasks => hasPendingTasks ?
+                      of(false) :
+                      combineLatest([this.zoneIsStable, this.cdScheduler.isStable])
+                          .pipe(map(
+                              ([zoneStable, schedulerStable]) => zoneStable && schedulerStable))),
               distinctUntilChanged(),
               share(),
           );
@@ -1300,8 +1307,8 @@ export function internalProvideZoneChangeDetection(ngZoneFactory: () => NgZone):
  * @see {@link NgZoneOptions}
  */
 export function provideZoneChangeDetection(options?: NgZoneOptions): EnvironmentProviders {
-  const zoneProviders =
-      internalProvideZoneChangeDetection(() => new NgZone(getNgZoneOptions(options)));
+  const zoneProviders = internalProvideZoneChangeDetection(
+      () => options ? new NgZone(getNgZoneOptions(options)) : new NoopNgZone());
   return makeEnvironmentProviders([
     (typeof ngDevMode === 'undefined' || ngDevMode) ? {provide: PROVIDED_NG_ZONE, useValue: true} :
                                                       [],

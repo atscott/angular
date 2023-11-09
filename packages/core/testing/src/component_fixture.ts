@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {ChangeDetectorRef, ComponentRef, DebugElement, ElementRef, getDebugNode, NgZone, RendererFactory2, ɵDeferBlockDetails as DeferBlockDetails, ɵFlushableEffectRunner as FlushableEffectRunner, ɵgetDeferBlocks as getDeferBlocks} from '@angular/core';
+import {ChangeDetectorRef, ComponentRef, DebugElement, ElementRef, getDebugNode, NgZone, RendererFactory2, ɵDeferBlockDetails as DeferBlockDetails, ɵFlushableEffectRunner as FlushableEffectRunner, ɵgetDeferBlocks as getDeferBlocks, ɵZoneAwareCDScheduler as ZoneAwareCDScheduler} from '@angular/core';
 import {Subscription} from 'rxjs';
 
 import {DeferBlockFixture} from './defer';
@@ -56,6 +56,7 @@ export class ComponentFixture<T> {
   /** @nodoc */
   constructor(
       public componentRef: ComponentRef<T>, public ngZone: NgZone|null,
+      private scheduler: ZoneAwareCDScheduler|null,
       private effectRunner: FlushableEffectRunner|null, private _autoDetect: boolean) {
     this.changeDetectorRef = componentRef.changeDetectorRef;
     this.elementRef = componentRef.location;
@@ -64,6 +65,16 @@ export class ComponentFixture<T> {
     this.nativeElement = this.elementRef.nativeElement;
     this.componentRef = componentRef;
     this.ngZone = ngZone;
+    this.scheduler?.isStable.subscribe((stable) => {
+      if (stable && this.ngZone?.isStable) {
+        this._isStable = true;
+        if (this._promise !== null) {
+          this._resolve!(true);
+          this._resolve = null;
+          this._promise = null;
+        }
+      }
+    });
 
     if (ngZone) {
       // Create subscriptions outside the NgZone so that the callbacks run oustide
@@ -85,6 +96,9 @@ export class ComponentFixture<T> {
         });
         this._onStableSubscription = ngZone.onStable.subscribe({
           next: () => {
+            if (this.scheduler && !this.scheduler.isStable.value) {
+              return;
+            }
             this._isStable = true;
             // Check whether there is a pending whenStable() completer to resolve.
             if (this._promise !== null) {

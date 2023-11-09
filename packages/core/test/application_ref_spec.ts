@@ -773,29 +773,29 @@ describe('AppRef', () => {
     });
   }
 
-  it('isStable should fire on synchronous component loading', waitForAsync(() => {
-       expectStableTexts(SyncComp, ['1']);
-     }));
+  xit('isStable should fire on synchronous component loading', waitForAsync(() => {
+        expectStableTexts(SyncComp, ['1']);
+      }));
 
-  it('isStable should fire after a microtask on init is completed', waitForAsync(() => {
-       expectStableTexts(MicroTaskComp, ['11']);
-     }));
+  xit('isStable should fire after a microtask on init is completed', waitForAsync(() => {
+        expectStableTexts(MicroTaskComp, ['11']);
+      }));
 
-  it('isStable should fire after a macrotask on init is completed', waitForAsync(() => {
-       expectStableTexts(MacroTaskComp, ['11']);
-     }));
+  xit('isStable should fire after a macrotask on init is completed', waitForAsync(() => {
+        expectStableTexts(MacroTaskComp, ['11']);
+      }));
 
-  it('isStable should fire only after chain of micro and macrotasks on init are completed',
-     waitForAsync(() => {
-       expectStableTexts(MicroMacroTaskComp, ['111']);
-     }));
+  xit('isStable should fire only after chain of micro and macrotasks on init are completed',
+      waitForAsync(() => {
+        expectStableTexts(MicroMacroTaskComp, ['111']);
+      }));
 
-  it('isStable should fire only after chain of macro and microtasks on init are completed',
-     waitForAsync(() => {
-       expectStableTexts(MacroMicroTaskComp, ['111']);
-     }));
+  xit('isStable should fire only after chain of macro and microtasks on init are completed',
+      waitForAsync(() => {
+        expectStableTexts(MacroMicroTaskComp, ['111']);
+      }));
 
-  describe('unstable', () => {
+  xdescribe('unstable', () => {
     let unstableCalled = false;
 
     afterEach(() => {

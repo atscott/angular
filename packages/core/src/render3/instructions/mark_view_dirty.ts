@@ -7,7 +7,7 @@
  */
 
 import {isRootView} from '../interfaces/type_checks';
-import {FLAGS, LView, LViewFlags} from '../interfaces/view';
+import {ENVIRONMENT, FLAGS, LView, LViewFlags} from '../interfaces/view';
 import {getLViewParent} from '../util/view_traversal_utils';
 
 /**
@@ -22,9 +22,14 @@ import {getLViewParent} from '../util/view_traversal_utils';
  * @returns the root LView
  */
 export function markViewDirty(lView: LView): LView|null {
+  const scheduler = lView[ENVIRONMENT].cdScheduler;
+
   while (lView) {
     lView[FLAGS] |= LViewFlags.Dirty;
     const parent = getLViewParent(lView);
+    if (parent === null) {
+      scheduler?.scheduleCD({root: lView, targeted: false});
+    }
     // Stop traversing up as soon as you find a root view that wasn't attached to any container
     if (isRootView(lView) && !parent) {
       return lView;

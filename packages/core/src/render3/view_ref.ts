@@ -17,7 +17,7 @@ import {checkNoChangesInternal, detectChangesInternal} from './instructions/chan
 import {markViewDirty} from './instructions/mark_view_dirty';
 import {CONTAINER_HEADER_OFFSET, VIEW_REFS} from './interfaces/container';
 import {isLContainer} from './interfaces/type_checks';
-import {CONTEXT, FLAGS, LView, LViewFlags, PARENT, TVIEW} from './interfaces/view';
+import {CONTEXT, ENVIRONMENT, FLAGS, LView, LViewFlags, PARENT, TVIEW} from './interfaces/view';
 import {destroyLView, detachView, detachViewFromDOM} from './node_manipulation';
 import {storeLViewOnDestroy, updateAncestorTraversalFlagsOnAttach} from './util/view_utils';
 
@@ -141,7 +141,7 @@ export class ViewRef<T> implements EmbeddedViewRef<T>, ChangeDetectorRefInterfac
    * ```
    */
   markForCheck(): void {
-    markViewDirty(this._cdRefInjectingView || this._lView);
+    const root = markViewDirty(this._cdRefInjectingView || this._lView);
   }
 
   /**
