@@ -206,6 +206,12 @@ export function requiresRefreshOrTraversal(lView: LView) {
  * parents above.
  */
 export function updateAncestorTraversalFlagsOnAttach(lView: LView) {
+  // When we attach a view that's marked `Dirty`, we should ensure that it is reached during the
+  // next CD traversal so we add the `RefreshView` flag and mark ancestors accordingly.
+  if (lView[FLAGS] & LViewFlags.Dirty) {
+    lView[FLAGS] |= LViewFlags.RefreshView;
+  }
+
   if (!requiresRefreshOrTraversal(lView)) {
     return;
   }
