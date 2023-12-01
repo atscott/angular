@@ -189,14 +189,15 @@ export class Router {
           } else if (e instanceof RedirectRequest) {
             const mergedTree =
                 this.urlHandlingStrategy.merge(e.url, currentTransition.currentRawUrl);
-            const extras = {
+            const extras: NavigationBehaviorOptions = {
               skipLocationChange: currentTransition.extras.skipLocationChange,
               // The URL is already updated at this point if we have 'eager' URL
               // updates or if the navigation was triggered by the browser (back
               // button, URL bar, etc). We want to replace that item in history
               // if the navigation is rejected.
-              replaceUrl: this.urlUpdateStrategy === 'eager' ||
-                  isBrowserTriggeredNavigation(currentTransition.source)
+              replaceUrl: (this.urlUpdateStrategy === 'eager' && !!currentNavigation.finalUrl) ||
+                  isBrowserTriggeredNavigation(currentTransition.source) ||
+                  currentNavigation.extras.replaceUrl
             };
 
             this.scheduleNavigation(mergedTree, IMPERATIVE_NAVIGATION, null, extras, {

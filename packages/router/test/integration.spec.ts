@@ -1691,6 +1691,37 @@ describe('Integration', () => {
     expect(TestBed.inject(Handler).handlerCalled).toBeTrue();
   });
 
+  it('should not replace current URL if a canMatch guard redirects with urlUpdateStrategy: "eager"',
+     async () => {
+       TestBed.configureTestingModule({
+         providers: [provideRouter(
+             [
+               {path: 'redirectToMe', component: BlankCmp},
+               {
+                 path: 'redirectFrom',
+                 canMatch: [() => {
+                   return coreInject(Router).parseUrl('/redirectToMe');
+                 }],
+                 component: BlankCmp
+               },
+               {path: '**', component: BlankCmp},
+             ],
+             withRouterConfig({urlUpdateStrategy: 'eager'}))]
+       });
+       const router = TestBed.inject(Router);
+
+       await router.navigateByUrl('/initial');
+       expect(router.url).toBe('/initial');
+
+       await router.navigateByUrl('/redirectFrom');
+       expect(router.url).toBe('/redirectToMe');
+       const location = TestBed.inject(Location) as SpyLocation;
+       expect(location.urlChanges).toEqual(['/initial', '/redirectToMe']);
+
+       location.back();
+       expect(location.path()).toEqual('/initial');
+     });
+
   // Errors should behave the same for both deferred and eager URL update strategies
   (['deferred', 'eager'] as const).forEach(urlUpdateStrategy => {
     it('should dispatch NavigationError after the url has been reset back', fakeAsync(() => {

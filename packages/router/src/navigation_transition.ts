@@ -246,7 +246,7 @@ export interface NavigationTransition {
   currentUrlTree: UrlTree;
   extractedUrl: UrlTree;
   currentRawUrl: UrlTree;
-  urlAfterRedirects?: UrlTree;
+  urlAfterRedirects: UrlTree;
   rawUrl: UrlTree;
   extras: NavigationExtras;
   resolve: any;
@@ -447,7 +447,7 @@ export class NavigationTransitions {
                                    // Fire RoutesRecognized
                                    const routesRecognized = new RoutesRecognized(
                                        t.id, this.urlSerializer.serialize(t.extractedUrl),
-                                       this.urlSerializer.serialize(t.urlAfterRedirects!),
+                                       this.urlSerializer.serialize(t.urlAfterRedirects),
                                        t.targetSnapshot!);
                                    this.events.next(routesRecognized);
                                  }));
@@ -497,7 +497,7 @@ export class NavigationTransitions {
                          tap(t => {
                            const guardsStart = new GuardsCheckStart(
                                t.id, this.urlSerializer.serialize(t.extractedUrl),
-                               this.urlSerializer.serialize(t.urlAfterRedirects!),
+                               this.urlSerializer.serialize(t.urlAfterRedirects),
                                t.targetSnapshot!);
                            this.events.next(guardsStart);
                          }),
@@ -521,8 +521,8 @@ export class NavigationTransitions {
 
                            const guardsEnd = new GuardsCheckEnd(
                                t.id, this.urlSerializer.serialize(t.extractedUrl),
-                               this.urlSerializer.serialize(t.urlAfterRedirects!),
-                               t.targetSnapshot!, !!t.guardsResult);
+                               this.urlSerializer.serialize(t.urlAfterRedirects), t.targetSnapshot!,
+                               !!t.guardsResult);
                            this.events.next(guardsEnd);
                          }),
 
@@ -542,7 +542,7 @@ export class NavigationTransitions {
                                  tap(t => {
                                    const resolveStart = new ResolveStart(
                                        t.id, this.urlSerializer.serialize(t.extractedUrl),
-                                       this.urlSerializer.serialize(t.urlAfterRedirects!),
+                                       this.urlSerializer.serialize(t.urlAfterRedirects),
                                        t.targetSnapshot!);
                                    this.events.next(resolveStart);
                                  }),
@@ -570,7 +570,7 @@ export class NavigationTransitions {
                                  tap(t => {
                                    const resolveEnd = new ResolveEnd(
                                        t.id, this.urlSerializer.serialize(t.extractedUrl),
-                                       this.urlSerializer.serialize(t.urlAfterRedirects!),
+                                       this.urlSerializer.serialize(t.urlAfterRedirects),
                                        t.targetSnapshot!);
                                    this.events.next(resolveEnd);
                                  }));
@@ -645,7 +645,7 @@ export class NavigationTransitions {
                              this.lastSuccessfulNavigation = this.currentNavigation;
                              this.events.next(new NavigationEnd(
                                  t.id, this.urlSerializer.serialize(t.extractedUrl),
-                                 this.urlSerializer.serialize(t.urlAfterRedirects!)));
+                                 this.urlSerializer.serialize(t.urlAfterRedirects)));
                              this.titleStrategy?.updateTitle(t.targetRouterState!.snapshot);
                              t.resolve(true);
                            },
