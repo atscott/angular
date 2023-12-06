@@ -299,7 +299,6 @@ export class NavigationTransitions {
   private readonly urlSerializer = inject(UrlSerializer);
   private readonly rootContexts = inject(ChildrenOutletContexts);
   private readonly location = inject(Location);
-  private readonly inputBindingEnabled = inject(INPUT_BINDER, {optional: true}) !== null;
   private readonly titleStrategy?: TitleStrategy = inject(TitleStrategy);
   private readonly options = inject(ROUTER_CONFIGURATION, {optional: true}) || {};
   private readonly paramsInheritanceStrategy =
@@ -632,7 +631,7 @@ export class NavigationTransitions {
 
                          activateRoutes(
                              this.rootContexts, router.routeReuseStrategy,
-                             (evt: Event) => this.events.next(evt), this.inputBindingEnabled),
+                             (evt: Event) => this.events.next(evt), this.environmentInjector),
 
                          // Ensure that if some observable used to drive the transition doesn't
                          // complete, the navigation still finalizes This should never happen, but

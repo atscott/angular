@@ -6,9 +6,11 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
+import {EnvironmentInjector} from '@angular/core';
 import {MonoTypeOperatorFunction} from 'rxjs';
 import {map} from 'rxjs/operators';
 
+import {INPUT_BINDER} from '../directives/router_outlet';
 import {ActivationEnd, ChildActivationEnd, Event} from '../events';
 import {NavigationTransition} from '../navigation_transition';
 import {DetachedRouteHandleInternal, RouteReuseStrategy} from '../route_reuse_strategy';
@@ -22,19 +24,20 @@ let warnedAboutUnsupportedInputBinding = false;
 export const activateRoutes =
     (rootContexts: ChildrenOutletContexts, routeReuseStrategy: RouteReuseStrategy,
      forwardEvent: (evt: Event) => void,
-     inputBindingEnabled: boolean): MonoTypeOperatorFunction<NavigationTransition> => map(t => {
+     injector: EnvironmentInjector): MonoTypeOperatorFunction<NavigationTransition> => map(t => {
       new ActivateRoutes(
-          routeReuseStrategy, t.targetRouterState!, t.currentRouterState, forwardEvent,
-          inputBindingEnabled)
+          routeReuseStrategy, t.targetRouterState!, t.currentRouterState, forwardEvent, injector)
           .activate(rootContexts);
       return t;
     });
 
 export class ActivateRoutes {
+  private readonly inputBindingEnabled = this.injector.get(INPUT_BINDER, null) !== null;
+
   constructor(
       private routeReuseStrategy: RouteReuseStrategy, private futureState: RouterState,
       private currState: RouterState, private forwardEvent: (evt: Event) => void,
-      private inputBindingEnabled: boolean) {}
+      private readonly injector: EnvironmentInjector) {}
 
   activate(parentContexts: ChildrenOutletContexts): void {
     const futureRoot = this.futureState._root;
@@ -204,7 +207,7 @@ export class ActivateRoutes {
           if (context.outlet) {
             // Activate the outlet when it has already been instantiated
             // Otherwise it will get activated from its `ngOnInit` when instantiated
-            context.outlet.activateWith(future, context.injector);
+            context.outlet.activateWith(future, context.injector ?? this.injector);
           }
 
           this.activateChildRoutes(futureNode, null, context.children);
