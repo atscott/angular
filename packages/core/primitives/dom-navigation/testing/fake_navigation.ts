@@ -1145,6 +1145,7 @@ class InternalNavigationTransition implements NavigationTransition {
       this.finishedReject = reject;
       this.finishedResolve = resolve;
     });
+    this.finished.catch(() => {});
   }
 }
 

@@ -16,7 +16,18 @@ import {
   runInInjectionContext,
   Type,
 } from '@angular/core';
-import {BehaviorSubject, combineLatest, EMPTY, from, Observable, of, Subject} from 'rxjs';
+import {
+  BehaviorSubject,
+  combineLatest,
+  EMPTY,
+  from,
+  fromEvent,
+  MonoTypeOperatorFunction,
+  Observable,
+  ObservableInput,
+  of,
+  Subject,
+} from 'rxjs';
 import {
   catchError,
   defaultIfEmpty,
@@ -33,6 +44,7 @@ import {createRouterState} from './create_router_state';
 import {INPUT_BINDER} from './directives/router_outlet';
 import {
   BeforeActivateRoutes,
+  BeforeRoutesRecognized,
   Event,
   GuardsCheckEnd,
   GuardsCheckStart,
@@ -285,8 +297,9 @@ export interface Navigation {
    * * 'imperative'--Triggered by `router.navigateByUrl` or `router.navigate`.
    * * 'popstate'--Triggered by a popstate event.
    * * 'hashchange'--Triggered by a hashchange event.
+   * * 'navigate'--Triggered by a 'navigate' event.
    */
-  trigger: 'imperative' | 'popstate' | 'hashchange';
+  trigger: NavigationTrigger;
   /**
    * Options that controlled the strategy used for this navigation.
    * See `NavigationExtras`.
@@ -304,6 +317,13 @@ export interface Navigation {
    * This function is a no-op if the navigation is beyond the point where it can be aborted.
    */
   readonly abort: () => void;
+
+  /** @internal */
+  navigationStartHandled: BehaviorSubject<boolean>;
+  /** @internal */
+  routesRecognizeHandled: BehaviorSubject<boolean>;
+  /** @internal */
+  beforeActivateHandled: BehaviorSubject<boolean>;
 }
 
 export interface NavigationTransition {
@@ -326,6 +346,9 @@ export interface NavigationTransition {
   guards: Checks;
   guardsResult: GuardResult | null;
   abortController: AbortController;
+  navigationStartHandled: BehaviorSubject<boolean>;
+  routesRecognizeHandled: BehaviorSubject<boolean>;
+  beforeActivateHandled: BehaviorSubject<boolean>;
 }
 
 /**
@@ -432,6 +455,9 @@ export class NavigationTransitions {
       guardsResult: null,
       abortController: new AbortController(),
       id,
+      routesRecognizeHandled: new BehaviorSubject(false),
+      navigationStartHandled: new BehaviorSubject(false),
+      beforeActivateHandled: new BehaviorSubject(false),
     });
   }
 
@@ -480,6 +506,9 @@ export class NavigationTransitions {
                     previousNavigation: null,
                   },
               abort: () => t.abortController.abort(),
+              navigationStartHandled: t.navigationStartHandled,
+              routesRecognizeHandled: t.routesRecognizeHandled,
+              beforeActivateHandled: t.beforeActivateHandled,
             };
             const urlTransition =
               !router.navigated || this.isUpdatingInternalState() || this.isUpdatedBrowserUrl();
@@ -523,6 +552,8 @@ export class NavigationTransitions {
                   return Promise.resolve(t);
                 }),
 
+                waitFor(overallTransitionState.navigationStartHandled),
+
                 // Recognize
                 recognize(
                   this.environmentInjector,
@@ -541,15 +572,18 @@ export class NavigationTransitions {
                     ...this.currentNavigation!,
                     finalUrl: t.urlAfterRedirects,
                   };
-
-                  // Fire RoutesRecognized
-                  const routesRecognized = new RoutesRecognized(
-                    t.id,
-                    this.urlSerializer.serialize(t.extractedUrl),
-                    this.urlSerializer.serialize(t.urlAfterRedirects!),
-                    t.targetSnapshot!,
+                  this.events.next(new BeforeRoutesRecognized());
+                }),
+                waitFor(overallTransitionState.routesRecognizeHandled),
+                tap((t) => {
+                  this.events.next(
+                    new RoutesRecognized(
+                      t.id,
+                      this.urlSerializer.serialize(t.extractedUrl),
+                      this.urlSerializer.serialize(t.urlAfterRedirects!),
+                      t.targetSnapshot!,
+                    ),
                   );
-                  this.events.next(routesRecognized);
                 }),
               );
             } else if (
@@ -749,6 +783,8 @@ export class NavigationTransitions {
           tap(() => {
             this.events.next(new BeforeActivateRoutes());
           }),
+
+          waitFor(overallTransitionState.beforeActivateHandled),
 
           activateRoutes(
             this.rootContexts,
@@ -990,4 +1026,14 @@ export class NavigationTransitions {
 
 export function isBrowserTriggeredNavigation(source: NavigationTrigger) {
   return source !== IMPERATIVE_NAVIGATION;
+}
+
+export function waitFor<T>(subject: BehaviorSubject<boolean>): MonoTypeOperatorFunction<T> {
+  // pause navigation until NavigationStart event is handled
+  return switchTap(() =>
+    subject.pipe(
+      filter((handled) => handled),
+      take(1),
+    ),
+  );
 }

@@ -12,6 +12,7 @@ import {SubscriptionLike} from 'rxjs';
 
 import {
   BeforeActivateRoutes,
+  BeforeRoutesRecognized,
   Event,
   NavigationCancel,
   NavigationCancellationCode,
@@ -21,7 +22,6 @@ import {
   NavigationStart,
   NavigationTrigger,
   PrivateRouterEvents,
-  RoutesRecognized,
 } from '../events';
 import {Navigation, RestoredState} from '../navigation_transition';
 import {ROUTER_CONFIGURATION} from '../router_config';
@@ -212,19 +212,22 @@ export class HistoryStateManager extends StateManager {
   override handleRouterEvent(e: Event | PrivateRouterEvents, currentTransition: Navigation) {
     if (e instanceof NavigationStart) {
       this.updateStateMemento();
+      currentTransition.navigationStartHandled.next(true);
     } else if (e instanceof NavigationSkipped) {
       this.commitTransition(currentTransition);
-    } else if (e instanceof RoutesRecognized) {
+    } else if (e instanceof BeforeRoutesRecognized) {
       if (this.urlUpdateStrategy === 'eager') {
         if (!currentTransition.extras.skipLocationChange) {
           this.setBrowserUrl(this.createBrowserPath(currentTransition), currentTransition);
         }
       }
+      currentTransition.routesRecognizeHandled.next(true);
     } else if (e instanceof BeforeActivateRoutes) {
       this.commitTransition(currentTransition);
       if (this.urlUpdateStrategy === 'deferred' && !currentTransition.extras.skipLocationChange) {
         this.setBrowserUrl(this.createBrowserPath(currentTransition), currentTransition);
       }
+      currentTransition.beforeActivateHandled.next(true);
     } else if (
       e instanceof NavigationCancel &&
       e.code !== NavigationCancellationCode.SupersededByNewNavigation &&

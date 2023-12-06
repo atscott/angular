@@ -56,9 +56,10 @@ import {
   UserCmp,
   SimpleCmp,
   expectEvents,
+  simulateLocationChange,
 } from './integration_helpers';
 
-export function lazyLoadingIntegrationSuite() {
+export function lazyLoadingIntegrationSuite(browserAPI: 'navigation' | 'history') {
   describe('lazy loading', () => {
     it('works', fakeAsync(
       inject([Router, Location], (router: Router, location: Location) => {
@@ -932,8 +933,7 @@ export function lazyLoadingIntegrationSuite() {
           events.splice(0);
 
           // another unsupported URL
-          location.go('/exclude/two');
-          location.historyGo(0);
+          simulateLocationChange('/exclude/two', browserAPI);
           advance(fixture);
 
           expect(location.path()).toEqual('/exclude/two');
@@ -941,8 +941,7 @@ export function lazyLoadingIntegrationSuite() {
           events.splice(0);
 
           // back to a supported URL
-          location.go('/include/simple');
-          location.historyGo(0);
+          simulateLocationChange('/include/simple', browserAPI);
           advance(fixture);
 
           expect(location.path()).toEqual('/include/simple');
@@ -978,8 +977,7 @@ export function lazyLoadingIntegrationSuite() {
           const events: Event[] = [];
           router.events.subscribe((e) => e instanceof RouterEvent && events.push(e));
 
-          location.go('/include/user/kate(aux:excluded)');
-          location.historyGo(0);
+          simulateLocationChange('/include/user/kate(aux:excluded)', browserAPI);
           advance(fixture);
 
           expect(location.path()).toEqual('/include/user/kate(aux:excluded)');
@@ -994,8 +992,7 @@ export function lazyLoadingIntegrationSuite() {
           ]);
           events.splice(0);
 
-          location.go('/include/user/kate(aux:excluded2)');
-          location.historyGo(0);
+          simulateLocationChange('/include/user/kate(aux:excluded2)', browserAPI);
           advance(fixture);
           expectEvents(events, [[NavigationSkipped, '/include/user/kate(aux:excluded2)']]);
           events.splice(0);
@@ -1032,8 +1029,7 @@ export function lazyLoadingIntegrationSuite() {
           },
         ]);
 
-        location.go('/include/user/kate(aux:excluded)');
-        location.historyGo(0);
+        simulateLocationChange('/include/user/kate(aux:excluded)', browserAPI);
         advance(fixture);
 
         expect(location.path()).toEqual('/include/user/kate(aux:excluded)');

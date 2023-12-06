@@ -11,6 +11,8 @@ import {
   LOCATION_INITIALIZED,
   LocationStrategy,
   ViewportScroller,
+  Location,
+  ɵNavigationAdapterForLocation,
 } from '@angular/common';
 import {
   APP_BOOTSTRAP_LISTENER,
@@ -49,6 +51,8 @@ import {
   VIEW_TRANSITION_OPTIONS,
   ViewTransitionsFeatureOptions,
 } from './utils/view_transition';
+import {StateManager} from './statemanager/state_manager';
+import {NavigationStateManager} from './statemanager/navigation_state_manager';
 
 /**
  * Sets up providers necessary to enable `Router` functionality for the application.
@@ -219,6 +223,14 @@ export function withInMemoryScrolling(
         return new RouterScroller(urlSerializer, transitions, viewportScroller, zone, options);
       },
     },
+  ];
+  return routerFeature(RouterFeatureKind.InMemoryScrollingFeature, providers);
+}
+
+export function withDomNavigation() {
+  const providers = [
+    {provide: StateManager, useExisting: NavigationStateManager},
+    {provide: Location, useClass: ɵNavigationAdapterForLocation},
   ];
   return routerFeature(RouterFeatureKind.InMemoryScrollingFeature, providers);
 }

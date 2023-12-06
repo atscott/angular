@@ -5,9 +5,10 @@
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.dev/license
  */
-import {CommonModule} from '@angular/common';
+import {CommonModule, Location, PlatformLocation} from '@angular/common';
 import {Component, NgModule, Type} from '@angular/core';
 import {ComponentFixture, tick, TestBed} from '@angular/core/testing';
+import {ɵPlatformNavigation as PlatformNavigation} from '@angular/common';
 import {
   ActivatedRoute,
   Event,
@@ -26,6 +27,14 @@ import {Observable} from 'rxjs';
 import {map} from 'rxjs/operators';
 
 export const ROUTER_DIRECTIVES = [RouterLink, RouterLinkActive, RouterOutlet];
+
+export function simulateLocationChange(url: string, browserAPI: 'history' | 'navigation') {
+  const location = TestBed.inject(Location);
+  location.go(url);
+  if (browserAPI === 'history') {
+    location.historyGo(0); // need this for the popstate event with history API. Not needed for navigation because above is intercepted
+  }
+}
 
 export function expectEvents(events: Event[], pairs: any[]) {
   expect(events.length).toEqual(pairs.length);

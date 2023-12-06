@@ -6,11 +6,19 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 
-import {Injectable, OnDestroy, ɵɵinject} from '@angular/core';
+import {
+  inject,
+  ɵNavigationCurrentEntryChangeEvent as NavigationCurrentEntryChangeEvent,
+  Injectable,
+  OnDestroy,
+  ɵɵinject,
+  DestroyRef,
+} from '@angular/core';
 import {Subject, SubscriptionLike} from 'rxjs';
 
 import {LocationStrategy} from './location_strategy';
 import {joinWithSlash, normalizeQueryParams, stripTrailingSlash} from './util';
+import {PlatformNavigation} from '../navigation/platform_navigation';
 
 /** @publicApi */
 export interface PopStateEvent {
@@ -301,6 +309,47 @@ export class Location implements OnDestroy {
    * @returns The URL string, modified if needed.
    */
   public static stripTrailingSlash: (url: string) => string = stripTrailingSlash;
+}
+
+@Injectable()
+export class NavigationAdapterForLocation extends Location {
+  private readonly navigation = inject(PlatformNavigation);
+  private readonly destroyRef = inject(DestroyRef);
+
+  constructor() {
+    super(inject(LocationStrategy));
+
+    const currentEntryChangeListener = () => {
+      this._notifyUrlChangeListeners(this.path(true), this.getState());
+    };
+    this.navigation.addEventListener('currententrychange', currentEntryChangeListener);
+    this.destroyRef.onDestroy(() => {
+      this.navigation.removeEventListener('currententrychange', currentEntryChangeListener);
+    });
+  }
+
+  override getState(): unknown {
+    return this.navigation.currentEntry?.getState();
+  }
+
+  override replaceState(path: string, query: string = '', state: any = null): void {
+    const url = this.prepareExternalUrl(path + normalizeQueryParams(query));
+    this.navigation.navigate(url, {state, history: 'replace'});
+  }
+
+  override go(path: string, query: string = '', state: any = null): void {
+    const url = this.prepareExternalUrl(path + normalizeQueryParams(query));
+    this.navigation.navigate(url, {state, history: 'push'});
+  }
+
+  override onUrlChange(fn: (url: string, state: unknown) => void): VoidFunction {
+    this._urlChangeListeners.push(fn);
+
+    return () => {
+      const fnIndex = this._urlChangeListeners.indexOf(fn);
+      this._urlChangeListeners.splice(fnIndex, 1);
+    };
+  }
 }
 
 export function createLocation() {

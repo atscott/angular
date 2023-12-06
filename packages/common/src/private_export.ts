@@ -12,3 +12,4 @@ export {
   setRootDomAdapter as ɵsetRootDomAdapter,
 } from './dom_adapter';
 export {PlatformNavigation as ɵPlatformNavigation} from './navigation/platform_navigation';
+export {NavigationAdapterForLocation as ɵNavigationAdapterForLocation} from './location/location';

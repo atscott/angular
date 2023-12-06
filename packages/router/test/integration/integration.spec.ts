@@ -8,6 +8,7 @@
 
 import {Location} from '@angular/common';
 import {ɵprovideFakePlatformNavigation} from '@angular/common/testing';
+import {ɵPlatformNavigation as PlatformNavigation} from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -15,6 +16,7 @@ import {
   Injectable,
   NgModule,
   ɵConsole as Console,
+  makeEnvironmentProviders,
 } from '@angular/core';
 import {fakeAsync, inject, TestBed, tick} from '@angular/core/testing';
 import {expect} from '@angular/platform-browser/testing/src/matchers';
@@ -44,6 +46,7 @@ import {
   provideRouter,
   withNavigationErrorHandler,
   withRouterConfig,
+  withDomNavigation,
 } from '../../src/provide_router';
 import {
   advance,
@@ -64,6 +67,7 @@ import {
   RouteCmp,
   ROUTER_DIRECTIVES,
   SimpleCmp,
+  simulateLocationChange,
   TeamCmp,
   TestModule,
   ThrowingCmp,
@@ -92,7 +96,12 @@ for (const browserAPI of ['navigation', 'history'] as const) {
         imports: [...ROUTER_DIRECTIVES, TestModule],
         providers: [
           {provide: Console, useValue: noopConsole},
-          provideRouter([{path: 'simple', component: SimpleCmp}]),
+          provideRouter(
+            [{path: 'simple', component: SimpleCmp}],
+            browserAPI === 'navigation'
+              ? withDomNavigation()
+              : (makeEnvironmentProviders([]) as any),
+          ),
           browserAPI === 'navigation' ? ɵprovideFakePlatformNavigation() : [],
         ],
       });
@@ -384,13 +393,17 @@ for (const browserAPI of ['navigation', 'history'] as const) {
         location.back();
         advance(fixture);
         expect(location.path()).toEqual('/team/33/simple');
-        expect(event!.navigationTrigger).toEqual('popstate');
+        expect(event!.navigationTrigger).toEqual(
+          browserAPI === 'history' ? 'popstate' : 'navigate',
+        );
         expect(event!.restoredState!.navigationId).toEqual(simpleNavStart.id);
 
         location.forward();
         advance(fixture);
         expect(location.path()).toEqual('/team/22/user/victor');
-        expect(event!.navigationTrigger).toEqual('popstate');
+        expect(event!.navigationTrigger).toEqual(
+          browserAPI === 'history' ? 'popstate' : 'navigate',
+        );
         expect(event!.restoredState!.navigationId).toEqual(userVictorNavStart.id);
       }),
     ));
@@ -415,42 +428,45 @@ for (const browserAPI of ['navigation', 'history'] as const) {
       }),
     ));
 
-    it('should navigate when locations changes', fakeAsync(
-      inject([Router, Location], (router: Router, location: Location) => {
-        const fixture = createRoot(router, RootCmp);
+    it('should navigate when locations changes', fakeAsync(() => {
+      // we cannot use 'deferred' url update with navigation API on this test because history.go(0) will
+      // result in a different thing since deferring the commit defers the current entry change
+      TestBed.configureTestingModule({
+        providers: [provideRouter([], withRouterConfig({urlUpdateStrategy: 'eager'}))],
+      });
+      const router = TestBed.inject(Router);
+      const location = TestBed.inject(Location);
+      const fixture = createRoot(router, RootCmp);
 
-        router.resetConfig([
-          {
-            path: 'team/:id',
-            component: TeamCmp,
-            children: [{path: 'user/:name', component: UserCmp}],
-          },
-        ]);
+      router.resetConfig([
+        {
+          path: 'team/:id',
+          component: TeamCmp,
+          children: [{path: 'user/:name', component: UserCmp}],
+        },
+      ]);
 
-        const recordedEvents: (NavigationStart | NavigationEnd)[] = [];
-        router.events.forEach((e) => onlyNavigationStartAndEnd(e) && recordedEvents.push(e));
+      const recordedEvents: (NavigationStart | NavigationEnd)[] = [];
+      router.events.forEach((e) => onlyNavigationStartAndEnd(e) && recordedEvents.push(e));
 
-        router.navigateByUrl('/team/22/user/victor');
-        advance(fixture);
+      router.navigateByUrl('/team/22/user/victor');
+      advance(fixture);
 
-        location.go('/team/22/user/fedor');
-        location.historyGo(0);
-        advance(fixture);
+      simulateLocationChange('/team/22/user/fedor', browserAPI);
+      advance(fixture);
 
-        location.go('/team/22/user/fedor');
-        location.historyGo(0);
-        advance(fixture);
+      simulateLocationChange('/team/22/user/fedor', browserAPI);
+      advance(fixture);
 
-        expect(fixture.nativeElement).toHaveText('team 22 [ user fedor, right:  ]');
+      expect(fixture.nativeElement).toHaveText('team 22 [ user fedor, right:  ]');
 
-        expectEvents(recordedEvents, [
-          [NavigationStart, '/team/22/user/victor'],
-          [NavigationEnd, '/team/22/user/victor'],
-          [NavigationStart, '/team/22/user/fedor'],
-          [NavigationEnd, '/team/22/user/fedor'],
-        ]);
-      }),
-    ));
+      expectEvents(recordedEvents, [
+        [NavigationStart, '/team/22/user/victor'],
+        [NavigationEnd, '/team/22/user/victor'],
+        [NavigationStart, '/team/22/user/fedor'],
+        [NavigationEnd, '/team/22/user/fedor'],
+      ]);
+    }));
 
     it('should update the location when the matched route does not change', fakeAsync(
       inject([Router, Location], (router: Router, location: Location) => {
@@ -925,17 +941,17 @@ for (const browserAPI of ['navigation', 'history'] as const) {
       }),
     ));
 
-    navigationErrorsIntegrationSuite();
+    navigationErrorsIntegrationSuite(browserAPI);
     eagerUrlUpdateStrategyIntegrationSuite();
-    duplicateInFlightNavigationsIntegrationSuite();
-    navigationIntegrationTestSuite();
+    duplicateInFlightNavigationsIntegrationSuite(browserAPI);
+    navigationIntegrationTestSuite(browserAPI);
     routeDataIntegrationSuite();
     routerLinkIntegrationSpec();
-    redirectsIntegrationSuite();
-    guardsIntegrationSuite();
+    redirectsIntegrationSuite(browserAPI);
+    guardsIntegrationSuite(browserAPI);
     routerEventsIntegrationSuite();
     routerLinkActiveIntegrationSuite();
-    lazyLoadingIntegrationSuite();
+    lazyLoadingIntegrationSuite(browserAPI);
     routeReuseIntegrationSuite();
   });
 }

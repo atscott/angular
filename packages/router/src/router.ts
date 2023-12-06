@@ -24,6 +24,7 @@ import {INPUT_BINDER} from './directives/router_outlet';
 import {RuntimeErrorCode} from './errors';
 import {
   BeforeActivateRoutes,
+  BeforeRoutesRecognized,
   Event,
   IMPERATIVE_NAVIGATION,
   NavigationCancel,
@@ -297,7 +298,8 @@ export class Router {
     source: NavigationTrigger,
     state: RestoredState | null | undefined,
   ) {
-    const extras: NavigationExtras = {replaceUrl: true};
+    const browserAlreadyCommittedUrl = source === 'popstate' || source === IMPERATIVE_NAVIGATION;
+    const extras: NavigationExtras = browserAlreadyCommittedUrl ? {replaceUrl: true} : {};
 
     // TODO: restoredState should always include the entire state, regardless
     // of navigationId. This requires a breaking change to update the type on
@@ -688,5 +690,9 @@ function validateCommands(commands: string[]): void {
 }
 
 function isPublicRouterEvent(e: Event | PrivateRouterEvents): e is Event {
-  return !(e instanceof BeforeActivateRoutes) && !(e instanceof RedirectRequest);
+  return (
+    !(e instanceof BeforeActivateRoutes) &&
+    !(e instanceof RedirectRequest) &&
+    !(e instanceof BeforeRoutesRecognized)
+  );
 }
