@@ -19,7 +19,7 @@ ts_project(
 
 jasmine_node_test(
     name = "test",
-    bootstrap = ["//tools/testing:node"],
+    bootstrap = ["//tools/testing:node_zoneless"],
     deps = [
         ":test_lib",
     ],

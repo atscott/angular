@@ -8,10 +8,19 @@
 
 import {
   DOCUMENT,
+  Location,
   PlatformLocation,
   ɵPlatformNavigation as PlatformNavigation,
+  ɵNavigationAdapterForLocation as NavigationAdapterForLocation,
+  ɵUSE_PLATFORM_NAVIGATION as USE_PLATFORM_NAVIGATION,
 } from '../../../index';
-import {inject, InjectionToken, Provider} from '@angular/core';
+import {
+  EnvironmentProviders,
+  inject,
+  InjectionToken,
+  makeEnvironmentProviders,
+  provideEnvironmentInitializer,
+} from '@angular/core';
 
 import {
   FakeNavigationPlatformLocation,
@@ -35,12 +44,31 @@ const FAKE_NAVIGATION = new InjectionToken<FakeNavigation>('fakeNavigation', {
 /**
  * Return a provider for the `FakeNavigation` in place of the real Navigation API.
  */
-export function provideFakePlatformNavigation(): Provider[] {
-  return [
+export function provideFakePlatformNavigation(): EnvironmentProviders {
+  return makeEnvironmentProviders([
     {
       provide: PlatformNavigation,
-      useFactory: () => inject(FAKE_NAVIGATION),
+      useFactory: () => {
+        const config = inject(MOCK_PLATFORM_LOCATION_CONFIG, {optional: true});
+        const nav = new FakeNavigation(
+          inject(DOCUMENT),
+          (config?.startUrl as `http${string}`) ?? 'http://_empty_/',
+        );
+        nav.setSynchronousTraversalsForTesting(true);
+        return nav;
+      },
     },
     {provide: PlatformLocation, useClass: FakeNavigationPlatformLocation},
-  ];
+    provideEnvironmentInitializer(() => {
+      // One might use FakeNavigationPlatformLocation without wanting to use Navigation APIs everywhere
+      if (!inject(USE_PLATFORM_NAVIGATION, {optional: true})) {
+        return;
+      }
+      if (!(inject(PlatformLocation) instanceof FakeNavigationPlatformLocation)) {
+        throw new Error(
+          'FakePlatformNavigation was provided but PlatformLocation may not get its information from PlatformNavigation',
+        );
+      }
+    }),
+  ]);
 }
