@@ -17,10 +17,11 @@ import type {Navigation} from './navigation_transition';
  * * 'imperative': Triggered by `router.navigateByUrl()` or `router.navigate()`.
  * * 'popstate' : Triggered by a `popstate` event.
  * * 'hashchange'-: Triggered by a `hashchange` event.
+ * * 'navigate'-: Triggered by a `navigate` event from the browser Navigation API.
  *
  * @publicApi
  */
-export type NavigationTrigger = 'imperative' | 'popstate' | 'hashchange';
+export type NavigationTrigger = 'imperative' | 'popstate' | 'hashchange' | 'navigate';
 export const IMPERATIVE_NAVIGATION = 'imperative';
 
 /**
@@ -617,15 +618,20 @@ export class Scroll {
 }
 
 export class BeforeActivateRoutes {}
+export class BeforeRoutesRecognized {}
 export class RedirectRequest {
   constructor(
     readonly url: UrlTree,
     readonly navigationBehaviorOptions: NavigationBehaviorOptions | undefined,
   ) {}
 }
-export type PrivateRouterEvents = BeforeActivateRoutes | RedirectRequest;
+export type PrivateRouterEvents = BeforeActivateRoutes | RedirectRequest | BeforeRoutesRecognized;
 export function isPublicRouterEvent(e: Event | PrivateRouterEvents): e is Event {
-  return !(e instanceof BeforeActivateRoutes) && !(e instanceof RedirectRequest);
+  return (
+    !(e instanceof BeforeActivateRoutes) &&
+    !(e instanceof RedirectRequest) &&
+    !(e instanceof BeforeRoutesRecognized)
+  );
 }
 
 /**

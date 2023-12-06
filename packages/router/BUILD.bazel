@@ -1,7 +1,16 @@
 load("//tools:defaults.bzl", "api_golden_test", "api_golden_test_npm_package", "generate_api_docs")
-load("//tools:defaults2.bzl", "ng_package", "ng_project", "npm_package")
+load("//tools:defaults2.bzl", "ng_package", "ng_project", "npm_package", "ts_config")
 
 package(default_visibility = ["//visibility:public"])
+
+ts_config(
+    name = "tsconfig_build",
+    src = "tsconfig.json",
+    deps = [
+        "//:node_modules/@types/dom-navigation",
+        "//packages:tsconfig_build",
+    ],
+)
 
 ng_project(
     name = "router",
@@ -15,7 +24,9 @@ ng_project(
         "//packages/common",
         "//packages/platform-browser",
     ],
+    tsconfig = ":tsconfig_build",
     deps = [
+        "//:node_modules/@types/dom-navigation",
         "//:node_modules/rxjs",
         "//packages/core:core_rjs",
     ],

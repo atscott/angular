@@ -8,9 +8,16 @@
 import {LocationStrategy, Location, HashLocationStrategy} from '@angular/common';
 import {TestBed} from '@angular/core/testing';
 import {Router, NavigationStart, RoutesRecognized} from '../../src';
-import {createRoot, RootCmp, BlankCmp, TeamCmp, advance} from './integration_helpers';
+import {
+  createRoot,
+  RootCmp,
+  BlankCmp,
+  TeamCmp,
+  advance,
+  simulateLocationChange,
+} from './integration_helpers';
 
-export function redirectsIntegrationSuite() {
+export function redirectsIntegrationSuite(browserAPI: 'navigation' | 'history') {
   describe('redirects', () => {
     it('should work', async () => {
       const router = TestBed.inject(Router);
@@ -83,10 +90,10 @@ export function redirectsIntegrationSuite() {
         {path: 'team/:id', component: TeamCmp},
       ]);
 
-      location.go('initial');
-      location.historyGo(0);
-      location.go('old/team/22');
-      location.historyGo(0);
+      location.go('/initial');
+      await advance(fixture);
+      location.go('/old/team/22');
+      await advance(fixture); // needed for navigation API to resolve above navigations
 
       // initial navigation
       router.initialNavigation();
@@ -98,8 +105,7 @@ export function redirectsIntegrationSuite() {
       expect(location.path()).toEqual('/initial');
 
       // location change
-      location.go('/old/team/33');
-      location.historyGo(0);
+      simulateLocationChange('/old/team/33', browserAPI);
 
       await advance(fixture);
       expect(location.path()).toEqual('/team/33');

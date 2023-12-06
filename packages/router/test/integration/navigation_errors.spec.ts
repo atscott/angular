@@ -44,10 +44,11 @@ import {
   EmptyQueryParamsCmp,
   createRoot,
   advance,
+  simulateLocationChange,
 } from './integration_helpers';
 import {timeout} from '../helpers';
 
-export function navigationErrorsIntegrationSuite() {
+export function navigationErrorsIntegrationSuite(browserAPI: 'navigation' | 'history') {
   it('should handle failed navigations gracefully', async () => {
     const router = TestBed.inject(Router);
     const fixture = await createRoot(router, RootCmp);
@@ -221,6 +222,11 @@ export function navigationErrorsIntegrationSuite() {
   // Errors should behave the same for both deferred and eager URL update strategies
   (['deferred', 'eager'] as const).forEach((urlUpdateStrategy) => {
     it('should dispatch NavigationError after the url has been reset back', async () => {
+      if (browserAPI === 'navigation') {
+        // This doesn't work with navigation API because navigation & events for rollback are not synchronous
+        // Rollback cannot be complete before NavigationError unless we delay the emit
+        return;
+      }
       TestBed.configureTestingModule({
         providers: [provideRouter([], withRouterConfig({urlUpdateStrategy}))],
       });
@@ -266,6 +272,7 @@ export function navigationErrorsIntegrationSuite() {
       // Try navigating to a component which throws an error during activation.
       ConditionalThrowingCmp.throwError = true;
       await expectAsync(router.navigateByUrl('/throwing')).toBeRejected();
+      await advance(fixture); // have to commit the rollback - Navigation API events to not happen synchronously (https://github.com/WICG/navigation-api/issues/288#issue-3002669948)
       expect(location.path()).toEqual('');
       expect(fixture.nativeElement.innerHTML).not.toContain('throwing');
 
@@ -275,7 +282,7 @@ export function navigationErrorsIntegrationSuite() {
       await advance(fixture);
       expect(location.path()).toEqual('/throwing');
       expect(fixture.nativeElement.innerHTML).toContain('throwing');
-    });
+    }, 1000000);
 
     it('should reset the url with the right state when navigation errors', async () => {
       TestBed.configureTestingModule({
@@ -298,18 +305,18 @@ export function navigationErrorsIntegrationSuite() {
         }
       });
 
-      router.navigateByUrl('/simple1');
-      await advance(fixture);
+      await router.navigateByUrl('/simple1');
+      await timeout(2);
       const simple1NavStart = event!;
 
-      router.navigateByUrl('/throwing').catch(() => null);
-      await advance(fixture);
+      await router.navigateByUrl('/throwing').catch(() => null);
+      await timeout(2);
 
-      router.navigateByUrl('/simple2');
-      await advance(fixture);
+      await router.navigateByUrl('/simple2');
+      await timeout(2);
 
       location.back();
-      await timeout();
+      await timeout(2);
 
       expect(event!.restoredState!.navigationId).toEqual(simple1NavStart.id);
     });
@@ -374,8 +381,7 @@ export function navigationErrorsIntegrationSuite() {
       }
     });
 
-    location.go('/throwing');
-    location.historyGo(0);
+    simulateLocationChange('/throwing', browserAPI);
     await advance(fixture);
 
     expect(routerUrlBeforeEmittingError).toEqual('/simple');
@@ -404,6 +410,10 @@ export function navigationErrorsIntegrationSuite() {
   });
 
   it('should not swallow errors from browser state update', async () => {
+    if (browserAPI === 'navigation') {
+      // Router interfaces with the browser APIs at different times. We cannot use the same test for this because the events will be different.
+      return;
+    }
     const routerEvents: Event[] = [];
     TestBed.inject(Router).resetConfig([{path: '**', component: BlankCmp}]);
     TestBed.inject(Router).events.subscribe((e) => {

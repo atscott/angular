@@ -11,6 +11,9 @@ import {
   LOCATION_INITIALIZED,
   LocationStrategy,
   ViewportScroller,
+  Location,
+  ɵNavigationAdapterForLocation,
+  ɵUSE_PLATFORM_NAVIGATION as USE_PLATFORM_NAVIGATION,
 } from '@angular/common';
 import {
   APP_BOOTSTRAP_LISTENER,
@@ -28,6 +31,7 @@ import {
   runInInjectionContext,
   Type,
   ɵperformanceMarkFeature as performanceMarkFeature,
+  provideEnvironmentInitializer,
 } from '@angular/core';
 import {of, Subject} from 'rxjs';
 
@@ -49,6 +53,8 @@ import {
   VIEW_TRANSITION_OPTIONS,
   ViewTransitionsFeatureOptions,
 } from './utils/view_transition';
+import {StateManager} from './statemanager/state_manager';
+import {NavigationStateManager} from './statemanager/navigation_state_manager';
 
 /**
  * Sets up providers necessary to enable `Router` functionality for the application.
@@ -219,6 +225,27 @@ export function withInMemoryScrolling(
         return new RouterScroller(urlSerializer, transitions, viewportScroller, zone, options);
       },
     },
+  ];
+  return routerFeature(RouterFeatureKind.InMemoryScrollingFeature, providers);
+}
+
+export function withDomNavigation() {
+  const providers = [
+    {provide: StateManager, useExisting: NavigationStateManager},
+    {provide: Location, useClass: ɵNavigationAdapterForLocation},
+    typeof ngDevMode === 'undefined' || ngDevMode
+      ? [
+          {provide: USE_PLATFORM_NAVIGATION, useValue: true},
+          provideEnvironmentInitializer(() => {
+            if (!(inject(Location) instanceof ɵNavigationAdapterForLocation)) {
+              // TODO(atscott): add specific checks for SpyLocation and mention not to use RouterTestingModule or provideLocationMocks
+              throw new Error(
+                'Using PlatformNavigation for app navigations but Location does not use Navigation APIs',
+              );
+            }
+          }),
+        ]
+      : [],
   ];
   return routerFeature(RouterFeatureKind.InMemoryScrollingFeature, providers);
 }

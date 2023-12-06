@@ -8,12 +8,14 @@
 
 import {Location} from '@angular/common';
 import {ɵprovideFakePlatformNavigation} from '@angular/common/testing';
+import {ɵPlatformNavigation as PlatformNavigation} from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
   NgModule,
   ɵConsole as Console,
   signal,
+  makeEnvironmentProviders,
 } from '@angular/core';
 import {TestBed} from '@angular/core/testing';
 import {expect} from '@angular/private/testing/matchers';
@@ -35,7 +37,12 @@ import {
   RoutesRecognized,
 } from '../../index';
 
-import {provideRouter} from '../../src/provide_router';
+import {
+  provideRouter,
+  withNavigationErrorHandler,
+  withRouterConfig,
+  withDomNavigation,
+} from '../../src/provide_router';
 import {
   BlankCmp,
   CollectParamsCmp,
@@ -52,6 +59,7 @@ import {
   RouteCmp,
   ROUTER_DIRECTIVES,
   SimpleCmp,
+  simulateLocationChange,
   TeamCmp,
   TestModule,
   TwoOutletsCmp,
@@ -81,8 +89,12 @@ for (const browserAPI of ['navigation', 'history'] as const) {
         imports: [...ROUTER_DIRECTIVES, TestModule],
         providers: [
           {provide: Console, useValue: noopConsole},
-          provideRouter([{path: 'simple', component: SimpleCmp}]),
-          browserAPI === 'navigation' ? ɵprovideFakePlatformNavigation() : [],
+          provideRouter(
+            [{path: 'simple', component: SimpleCmp}],
+            browserAPI === 'navigation'
+              ? withDomNavigation()
+              : (makeEnvironmentProviders([]) as any),
+          ),
         ],
       });
     });
@@ -374,13 +386,13 @@ for (const browserAPI of ['navigation', 'history'] as const) {
       location.back();
       await advance(fixture);
       expect(location.path()).toEqual('/team/33/simple');
-      expect(event!.navigationTrigger).toEqual('popstate');
+      expect(event!.navigationTrigger).toEqual(browserAPI === 'history' ? 'popstate' : 'navigate');
       expect(event!.restoredState!.navigationId).toEqual(simpleNavStart.id);
 
       location.forward();
       await advance(fixture);
       expect(location.path()).toEqual('/team/22/user/victor');
-      expect(event!.navigationTrigger).toEqual('popstate');
+      expect(event!.navigationTrigger).toEqual(browserAPI === 'history' ? 'popstate' : 'navigate');
       expect(event!.restoredState!.navigationId).toEqual(userVictorNavStart.id);
     });
 
@@ -423,12 +435,10 @@ for (const browserAPI of ['navigation', 'history'] as const) {
       router.navigateByUrl('/team/22/user/victor');
       await advance(fixture);
 
-      location.go('/team/22/user/fedor');
-      location.historyGo(0);
+      simulateLocationChange('/team/22/user/fedor', browserAPI);
       await advance(fixture);
 
-      location.go('/team/22/user/fedor');
-      location.historyGo(0);
+      simulateLocationChange('/team/22/user/fedor', browserAPI);
       await advance(fixture);
 
       expect(fixture.nativeElement).toHaveText('team 22 [ user fedor, right:  ]');
@@ -901,17 +911,17 @@ for (const browserAPI of ['navigation', 'history'] as const) {
       expect(cmp.path.length).toEqual(2);
     });
 
-    navigationErrorsIntegrationSuite();
+    navigationErrorsIntegrationSuite(browserAPI);
     eagerUrlUpdateStrategyIntegrationSuite();
-    duplicateInFlightNavigationsIntegrationSuite();
-    navigationIntegrationTestSuite();
+    duplicateInFlightNavigationsIntegrationSuite(browserAPI);
+    navigationIntegrationTestSuite(browserAPI);
     routeDataIntegrationSuite();
     routerLinkIntegrationSpec();
-    redirectsIntegrationSuite();
-    guardsIntegrationSuite();
+    redirectsIntegrationSuite(browserAPI);
+    guardsIntegrationSuite(browserAPI);
     routerEventsIntegrationSuite();
     routerLinkActiveIntegrationSuite();
-    lazyLoadingIntegrationSuite();
+    lazyLoadingIntegrationSuite(browserAPI);
     routeReuseIntegrationSuite();
   });
 }

@@ -69,10 +69,11 @@ import {
   ModuleWithBlankCmpAsRoute,
   createRoot,
   advance,
+  simulateLocationChange,
 } from './integration_helpers';
 import {timeout} from '../helpers';
 
-export function guardsIntegrationSuite() {
+export function guardsIntegrationSuite(browserAPI: 'navigation' | 'history') {
   describe('guards', () => {
     describe('CanActivate', () => {
       describe('guard completes before emitting a value', () => {
@@ -283,8 +284,7 @@ export function guardsIntegrationSuite() {
           await advance(fixture);
           expect(location.path()).toEqual('/one');
 
-          location.go('/two');
-          location.historyGo(0);
+          simulateLocationChange('/two', browserAPI);
           await advance(fixture);
           expect(location.path()).toEqual('/one');
         });

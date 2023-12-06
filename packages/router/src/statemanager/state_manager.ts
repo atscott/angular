@@ -12,6 +12,7 @@ import {SubscriptionLike} from 'rxjs';
 
 import {
   BeforeActivateRoutes,
+  BeforeRoutesRecognized,
   Event,
   NavigationCancel,
   NavigationCancellationCode,
@@ -21,7 +22,6 @@ import {
   NavigationStart,
   NavigationTrigger,
   PrivateRouterEvents,
-  RoutesRecognized,
 } from '../events';
 import {Navigation, RestoredState} from '../navigation_transition';
 import {ROUTER_CONFIGURATION} from '../router_config';
@@ -32,7 +32,7 @@ import {UrlSerializer, UrlTree} from '../url_tree';
 @Injectable({providedIn: 'root', useFactory: () => inject(HistoryStateManager)})
 export abstract class StateManager {
   protected readonly urlSerializer = inject(UrlSerializer);
-  private readonly options = inject(ROUTER_CONFIGURATION, {optional: true}) || {};
+  protected readonly options = inject(ROUTER_CONFIGURATION, {optional: true}) || {};
   protected readonly canceledNavigationResolution =
     this.options.canceledNavigationResolution || 'replace';
   protected location = inject(Location);
@@ -125,7 +125,7 @@ export abstract class StateManager {
     };
   }
 
-  protected resetInternalState({finalUrl}: Navigation): void {
+  protected resetInternalState({finalUrl}: Navigation, traversalReset = false): void {
     this.routerState = this.stateMemento.routerState;
     this.currentUrlTree = this.stateMemento.currentUrlTree;
     // Note here that we use the urlHandlingStrategy to get the reset `rawUrlTree` because it may be
@@ -133,10 +133,9 @@ export abstract class StateManager {
     // the part of the navigation handled by the Angular router rather than the whole URL. In
     // addition, the URLHandlingStrategy may be configured to specifically preserve parts of the URL
     // when merging, such as the query params so they are not lost on a refresh.
-    this.rawUrlTree = this.urlHandlingStrategy.merge(
-      this.currentUrlTree,
-      finalUrl ?? this.rawUrlTree,
-    );
+    this.rawUrlTree = traversalReset
+      ? this.stateMemento.rawUrlTree
+      : this.urlHandlingStrategy.merge(this.currentUrlTree, finalUrl ?? this.rawUrlTree);
   }
 
   /** Returns the current state stored by the browser for the current history entry. */
@@ -212,19 +211,22 @@ export class HistoryStateManager extends StateManager {
   override handleRouterEvent(e: Event | PrivateRouterEvents, currentTransition: Navigation): void {
     if (e instanceof NavigationStart) {
       this.updateStateMemento();
+      currentTransition.navigationStartHandled.next(true);
     } else if (e instanceof NavigationSkipped) {
       this.commitTransition(currentTransition);
-    } else if (e instanceof RoutesRecognized) {
+    } else if (e instanceof BeforeRoutesRecognized) {
       if (this.urlUpdateStrategy === 'eager') {
         if (!currentTransition.extras.skipLocationChange) {
           this.setBrowserUrl(this.createBrowserPath(currentTransition), currentTransition);
         }
       }
+      currentTransition.routesRecognizeHandled.next(true);
     } else if (e instanceof BeforeActivateRoutes) {
       this.commitTransition(currentTransition);
       if (this.urlUpdateStrategy === 'deferred' && !currentTransition.extras.skipLocationChange) {
         this.setBrowserUrl(this.createBrowserPath(currentTransition), currentTransition);
       }
+      currentTransition.beforeActivateHandled.next(true);
     } else if (
       e instanceof NavigationCancel &&
       e.code !== NavigationCancellationCode.SupersededByNewNavigation &&

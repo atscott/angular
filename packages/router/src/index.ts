@@ -75,6 +75,7 @@ export {
   DebugTracingFeature,
   DisabledInitialNavigationFeature,
   withViewTransitions,
+  withDomNavigation,
   ViewTransitionsFeature,
   EnabledBlockingInitialNavigationFeature,
   InitialNavigationFeature,

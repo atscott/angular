@@ -24,6 +24,8 @@ import {createSegmentGroupFromRoute, createUrlTreeFromSegmentGroup} from './crea
 import {INPUT_BINDER} from './directives/router_outlet';
 import {RuntimeErrorCode} from './errors';
 import {
+  BeforeActivateRoutes,
+  BeforeRoutesRecognized,
   Event,
   IMPERATIVE_NAVIGATION,
   isPublicRouterEvent,
@@ -297,7 +299,8 @@ export class Router {
     source: NavigationTrigger,
     state: RestoredState | null | undefined,
   ) {
-    const extras: NavigationExtras = {replaceUrl: true};
+    const browserAlreadyCommittedUrl = source === 'popstate' || source === IMPERATIVE_NAVIGATION;
+    const extras: NavigationExtras = browserAlreadyCommittedUrl ? {replaceUrl: true} : {};
 
     // TODO: restoredState should always include the entire state, regardless
     // of navigationId. This requires a breaking change to update the type on
