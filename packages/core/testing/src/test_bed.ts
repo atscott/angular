@@ -38,8 +38,7 @@ import {
   ɵsetUnknownElementStrictMode as setUnknownElementStrictMode,
   ɵsetUnknownPropertyStrictMode as setUnknownPropertyStrictMode,
   ɵstringify as stringify,
-  ɵZoneAwareQueueingScheduler as ZoneAwareQueueingScheduler,
-} from '@angular/core';
+  ɵZoneAwareQueueingScheduler as ZoneAwareQueueingScheduler} from '@angular/core';
 
 /* clang-format on */
 

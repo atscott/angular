@@ -347,6 +347,7 @@ export class ApplicationRef {
    * Returns an Observable that indicates when the application is stable or unstable.
    */
   public readonly isStable: Observable<boolean> =
+
       inject(InitialRenderPendingTasks)
           .hasPendingTasks.pipe(
               switchMap(hasPendingTasks => hasPendingTasks ? of(false) : this.zoneIsStable),

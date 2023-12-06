@@ -171,3 +171,10 @@ export function getNgZoneOptions(options?: NgZoneOptions): InternalNgZoneOptions
     shouldCoalesceRunChangeDetection: options?.runCoalescing ?? false,
   };
 }
+
+/**
+ * Injectable that is notified when an `LView` is made aware of changes to application state.
+ */
+export abstract class ChangeDetectionScheduler {
+  abstract notify(): void;
+}
