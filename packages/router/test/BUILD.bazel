@@ -7,6 +7,7 @@ ts_project(
     # Visible to //:saucelabs_unit_tests_poc target
     visibility = ["//:__pkg__"],
     deps = [
+        "//:node_modules/@types/dom-navigation",
         "//:node_modules/rxjs",
         "//packages/common",
         "//packages/common/testing",

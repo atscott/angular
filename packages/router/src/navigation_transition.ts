@@ -19,13 +19,37 @@ import {
   untracked,
   ɵWritable as Writable,
 } from '@angular/core';
-import {BehaviorSubject, EMPTY, from, Observable, of, Subject} from 'rxjs';
-import {catchError, filter, finalize, map, switchMap, take, takeUntil, tap} from 'rxjs/operators';
+import {
+  BehaviorSubject,
+  ReplaySubject,
+  combineLatest,
+  EMPTY,
+  from,
+  fromEvent,
+  MonoTypeOperatorFunction,
+  Observable,
+  ObservableInput,
+  of,
+  Subject,
+} from 'rxjs';
+import {
+  catchError,
+  concatMap,
+  defaultIfEmpty,
+  filter,
+  finalize,
+  map,
+  switchMap,
+  take,
+  takeUntil,
+  tap,
+} from 'rxjs/operators';
 
 import {createRouterState} from './create_router_state';
 import {INPUT_BINDER} from './directives/router_outlet';
 import {
   BeforeActivateRoutes,
+  BeforeRoutesRecognized,
   Event,
   GuardsCheckEnd,
   GuardsCheckStart,
@@ -295,6 +319,13 @@ export interface Navigation {
    * This function is a no-op if the navigation is beyond the point where it can be aborted.
    */
   readonly abort: () => void;
+
+  /** @internal */
+  navigationStartHandled: Subject<void>;
+  /** @internal */
+  routesRecognizeHandled: Subject<void>;
+  /** @internal */
+  beforeActivateHandled: Subject<void>;
 }
 
 const noop = () => {};
@@ -318,6 +349,9 @@ export interface NavigationTransition {
   targetRouterState: RouterState | null;
   guards: Checks;
   guardsResult: GuardResult | null;
+  navigationStartHandled: Subject<void>;
+  routesRecognizeHandled: Subject<void>;
+  beforeActivateHandled: Subject<void>;
 }
 
 /**
@@ -430,6 +464,9 @@ export class NavigationTransitions {
         guards: {canActivateChecks: [], canDeactivateChecks: []},
         guardsResult: null,
         id,
+        routesRecognizeHandled: new ReplaySubject<void>(1),
+        navigationStartHandled: new ReplaySubject<void>(1),
+        beforeActivateHandled: new ReplaySubject<void>(1),
       });
     });
   }
@@ -484,6 +521,9 @@ export class NavigationTransitions {
                     previousNavigation: null,
                   },
               abort: () => abortController.abort(),
+              navigationStartHandled: t.navigationStartHandled,
+              routesRecognizeHandled: t.routesRecognizeHandled,
+              beforeActivateHandled: t.beforeActivateHandled,
             });
             const urlTransition =
               !router.navigated || this.isUpdatingInternalState() || this.isUpdatedBrowserUrl();
@@ -527,6 +567,8 @@ export class NavigationTransitions {
                   return Promise.resolve(t);
                 }),
 
+                waitFor(overallTransitionState.navigationStartHandled),
+
                 // Recognize
                 recognize(
                   this.environmentInjector,
@@ -546,15 +588,18 @@ export class NavigationTransitions {
                     nav!.finalUrl = t.urlAfterRedirects;
                     return nav;
                   });
-
-                  // Fire RoutesRecognized
-                  const routesRecognized = new RoutesRecognized(
-                    t.id,
-                    this.urlSerializer.serialize(t.extractedUrl),
-                    this.urlSerializer.serialize(t.urlAfterRedirects!),
-                    t.targetSnapshot!,
+                  this.events.next(new BeforeRoutesRecognized());
+                }),
+                waitFor(overallTransitionState.routesRecognizeHandled),
+                tap((t) => {
+                  this.events.next(
+                    new RoutesRecognized(
+                      t.id,
+                      this.urlSerializer.serialize(t.extractedUrl),
+                      this.urlSerializer.serialize(t.urlAfterRedirects!),
+                      t.targetSnapshot!,
+                    ),
                   );
-                  this.events.next(routesRecognized);
                 }),
               );
             } else if (
@@ -584,7 +629,10 @@ export class NavigationTransitions {
                 nav!.finalUrl = extractedUrl;
                 return nav;
               });
-              return of(overallTransitionState);
+              // TODO(atscott): This is a bit scary. what do we do with shouldProcessUrl: false in the navigation state manager?
+              // presumably another router is supposed to process it? So we should already have a NavigateEvent?
+              // Probably shouldn't do any rollbacks for it??
+              return of(overallTransitionState).pipe(waitFor(t.navigationStartHandled));
             } else {
               /* When neither the current or previous URL can be processed, do
                * nothing other than update router's internal reference to the
@@ -755,6 +803,8 @@ export class NavigationTransitions {
           tap(() => {
             this.events.next(new BeforeActivateRoutes());
           }),
+
+          waitFor(overallTransitionState.beforeActivateHandled),
 
           activateRoutes(
             this.rootContexts,
@@ -997,4 +1047,17 @@ export class NavigationTransitions {
 
 export function isBrowserTriggeredNavigation(source: NavigationTrigger) {
   return source !== IMPERATIVE_NAVIGATION;
+}
+
+/**
+ * Pauses the RxJS pipeline until the given signal$ emits (or completes).
+ * Use a ReplaySubject<void>(1) if you want late subscribers to proceed immediately.
+ */
+export function waitFor<T>(signal$: Observable<any>): MonoTypeOperatorFunction<T> {
+  return concatMap((value) =>
+    signal$.pipe(
+      take(1),
+      map(() => value),
+    ),
+  );
 }
