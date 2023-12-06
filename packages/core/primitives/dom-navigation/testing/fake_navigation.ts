@@ -738,6 +738,7 @@ export interface ExperimentalNavigateEvent extends NavigateEvent {
   intercept(options?: ExperimentalNavigationInterceptOptions): void;
 
   commit(): void;
+  redirect(url: string): void;
 }
 
 /**
@@ -757,6 +758,7 @@ interface InternalFakeNavigateEvent extends FakeNavigateEvent {
   focusResetBehavior: 'after-transition' | 'manual' | null;
 
   commit(internal?: boolean): void;
+  redirect(url: string): void;
   cancel(reason: Error): void;
 }
 
@@ -830,6 +832,12 @@ function dispatchNavigateEvent({
     event.commitOption = options?.commit ?? event.commitOption;
     event.scrollBehavior = options?.scroll ?? event.scrollBehavior;
     event.focusResetBehavior = options?.focusReset ?? event.focusResetBehavior;
+  };
+
+  event.redirect = function (this: InternalFakeNavigateEvent, url: string) {
+    // TODO(atscott): update once spec describes what to do here
+    const toUrl = new URL(url, this.result.navigation.currentEntry.url!);
+    this.destination.url = toUrl.href;
   };
 
   event.scroll = function (this: InternalFakeNavigateEvent): void {
@@ -1030,7 +1038,7 @@ function createPopStateEvent({state}: {state: unknown}) {
  * Fake equivalent of `NavigationDestination`.
  */
 export class FakeNavigationDestination implements NavigationDestination {
-  readonly url: string;
+  url: string;
   readonly sameDocument: boolean;
   readonly key: string | null;
   readonly id: string | null;

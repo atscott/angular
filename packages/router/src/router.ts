@@ -297,7 +297,8 @@ export class Router {
     source: NavigationTrigger,
     state: RestoredState | null | undefined,
   ) {
-    const extras: NavigationExtras = {replaceUrl: true};
+    const browserAlreadyCommittedUrl = source === 'popstate' || source === IMPERATIVE_NAVIGATION;
+    const extras: NavigationExtras = browserAlreadyCommittedUrl ? {replaceUrl: true} : {};
 
     // TODO: restoredState should always include the entire state, regardless
     // of navigationId. This requires a breaking change to update the type on

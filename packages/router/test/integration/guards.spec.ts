@@ -69,9 +69,10 @@ import {
   TwoOutletsCmp,
   UserCmp,
   ModuleWithBlankCmpAsRoute,
+  simulateLocationChange,
 } from './integration_helpers';
 
-export function guardsIntegrationSuite() {
+export function guardsIntegrationSuite(browserAPI: 'navigation' | 'history') {
   describe('guards', () => {
     describe('CanActivate', () => {
       describe('guard completes before emitting a value', () => {
@@ -284,8 +285,7 @@ export function guardsIntegrationSuite() {
             advance(fixture);
             expect(location.path()).toEqual('/one');
 
-            location.go('/two');
-            location.historyGo(0);
+            simulateLocationChange('/two', browserAPI);
             advance(fixture);
             expect(location.path()).toEqual('/one');
           }),

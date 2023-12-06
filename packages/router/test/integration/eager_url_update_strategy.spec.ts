@@ -177,7 +177,7 @@ export function eagerUrlUpdateStrategyIntegrationSuite() {
         router.navigateByUrl('/simple', {state: {foo: 'bar'}});
         tick();
 
-        const state = location.getState() as any;
+        const state = location.getState();
         expect(state).toEqual({foo: 'bar', navigationId: 2});
         expect(navigation.extras.state).toBeDefined();
         expect(navigation.extras.state).toEqual({foo: 'bar'});

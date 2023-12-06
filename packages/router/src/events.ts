@@ -17,10 +17,11 @@ import type {Navigation} from './navigation_transition';
  * * 'imperative': Triggered by `router.navigateByUrl()` or `router.navigate()`.
  * * 'popstate' : Triggered by a `popstate` event.
  * * 'hashchange'-: Triggered by a `hashchange` event.
+ * * 'navigate'-: Triggered by a `navigate` event from the browser Navigation API.
  *
  * @publicApi
  */
-export type NavigationTrigger = 'imperative' | 'popstate' | 'hashchange';
+export type NavigationTrigger = 'imperative' | 'popstate' | 'hashchange' | 'navigate';
 export const IMPERATIVE_NAVIGATION = 'imperative';
 
 /**
