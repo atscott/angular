@@ -103,6 +103,10 @@ export class Location implements OnDestroy {
     return this.normalize(this._locationStrategy.path(includeHash));
   }
 
+  getPathFromUrl(url: URL): string {
+    return this._locationStrategy.getPathFromUrl(url);
+  }
+
   /**
    * Reports the current state of the location history.
    * @returns The current value of the `history.state` object.

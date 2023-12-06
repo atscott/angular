@@ -190,6 +190,10 @@ export enum NavigationCancellationCode {
    * A navigation failed because a guard returned `false`.
    */
   GuardRejected,
+  /**
+   * aborted manually
+   */
+  Aborted,
 }
 
 /**

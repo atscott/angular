@@ -16,7 +16,16 @@ import {
   runInInjectionContext,
   Type,
 } from '@angular/core';
-import {BehaviorSubject, combineLatest, EMPTY, from, Observable, of, Subject} from 'rxjs';
+import {
+  BehaviorSubject,
+  combineLatest,
+  EMPTY,
+  from,
+  fromEvent,
+  Observable,
+  of,
+  Subject,
+} from 'rxjs';
 import {
   catchError,
   defaultIfEmpty,
@@ -298,6 +307,8 @@ export interface Navigation {
    * for its own `previousNavigation`.
    */
   previousNavigation: Navigation | null;
+
+  abort: () => void;
 }
 
 export interface NavigationTransition {
@@ -319,6 +330,7 @@ export interface NavigationTransition {
   targetRouterState: RouterState | null;
   guards: Checks;
   guardsResult: GuardResult | null;
+  abortController: AbortController;
 }
 
 /**
@@ -416,7 +428,12 @@ export class NavigationTransitions {
     >,
   ) {
     const id = ++this.navigationId;
-    this.transitions?.next({...this.transitions.value, ...request, id});
+    this.transitions?.next({
+      ...this.transitions.value,
+      ...request,
+      id,
+      abortController: new AbortController(),
+    });
   }
 
   setupNavigations(
@@ -443,6 +460,7 @@ export class NavigationTransitions {
       targetRouterState: null,
       guards: {canActivateChecks: [], canDeactivateChecks: []},
       guardsResult: null,
+      abortController: new AbortController(),
     });
     return this.transitions.pipe(
       filter((t) => t.id !== 0),
@@ -458,7 +476,7 @@ export class NavigationTransitions {
 
       // Using switchMap so we cancel executing navigations when a new one comes in
       switchMap((overallTransitionState) => {
-        let completed = false;
+        let completedOrAborted = false;
         let errored = false;
         return of(overallTransitionState).pipe(
           switchMap((t) => {
@@ -496,6 +514,8 @@ export class NavigationTransitions {
                     ...this.lastSuccessfulNavigation,
                     previousNavigation: null,
                   },
+              abort: (reason?: any) =>
+                overallTransitionState.abortController.abort(reason ?? 'manual cancellation'),
             };
             const urlTransition =
               !router.navigated || this.isUpdatingInternalState() || this.isUpdatedBrowserUrl();
@@ -780,7 +800,7 @@ export class NavigationTransitions {
 
           tap({
             next: (t: NavigationTransition) => {
-              completed = true;
+              completedOrAborted = true;
               this.lastSuccessfulNavigation = this.currentNavigation;
               this.events.next(
                 new NavigationEnd(
@@ -793,7 +813,7 @@ export class NavigationTransitions {
               t.resolve(true);
             },
             complete: () => {
-              completed = true;
+              completedOrAborted = true;
             },
           }),
 
@@ -812,6 +832,22 @@ export class NavigationTransitions {
             ),
           ),
 
+          takeUntil(
+            fromEvent(overallTransitionState.abortController.signal, 'abort').pipe(
+              tap(() => {
+                completedOrAborted = true;
+                this.events.next(
+                  new NavigationCancel(
+                    overallTransitionState.id,
+                    this.urlSerializer.serialize(overallTransitionState.extractedUrl),
+                    overallTransitionState.abortController.signal.reason + '',
+                    NavigationCancellationCode.Aborted,
+                  ),
+                );
+              }),
+            ),
+          ),
+
           finalize(() => {
             /* When the navigation stream finishes either through error or success,
              * we set the `completed` or `errored` flag. However, there are some
@@ -819,7 +855,7 @@ export class NavigationTransitions {
              * For instance, a redirect during NavigationStart. Therefore, this is a
              * catch-all to make sure the NavigationCancel event is fired when a
              * navigation gets cancelled but not caught by other means. */
-            if (!completed && !errored) {
+            if (!completedOrAborted && !errored) {
               const cancelationReason =
                 typeof ngDevMode === 'undefined' || ngDevMode
                   ? `Navigation ID ${overallTransitionState.id} is not equal to the current navigation id ${this.navigationId}`

@@ -49,6 +49,8 @@ import {
   VIEW_TRANSITION_OPTIONS,
   ViewTransitionsFeatureOptions,
 } from './utils/view_transition';
+import {StateManager} from './statemanager/state_manager';
+import {NavigationStateManager} from './statemanager/navigation_state_manager';
 
 /**
  * Sets up providers necessary to enable `Router` functionality for the application.
@@ -220,6 +222,11 @@ export function withInMemoryScrolling(
       },
     },
   ];
+  return routerFeature(RouterFeatureKind.InMemoryScrollingFeature, providers);
+}
+
+export function withDomNavigation() {
+  const providers = [{provide: StateManager, useExisting: NavigationStateManager}];
   return routerFeature(RouterFeatureKind.InMemoryScrollingFeature, providers);
 }
 

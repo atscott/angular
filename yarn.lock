@@ -323,9 +323,15 @@
     "@angular/core" "^13.0.0 || ^14.0.0-0"
     reflect-metadata "^0.1.13"
 
+<<<<<<< HEAD
 "@angular/build-tooling@https://github.com/angular/dev-infra-private-build-tooling-builds.git#ce04ec6cf7604014191821a637e60964a1a3bb4a":
   version "0.0.0-2670abf637fa155971cdd1f7e570a7f234922a65"
   resolved "https://github.com/angular/dev-infra-private-build-tooling-builds.git#ce04ec6cf7604014191821a637e60964a1a3bb4a"
+=======
+"@angular/build-tooling@https://github.com/angular/dev-infra-private-build-tooling-builds.git#1298ed34f97ed13cce3177ffd25ac3292385b196":
+  version "0.0.0-e8d26efbaea89c31f1580c61c968c8119f5247a6"
+  resolved "https://github.com/angular/dev-infra-private-build-tooling-builds.git#1298ed34f97ed13cce3177ffd25ac3292385b196"
+>>>>>>> b1bf460093 (feat(router): Create a Navigation API-backed navigation_state_manager.ts)
   dependencies:
     "@angular/benchpress" "0.3.0"
     "@angular/build" "19.1.0-rc.0"
@@ -472,6 +478,7 @@
   dependencies:
     tslib "^2.3.0"
 
+<<<<<<< HEAD
 "@angular/material@19.2.0-next.4":
   version "19.2.0-next.4"
   resolved "https://registry.yarnpkg.com/@angular/material/-/material-19.2.0-next.4.tgz#4fa6cd7216b52edff40d617cbea276c0b1ffb8fe"
@@ -482,6 +489,24 @@
 "@angular/ng-dev@https://github.com/angular/dev-infra-private-ng-dev-builds.git#252589f7bc8fe6ca13b31e02d506ec52e826cdd2":
   version "0.0.0-0ad6a370f70638e785d6ef1f90dc6ede34684a47"
   resolved "https://github.com/angular/dev-infra-private-ng-dev-builds.git#252589f7bc8fe6ca13b31e02d506ec52e826cdd2"
+=======
+<<<<<<< HEAD
+"@angular/material@19.2.0-next.1":
+  version "19.2.0-next.1"
+  resolved "https://registry.yarnpkg.com/@angular/material/-/material-19.2.0-next.1.tgz#1e5b63d6509e4e09e02ce5a02079a4f86bf2275f"
+  integrity sha512-5sgxT0928VkqizIXcoEL8VpZV853XUfC4VXjTHWvjOqFSSX/EN88DXqz4VUsOZ9zIfc7hV9Gzi4JQYgTyXCfuQ==
+  dependencies:
+    tslib "^2.3.0"
+
+"@angular/ng-dev@https://github.com/angular/dev-infra-private-ng-dev-builds.git#2a80accff0f6515819a6c6e77eeca9d6936cd7b9":
+  version "0.0.0-2670abf637fa155971cdd1f7e570a7f234922a65"
+  resolved "https://github.com/angular/dev-infra-private-ng-dev-builds.git#2a80accff0f6515819a6c6e77eeca9d6936cd7b9"
+=======
+"@angular/ng-dev@https://github.com/angular/dev-infra-private-ng-dev-builds.git#744e5a754635c8e8e008f957aba8f9dd8011cc8f":
+  version "0.0.0-e8d26efbaea89c31f1580c61c968c8119f5247a6"
+  resolved "https://github.com/angular/dev-infra-private-ng-dev-builds.git#744e5a754635c8e8e008f957aba8f9dd8011cc8f"
+>>>>>>> b1bf460093 (feat(router): Create a Navigation API-backed navigation_state_manager.ts)
+>>>>>>> 0c0a474761 (feat(router): Create a Navigation API-backed navigation_state_manager.ts)
   dependencies:
     "@google-cloud/spanner" "7.18.1"
     "@octokit/rest" "21.1.1"
@@ -4388,6 +4413,11 @@
   version "7.0.1"
   resolved "https://registry.yarnpkg.com/@types/diff/-/diff-7.0.1.tgz#acc505eb2e8337ca400503283a6ab44a59906d9f"
   integrity sha512-R/BHQFripuhW6XPXy05hIvXJQdQ4540KnTvEFHSLjXfHYM41liOLKgIJEyYYiQe796xpaMHfe4Uj/p7Uvng2vA==
+
+"@types/dom-navigation@^1.0.4":
+  version "1.0.4"
+  resolved "https://registry.yarnpkg.com/@types/dom-navigation/-/dom-navigation-1.0.4.tgz#a5aab514a1e40dba2b9a6cc5915d31d06bea5bcf"
+  integrity sha512-s4pCS4jogEzXQsqoPZdLU+GA/5Wq+GoFsgiN2VGI8tw5I2Y/CftGJpC76iVhyoD7JTTEo+p0w+eh8SItMaxmgg==
 
 "@types/dom-view-transitions@^1.0.1":
   version "1.0.5"

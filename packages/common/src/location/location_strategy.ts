@@ -33,6 +33,9 @@ import {joinWithSlash, normalizeQueryParams} from './util';
 @Injectable({providedIn: 'root', useFactory: () => inject(PathLocationStrategy)})
 export abstract class LocationStrategy {
   abstract path(includeHash?: boolean): string;
+  getPathFromUrl(url: URL): string {
+    throw new Error(ngDevMode ? 'Not implemented' : '');
+  }
   abstract prepareExternalUrl(internal: string): string;
   abstract getState(): unknown;
   abstract pushState(state: any, title: string, url: string, queryParams: string): void;
@@ -147,6 +150,12 @@ export class PathLocationStrategy extends LocationStrategy implements OnDestroy 
       this._platformLocation.pathname + normalizeQueryParams(this._platformLocation.search);
     const hash = this._platformLocation.hash;
     return hash && includeHash ? `${pathname}${hash}` : pathname;
+  }
+
+  override getPathFromUrl(url: URL): string {
+    const pathname = url.pathname + normalizeQueryParams(url.search);
+    const hash = url.hash;
+    return hash ? `${pathname}${hash}` : pathname;
   }
 
   override pushState(state: any, title: string, url: string, queryParams: string) {

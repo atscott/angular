@@ -50,6 +50,10 @@ export class SpyLocation implements Location {
     this._basePath = url;
   }
 
+  getPathFromUrl(url: URL): string {
+    return url.pathname + url.search + url.hash;
+  }
+
   path(): string {
     return this._history[this._historyIndex].path;
   }

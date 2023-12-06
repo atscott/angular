@@ -71,6 +71,11 @@ export class HashLocationStrategy extends LocationStrategy implements OnDestroy 
     return path.length > 0 ? path.substring(1) : path;
   }
 
+  override getPathFromUrl(url: URL): string {
+    const path = url.hash ?? '#';
+    return path.length > 0 ? path.substring(1) : path;
+  }
+
   override prepareExternalUrl(internal: string): string {
     const url = joinWithSlash(this._baseHref, internal);
     return url.length > 0 ? '#' + url : url;
