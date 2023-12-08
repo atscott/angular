@@ -6,6 +6,8 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
+import {Observable} from 'rxjs';
+
 import {InjectionToken} from '../di/injection_token';
 import {getDocument} from '../render3/interfaces/document';
 

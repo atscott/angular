@@ -322,6 +322,12 @@ export class ApplicationRef {
   private _destroyListeners: Array<() => void> = [];
   private readonly rootViews = inject(ApplicationRootViews);
   private readonly zoneIsStable = inject(ZONE_IS_STABLE_OBSERVABLE);
+  private readonly schedulerIsStable =
+      inject(ChangeDetectionScheduler, {optional: true})?.isStable ?? of(true);
+  private readonly allStable =
+      combineLatest([
+        this.zoneIsStable, this.schedulerIsStable
+      ]).pipe(map((stableIndicator) => stableIndicator.every(isStable => isStable)))
 
   /**
    * Indicates whether this instance was destroyed.
@@ -347,7 +353,7 @@ export class ApplicationRef {
   public readonly isStable: Observable<boolean> =
       inject(InitialRenderPendingTasks)
           .hasPendingTasks.pipe(
-              switchMap(hasPendingTasks => hasPendingTasks ? of(false) : this.zoneIsStable),
+              switchMap(hasPendingTasks => hasPendingTasks ? of(false) : this.allStable),
               distinctUntilChanged(),
               share(),
           );

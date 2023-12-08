@@ -6,14 +6,14 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {Subscription} from 'rxjs';
+import {Observable, Subscription} from 'rxjs';
 
 import {ApplicationRef} from '../application/application_ref';
 import {ENVIRONMENT_INITIALIZER, EnvironmentProviders, inject, Injectable, InjectionToken, makeEnvironmentProviders, StaticProvider} from '../di';
 import {ErrorHandler, INTERNAL_APPLICATION_ERROR_HANDLER} from '../error_handler';
 import {RuntimeError, RuntimeErrorCode} from '../errors';
 import {NgZone} from '../zone';
-import {InternalNgZoneOptions, isStableFactory, ZONE_IS_STABLE_OBSERVABLE} from '../zone/ng_zone';
+import {InternalNgZoneOptions, ZONE_IS_STABLE_OBSERVABLE, zoneIsStableFactory} from '../zone/ng_zone';
 
 @Injectable({providedIn: 'root'})
 export class NgZoneChangeDetectionScheduler {
@@ -69,7 +69,7 @@ export function internalProvideZoneChangeDetection(ngZoneFactory: () => NgZone):
       },
     },
     {provide: INTERNAL_APPLICATION_ERROR_HANDLER, useFactory: ngZoneApplicationErrorHandlerFactory},
-    {provide: ZONE_IS_STABLE_OBSERVABLE, useFactory: isStableFactory},
+    {provide: ZONE_IS_STABLE_OBSERVABLE, useFactory: zoneIsStableFactory},
   ];
 }
 
@@ -177,4 +177,5 @@ export function getNgZoneOptions(options?: NgZoneOptions): InternalNgZoneOptions
  */
 export abstract class ChangeDetectionScheduler {
   abstract notify(): void;
+  abstract isStable: Observable<boolean>;
 }

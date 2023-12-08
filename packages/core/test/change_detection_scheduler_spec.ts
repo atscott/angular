@@ -11,22 +11,25 @@ import {PLATFORM_BROWSER_ID} from '@angular/common/src/platform_id';
 import {afterNextRender, ApplicationRef, ChangeDetectorRef, Component, ComponentRef, createComponent, DebugElement, ElementRef, EnvironmentInjector, getDebugNode, inject, Injectable, Input, NgZone, PLATFORM_ID, signal, TemplateRef, Type, ViewChild, ViewContainerRef, ɵApplicationRootViews, ɵChangeDetectionScheduler as ChangeDetectionScheduler, ɵNoopNgZone} from '@angular/core';
 import {TestBed} from '@angular/core/testing';
 import {BehaviorSubject} from 'rxjs';
+import {take} from 'rxjs/operators';
 
 @Injectable({providedIn: 'root'})
 class ChangeDetectionSchedulerImpl implements ChangeDetectionScheduler {
   private rootViews = inject(ɵApplicationRootViews);
-  private _hasPendingChangeDetection = false;
-  get hasPendingChangeDetection() {
-    return this._hasPendingChangeDetection;
+  private _isStable = new BehaviorSubject(true);
+
+  readonly isStable = this._isStable.asObservable();
+  get hasPendingChangeDetection(): boolean {
+    return !this._isStable.value;
   }
 
   notify(): void {
-    if (this._hasPendingChangeDetection) return;
+    if (this.hasPendingChangeDetection) return;
 
-    this._hasPendingChangeDetection = true;
+    this._isStable.next(false);
     setTimeout(() => {
       this.rootViews.tick();
-      this._hasPendingChangeDetection = false;
+      this._isStable.next(true);
     }, 1);
   }
 }
@@ -61,6 +64,28 @@ describe('Angular with NoopNgZone', () => {
     scheduler = TestBed.inject(ChangeDetectionSchedulerImpl);
     injector = TestBed.inject(EnvironmentInjector);
     environmentInjector = injector;
+  });
+
+  it('contributes to application stableness', async () => {
+    const val = signal('initial');
+    @Component({template: '{{val()}}', standalone: true})
+    class TestComponent {
+      val = val;
+    }
+    const component = createComponent(TestComponent, {environmentInjector});
+    const appRef = environmentInjector.get(ApplicationRef);
+
+    appRef.attachView(component.hostView);
+    expectAsync(appRef.isStable.pipe(take(1)).toPromise()).toBeResolvedTo(false);
+
+    // Cause another pending CD immediately after render and verify app has not stabilized
+    await nextRender().then(() => {
+      val.set('new');
+    });
+    await expectAsync(appRef.isStable.pipe(take(1)).toPromise()).toBeResolvedTo(false);
+
+    await nextRender();
+    await expectAsync(appRef.isStable.pipe(take(1)).toPromise()).toBeResolvedTo(true);
   });
 
   describe('notifies scheduler', () => {
