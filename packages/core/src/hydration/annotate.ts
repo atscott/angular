@@ -6,7 +6,8 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {ApplicationRef} from '../application/application_ref';
+import {ApplicationRootViews} from '../application/application_root_views';
+import {EnvironmentInjector} from '../di';
 import {ViewEncapsulation} from '../metadata';
 import {Renderer2} from '../render';
 import {collectNativeNodes, collectNativeNodesInLContainer} from '../render3/collect_native_nodes';
@@ -157,10 +158,11 @@ function annotateLContainerForHydration(lContainer: LContainer, context: Hydrati
  * @param appRef An instance of an ApplicationRef.
  * @param doc A reference to the current Document instance.
  */
-export function annotateForHydration(appRef: ApplicationRef, doc: Document) {
+export function annotateForHydration(injector: EnvironmentInjector, doc: Document) {
+  const rootViews = injector.get(ApplicationRootViews);
   const serializedViewCollection = new SerializedViewCollection();
   const corruptedTextNodes = new Map<HTMLElement, TextNodeMarker>();
-  const viewRefs = appRef._views;
+  const viewRefs = rootViews.views;
   for (const viewRef of viewRefs) {
     const lNode = getLNodeForHydration(viewRef);
 
@@ -186,7 +188,7 @@ export function annotateForHydration(appRef: ApplicationRef, doc: Document) {
   // hydration logic was setup and enabled correctly. Otherwise, if a client
   // hydration doesn't find a key in the transfer state - an error is produced.
   const serializedViews = serializedViewCollection.getAll();
-  const transferState = appRef.injector.get(TransferState);
+  const transferState = injector.get(TransferState);
   transferState.set(NGH_DATA_KEY, serializedViews);
 }
 

@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {ApplicationRef} from '../application/application_ref';
+import {ApplicationRootViews} from '../application/application_root_views';
 import {CONTAINER_HEADER_OFFSET, DEHYDRATED_VIEWS, LContainer} from '../render3/interfaces/container';
 import {Renderer} from '../render3/interfaces/renderer';
 import {RNode} from '../render3/interfaces/renderer_dom';
@@ -89,8 +89,8 @@ function cleanupLView(lView: LView) {
  * Walks over all views registered within the ApplicationRef and removes
  * all dehydrated views from all `LContainer`s along the way.
  */
-export function cleanupDehydratedViews(appRef: ApplicationRef) {
-  const viewRefs = appRef._views;
+export function cleanupDehydratedViews(rootViews: ApplicationRootViews) {
+  const viewRefs = rootViews.views;
   for (const viewRef of viewRefs) {
     const lNode = getLNodeForHydration(viewRef);
     // An `lView` might be `null` if a `ViewRef` represents

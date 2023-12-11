@@ -8,13 +8,13 @@
 
 import {AsyncPipe} from '@angular/common';
 import {PLATFORM_BROWSER_ID} from '@angular/common/src/platform_id';
-import {afterNextRender, ApplicationRef, ChangeDetectorRef, Component, ComponentRef, createComponent, DebugElement, ElementRef, EnvironmentInjector, getDebugNode, inject, Injectable, Input, NgZone, PLATFORM_ID, signal, TemplateRef, Type, ViewChild, ViewContainerRef, ɵChangeDetectionScheduler as ChangeDetectionScheduler, ɵNoopNgZone} from '@angular/core';
+import {afterNextRender, ApplicationRef, ChangeDetectorRef, Component, ComponentRef, createComponent, DebugElement, ElementRef, EnvironmentInjector, getDebugNode, inject, Injectable, Input, NgZone, PLATFORM_ID, signal, TemplateRef, Type, ViewChild, ViewContainerRef, ɵApplicationRootViews, ɵChangeDetectionScheduler as ChangeDetectionScheduler, ɵNoopNgZone} from '@angular/core';
 import {TestBed} from '@angular/core/testing';
 import {BehaviorSubject} from 'rxjs';
 
 @Injectable({providedIn: 'root'})
 class ChangeDetectionSchedulerImpl implements ChangeDetectionScheduler {
-  private appRef = inject(ApplicationRef);
+  private rootViews = inject(ɵApplicationRootViews);
   private _hasPendingChangeDetection = false;
   get hasPendingChangeDetection() {
     return this._hasPendingChangeDetection;
@@ -25,7 +25,7 @@ class ChangeDetectionSchedulerImpl implements ChangeDetectionScheduler {
 
     this._hasPendingChangeDetection = true;
     setTimeout(() => {
-      this.appRef.tick();
+      this.rootViews.tick();
       this._hasPendingChangeDetection = false;
     }, 1);
   }

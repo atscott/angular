@@ -9,9 +9,10 @@
 import '../util/ng_jit_mode';
 
 import {setThrowInvalidWriteToSignalError} from '@angular/core/primitives/signals';
-import {Observable, of} from 'rxjs';
-import {distinctUntilChanged, first, share, switchMap} from 'rxjs/operators';
+import {combineLatest, Observable, of} from 'rxjs';
+import {distinctUntilChanged, first, map, share, switchMap} from 'rxjs/operators';
 
+import {ChangeDetectionScheduler} from '../change_detection/scheduling';
 import {getCompilerFacade, JitCompilerUsage} from '../compiler/compiler_facade';
 import {Console} from '../console';
 import {inject} from '../di';
@@ -19,7 +20,7 @@ import {Injectable} from '../di/injectable';
 import {InjectionToken} from '../di/injection_token';
 import {Injector} from '../di/injector';
 import {EnvironmentInjector} from '../di/r3_injector';
-import {ErrorHandler, INTERNAL_APPLICATION_ERROR_HANDLER} from '../error_handler';
+import {ErrorHandler} from '../error_handler';
 import {formatRuntimeError, RuntimeError, RuntimeErrorCode} from '../errors';
 import {InitialRenderPendingTasks} from '../initial_render_pending_tasks';
 import {Type} from '../interface/type';
@@ -35,12 +36,12 @@ import {isStandalone} from '../render3/definition';
 import {setJitOptions} from '../render3/jit/jit_options';
 import {NgModuleFactory as R3NgModuleFactory} from '../render3/ng_module_ref';
 import {publishDefaultGlobalUtils as _publishDefaultGlobalUtils} from '../render3/util/global_utils';
-import {ViewRef as InternalViewRef} from '../render3/view_ref';
 import {TESTABILITY} from '../testability/testability';
 import {isPromise} from '../util/lang';
 import {NgZone, ZONE_IS_STABLE_OBSERVABLE} from '../zone/ng_zone';
 
 import {ApplicationInitStatus} from './application_init';
+import {ApplicationRootViews} from './application_root_views';
 
 /**
  * A [DI token](guide/glossary#di-token "DI token definition") that provides a set of callbacks to
@@ -317,12 +318,9 @@ export function optionsReducer<T extends Object>(dst: T, objs: T|T[]): T {
 export class ApplicationRef {
   /** @internal */
   private _bootstrapListeners: ((compRef: ComponentRef<any>) => void)[] = [];
-  private _runningTick: boolean = false;
   private _destroyed = false;
   private _destroyListeners: Array<() => void> = [];
-  /** @internal */
-  _views: InternalViewRef<unknown>[] = [];
-  private readonly internalErrorHandler = inject(INTERNAL_APPLICATION_ERROR_HANDLER);
+  private readonly rootViews = inject(ApplicationRootViews);
   private readonly zoneIsStable = inject(ZONE_IS_STABLE_OBSERVABLE);
 
   /**
@@ -347,7 +345,6 @@ export class ApplicationRef {
    * Returns an Observable that indicates when the application is stable or unstable.
    */
   public readonly isStable: Observable<boolean> =
-
       inject(InitialRenderPendingTasks)
           .hasPendingTasks.pipe(
               switchMap(hasPendingTasks => hasPendingTasks ? of(false) : this.zoneIsStable),
@@ -543,28 +540,7 @@ export class ApplicationRef {
    */
   tick(): void {
     (typeof ngDevMode === 'undefined' || ngDevMode) && this.warnIfDestroyed();
-    if (this._runningTick) {
-      throw new RuntimeError(
-          RuntimeErrorCode.RECURSIVE_APPLICATION_REF_TICK,
-          ngDevMode && 'ApplicationRef.tick is called recursively');
-    }
-
-    try {
-      this._runningTick = true;
-      for (let view of this._views) {
-        view.detectChanges();
-      }
-      if (typeof ngDevMode === 'undefined' || ngDevMode) {
-        for (let view of this._views) {
-          view.checkNoChanges();
-        }
-      }
-    } catch (e) {
-      // Attention: Don't rethrow as it could cancel subscriptions to Observables!
-      this.internalErrorHandler(e);
-    } finally {
-      this._runningTick = false;
-    }
+    this.rootViews.tick();
   }
 
   /**
@@ -574,9 +550,7 @@ export class ApplicationRef {
    */
   attachView(viewRef: ViewRef): void {
     (typeof ngDevMode === 'undefined' || ngDevMode) && this.warnIfDestroyed();
-    const view = (viewRef as InternalViewRef<unknown>);
-    this._views.push(view);
-    view.attachToAppRef(this);
+    this.rootViews.attachView(viewRef);
   }
 
   /**
@@ -584,9 +558,7 @@ export class ApplicationRef {
    */
   detachView(viewRef: ViewRef): void {
     (typeof ngDevMode === 'undefined' || ngDevMode) && this.warnIfDestroyed();
-    const view = (viewRef as InternalViewRef<unknown>);
-    remove(this._views, view);
-    view.detachFromAppRef();
+    this.rootViews.detachView(viewRef);
   }
 
   private _loadComponent(componentRef: ComponentRef<any>): void {
@@ -615,13 +587,13 @@ export class ApplicationRef {
       this._destroyListeners.forEach(listener => listener());
 
       // Destroy all registered views.
-      this._views.slice().forEach((view) => view.destroy());
+      this.rootViews.views.slice().forEach((view) => view.destroy());
     } finally {
       // Indicate that this instance is destroyed.
       this._destroyed = true;
 
       // Release all references.
-      this._views = [];
+      this.rootViews.views = [];
       this._bootstrapListeners = [];
       this._destroyListeners = [];
     }
@@ -669,7 +641,7 @@ export class ApplicationRef {
    * Returns the number of attached views.
    */
   get viewCount() {
-    return this._views.length;
+    return this.rootViews.views.length;
   }
 
   private warnIfDestroyed() {

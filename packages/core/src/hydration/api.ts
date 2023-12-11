@@ -7,6 +7,7 @@
  */
 
 import {APP_BOOTSTRAP_LISTENER, ApplicationRef, whenStable} from '../application/application_ref';
+import {ApplicationRootViews} from '../application/application_root_views';
 import {Console} from '../console';
 import {ENVIRONMENT_INITIALIZER, EnvironmentProviders, Injector, makeEnvironmentProviders} from '../di';
 import {inject} from '../di/injector_compatibility';
@@ -172,6 +173,7 @@ export function withDomHydration(): EnvironmentProviders {
       useFactory: () => {
         if (isPlatformBrowser() && inject(IS_HYDRATION_DOM_REUSE_ENABLED)) {
           const appRef = inject(ApplicationRef);
+          const rootViews = inject(ApplicationRootViews);
           const injector = inject(Injector);
           return () => {
             // Wait until an app becomes stable and cleanup all views that
@@ -183,7 +185,7 @@ export function withDomHydration(): EnvironmentProviders {
             // to ensure that change detection is properly run afterward.
             whenStableWithTimeout(appRef, injector).then(() => {
               NgZone.assertInAngularZone();
-              cleanupDehydratedViews(appRef);
+              cleanupDehydratedViews(rootViews);
 
               if (typeof ngDevMode !== 'undefined' && ngDevMode) {
                 printHydrationStats(injector);

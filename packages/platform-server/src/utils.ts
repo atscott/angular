@@ -66,10 +66,10 @@ async function _render(platformRef: PlatformRef, applicationRef: ApplicationRef)
   await whenStable(applicationRef);
 
   const platformState = platformRef.injector.get(PlatformState);
-  if (applicationRef.injector.get(IS_HYDRATION_DOM_REUSE_ENABLED, false)) {
+  if (environmentInjector.get(IS_HYDRATION_DOM_REUSE_ENABLED, false)) {
     const doc = platformState.getDocument();
     appendSsrContentIntegrityMarker(doc);
-    annotateForHydration(applicationRef, doc);
+    annotateForHydration(environmentInjector, doc);
   }
 
   // Run any BEFORE_APP_SERIALIZED callbacks just before rendering to string.
