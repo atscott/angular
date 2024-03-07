@@ -410,11 +410,13 @@ export interface Navigation {
     id: number;
     initialUrl: UrlTree;
     previousNavigation: Navigation | null;
+    targetBrowserUrl?: UrlTree | string;
     trigger: 'imperative' | 'popstate' | 'hashchange';
 }
 
 // @public
 export interface NavigationBehaviorOptions {
+    readonly browserUrl?: UrlTree | string;
     readonly info?: unknown;
     onSameUrlNavigation?: OnSameUrlNavigation;
     replaceUrl?: boolean;
