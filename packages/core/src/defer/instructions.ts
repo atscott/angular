@@ -17,7 +17,9 @@ import {populateDehydratedViewsInLContainer} from '../linker/view_container_ref'
 import {PendingTasks} from '../pending_tasks';
 import {assertLContainer, assertTNodeForLView} from '../render3/assert';
 import {bindingUpdated} from '../render3/bindings';
+import {ChainedInjector} from '../render3/component_ref';
 import {getComponentDef, getDirectiveDef, getPipeDef} from '../render3/definition';
+import {NodeInjector} from '../render3/di';
 import {getTemplateLocationDetails} from '../render3/instructions/element_validation';
 import {markViewDirty} from '../render3/instructions/mark_view_dirty';
 import {handleError} from '../render3/instructions/shared';
@@ -542,8 +544,8 @@ function applyDeferBlockState(
       }
     }
     const dehydratedView = findMatchingDehydratedView(lContainer, activeBlockTNode.tView!.ssrId);
-    const embeddedLView =
-        createAndRenderEmbeddedLView(hostLView, activeBlockTNode, null, {dehydratedView, injector});
+    const embeddedLView = createAndRenderEmbeddedLView(
+        hostLView, activeBlockTNode, null, {dehydratedView, rootInjector: injector});
     addLViewToLContainer(
         lContainer, embeddedLView, viewIndex, shouldAddViewToDom(activeBlockTNode, dehydratedView));
     markViewDirty(embeddedLView);

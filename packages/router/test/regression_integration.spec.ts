@@ -6,21 +6,31 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {CommonModule, HashLocationStrategy, Location, LocationStrategy} from '@angular/common';
+import {
+  CommonModule,
+  HashLocationStrategy,
+  JsonPipe,
+  Location,
+  LocationStrategy,
+} from '@angular/common';
 import {provideLocationMocks, SpyLocation} from '@angular/common/testing';
 import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
+  inject,
   Component,
+  ɵDEFER_BLOCK_DEPENDENCY_INTERCEPTOR,
   Injectable,
   NgModule,
   TemplateRef,
   Type,
   ViewChild,
   ViewContainerRef,
+  PLATFORM_ID,
 } from '@angular/core';
 import {ComponentFixture, fakeAsync, TestBed, tick} from '@angular/core/testing';
 import {
+  ActivatedRoute,
   ChildrenOutletContexts,
   DefaultUrlSerializer,
   NavigationCancel,
@@ -36,6 +46,7 @@ import {delay, filter, mapTo, take} from 'rxjs/operators';
 
 import {provideRouter, withRouterConfig} from '../src/provide_router';
 import {afterNextNavigation} from '../src/utils/navigations';
+import {PLATFORM_BROWSER_ID} from '@angular/common/src/platform_id';
 
 describe('Integration', () => {
   describe('routerLinkActive', () => {
@@ -463,6 +474,81 @@ describe('Integration', () => {
     // navigations to a and b were both cancelled.
     expect(cancellations.length).toEqual(2);
   });
+});
+
+fdescribe('test', () => {
+  it('abc', async () => {
+    @Component({
+      standalone: true,
+      imports: [RouterOutlet],
+      template: '<router-outlet></router-outlet>',
+    })
+    class App {}
+
+    @Component({
+      selector: 'another-child',
+      imports: [CommonModule],
+      standalone: true,
+      template: 'another child: {{route.snapshot.url[0]}}',
+    })
+    class AnotherChild {
+      route = inject(ActivatedRoute);
+    }
+
+    @Component({
+      imports: [JsonPipe, CommonModule, AnotherChild],
+      template: `
+      child: {{route.snapshot.url[0]}}
+      @defer (when true) {
+        <another-child></another-child>
+      }
+      `,
+      standalone: true,
+    })
+    class Child {
+      route = inject(ActivatedRoute);
+    }
+    function dynamicImportOf<T>(type: T, timeout = 0): Promise<T> {
+      return new Promise<T>((resolve) => {
+        setTimeout(() => resolve(type), timeout);
+      });
+    }
+
+    const deferDepsInterceptor = {
+      intercept() {
+        return () => {
+          return [dynamicImportOf(AnotherChild, 10)];
+        };
+      },
+    };
+    function clearDirectiveDefs(type: Type<unknown>): void {
+      const cmpDef = (type as any)['ɵcmp'];
+      cmpDef!.dependencies = [];
+      cmpDef!.directiveDefs = null;
+    }
+
+    TestBed.configureTestingModule({
+      providers: [
+        {provide: PLATFORM_ID, useValue: PLATFORM_BROWSER_ID},
+        {provide: ɵDEFER_BLOCK_DEPENDENCY_INTERCEPTOR, useValue: deferDepsInterceptor},
+        provideRouter([
+          {
+            path: 'a',
+            component: Child,
+          },
+        ]),
+      ],
+    });
+    clearDirectiveDefs(Child);
+
+    const app = TestBed.createComponent(App);
+    await TestBed.inject(Router).navigateByUrl('/a?x=1');
+    app.detectChanges();
+    await app.whenStable();
+    app.detectChanges();
+    expect(app.nativeElement.innerHTML).toContain('child: a');
+    expect(app.nativeElement.innerHTML).toContain('another child: a');
+  }, 100000);
 });
 
 function advance<T>(fixture: ComponentFixture<T>): void {

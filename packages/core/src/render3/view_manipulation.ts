@@ -23,8 +23,11 @@ import {DECLARATION_LCONTAINER, FLAGS, HYDRATION, LView, LViewFlags, QUERIES, RE
 import {addViewToDOM, destroyLView, detachView, getBeforeNodeForView, insertView, nativeParentNode} from './node_manipulation';
 
 export function createAndRenderEmbeddedLView<T>(
-    declarationLView: LView<unknown>, templateTNode: TNode, context: T,
-    options?: {injector?: Injector, dehydratedView?: DehydratedContainerView|null}): LView<T> {
+    declarationLView: LView<unknown>, templateTNode: TNode, context: T, options?: {
+      injector?: Injector,
+      rootInjector?: Injector,
+      dehydratedView?: DehydratedContainerView|null
+    }): LView<T> {
   const prevConsumer = setActiveConsumer(null);
   try {
     const embeddedTView = templateTNode.tView!;
@@ -35,8 +38,8 @@ export function createAndRenderEmbeddedLView<T>(
     const isSignalView = declarationLView[FLAGS] & LViewFlags.SignalView;
     const viewFlags = isSignalView ? LViewFlags.SignalView : LViewFlags.CheckAlways;
     const embeddedLView = createLView<T>(
-        declarationLView, embeddedTView, context, viewFlags, null, templateTNode, null, null, null,
-        options?.injector ?? null, options?.dehydratedView ?? null);
+        declarationLView, embeddedTView, context, viewFlags, null, templateTNode, null, null,
+        options?.rootInjector ?? null, options?.injector ?? null, options?.dehydratedView ?? null);
 
     const declarationLContainer = declarationLView[templateTNode.index];
     ngDevMode && assertLContainer(declarationLContainer);

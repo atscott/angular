@@ -24,6 +24,7 @@ import {
   SimpleChanges,
   ViewContainerRef,
   ɵRuntimeError as RuntimeError,
+  createEnvironmentInjector,
 } from '@angular/core';
 import {combineLatest, of, Subscription} from 'rxjs';
 import {switchMap} from 'rxjs/operators';
@@ -359,7 +360,14 @@ export class RouterOutlet implements OnDestroy, OnInit, RouterOutletContract {
     const snapshot = activatedRoute.snapshot;
     const component = snapshot.component!;
     const childContexts = this.parentContexts.getOrCreateContext(this.name).children;
-    const injector = new OutletInjector(activatedRoute, childContexts, location.injector);
+    // const injector = new OutletInjector(activatedRoute, childContexts, location.injector);
+    const injector = createEnvironmentInjector(
+      [
+        {provide: ActivatedRoute, useValue: activatedRoute},
+        {provide: ChildrenOutletContexts, useValue: childContexts},
+      ],
+      environmentInjector,
+    );
 
     this.activated = location.createComponent(component, {
       index: location.length,
@@ -382,6 +390,9 @@ class OutletInjector implements Injector {
   ) {}
 
   get(token: any, notFoundValue?: any): any {
+    if (token === EnvironmentInjector) {
+      return this;
+    }
     if (token === ActivatedRoute) {
       return this.route;
     }
