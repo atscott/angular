@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {ApplicationRef, ChangeDetectorRef, ComponentRef, DebugElement, ElementRef, getDebugNode, inject, NgZone, RendererFactory2, ViewRef, ɵDeferBlockDetails as DeferBlockDetails, ɵdetectChangesInViewIfRequired, ɵEffectScheduler as EffectScheduler, ɵgetDeferBlocks as getDeferBlocks, ɵNoopNgZone as NoopNgZone, ɵPendingTasks as PendingTasks} from '@angular/core';
+import {ApplicationRef, ChangeDetectorRef, ComponentRef, DebugElement, ElementRef, ErrorHandler, getDebugNode, inject, NgZone, RendererFactory2, ViewRef, ɵDeferBlockDetails as DeferBlockDetails, ɵdetectChangesInViewIfRequired, ɵEffectScheduler as EffectScheduler, ɵgetDeferBlocks as getDeferBlocks, ɵNoopNgZone as NoopNgZone, ɵPendingTasks as PendingTasks} from '@angular/core';
 import {Subject, Subscription} from 'rxjs';
 import {first} from 'rxjs/operators';
 
@@ -214,6 +214,7 @@ export class PseudoApplicationComponentFixture<T> extends ComponentFixture<T> {
   private _autoDetect = inject(ComponentFixtureAutoDetect, {optional: true}) ?? false;
   private afterTickSubscription: Subscription|undefined = undefined;
   private beforeRenderSubscription: Subscription|undefined = undefined;
+  private readonly errorHandler = inject(ErrorHandler);
 
   initialize(): void {
     if (this._autoDetect) {
@@ -270,6 +271,7 @@ export class PseudoApplicationComponentFixture<T> extends ComponentFixture<T> {
   private subscribeToAppRefEvents() {
     this._ngZone.runOutsideAngular(() => {
       this.afterTickSubscription = this._testAppRef.afterTick.subscribe(() => {
+        // TODO(atscott): Wrap in try, catch and report to error handler
         this.checkNoChanges();
       });
       this.beforeRenderSubscription = this._testAppRef.beforeRender.subscribe((isFirstPass) => {
@@ -281,13 +283,10 @@ export class PseudoApplicationComponentFixture<T> extends ComponentFixture<T> {
               false /** zoneless enabled */,
           );
         } catch (e: unknown) {
-          // If an error occurred during change detection, remove the test view from the application
-          // ref tracking. Note that this isn't exactly desirable but done this way because of how
-          // things used to work with `autoDetect` and uncaught errors. Ideally we would surface
-          // this error to the error handler instead and continue refreshing the view like
-          // what would happen in the application.
+          // TODO(atscott): resubscribe after the `afterTick` event
           this.unsubscribeFromAppRefEvents();
-
+          this.errorHandler.handleError(e);
+          // TOOD(atscott): Do not rethrow error. This does not happen in the application
           throw e;
         }
       });
