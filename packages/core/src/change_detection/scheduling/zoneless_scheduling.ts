@@ -9,6 +9,7 @@
 import {InjectionToken} from '../../di/injection_token';
 
 
+
 export const enum NotificationSource {
   // Change detection needs to run in order to synchronize application state
   // with the DOM when the following notifications are received:
@@ -22,6 +23,8 @@ export const enum NotificationSource {
   DebugApplyChanges,
   // ChangeDetectorRef.markForCheck indicates the component is dirty/needs to refresh.
   MarkForCheck,
+  // Node removal from animations
+  AnimationsNodeRemoval,
 
   // Bound listener callbacks execute and can update state without causing other notifications from
   // above.
@@ -43,7 +46,7 @@ export const enum NotificationSource {
   // be received (i.e. `markForCheck`).
   ViewDetachedFromDOM,
   // Applying animations might result in new DOM state and should rerun render hooks
-  AsyncAnimationsLoaded
+  AsyncAnimationsLoaded,
 }
 
 /**

@@ -93,6 +93,7 @@ export class ChangeDetectionSchedulerImpl implements ChangeDetectionScheduler {
       case NotificationSource.MarkAncestorsForTraversal:
       case NotificationSource.MarkForCheck:
       case NotificationSource.Listener:
+      case NotificationSource.AnimationsNodeRemoval:
       case NotificationSource.SetInput: {
         this.shouldRefreshViews = true;
         break;
