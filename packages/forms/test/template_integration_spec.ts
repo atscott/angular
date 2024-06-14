@@ -1331,12 +1331,9 @@ describe('template-driven forms integration tests', () => {
   });
 
   describe('valueChange and statusChange events', () => {
-    it('should emit valueChanges and statusChanges on init', fakeAsync(() => {
+    it('should emit valueChanges and statusChanges on init', () => {
       const fixture = initTest(NgModelForm);
       const form = fixture.debugElement.children[0].injector.get(NgForm);
-      fixture.componentInstance.name = 'aa';
-      fixture.detectChanges();
-
       expect(form.valid).toEqual(true);
       expect(form.value).toEqual({});
 
@@ -1345,12 +1342,12 @@ describe('template-driven forms integration tests', () => {
 
       form.statusChanges!.subscribe((status: string) => (formValidity = status));
       form.valueChanges!.subscribe((value: string) => (formValue = value));
-
-      tick();
+      fixture.componentInstance.name = 'aa';
+      fixture.detectChanges();
 
       expect(formValidity).toEqual('INVALID');
       expect(formValue).toEqual({name: 'aa'});
-    }));
+    });
 
     it('should mark controls dirty before emitting the value change event', fakeAsync(() => {
       const fixture = initTest(NgModelForm);

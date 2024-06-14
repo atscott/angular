@@ -6,8 +6,15 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {SimpleChange, ɵWritable as Writable} from '@angular/core';
-import {fakeAsync, flushMicrotasks, tick} from '@angular/core/testing';
+import {
+  Component,
+  Directive,
+  SimpleChange,
+  ɵWritable as Writable,
+  forwardRef,
+  provideExperimentalZonelessChangeDetection,
+} from '@angular/core';
+import {TestBed, fakeAsync, flushMicrotasks, tick} from '@angular/core/testing';
 import {
   AbstractControl,
   CheckboxControlValueAccessor,
@@ -21,6 +28,8 @@ import {
   FormGroup,
   FormGroupDirective,
   FormGroupName,
+  FormsModule,
+  NG_VALUE_ACCESSOR,
   NgControl,
   NgForm,
   NgModel,
@@ -685,6 +694,47 @@ describe('Form Directives', () => {
       tick();
       expect(ngModel.control.disabled).toEqual(true);
     }));
+
+    it('writes the value only once', async () => {
+      const valueLog = [] as any[];
+      @Component({
+        standalone: true,
+        imports: [FormsModule, forwardRef(() => MyValueAccessor)],
+        template: `
+  <form #form1="ngForm">
+    <input my-cmp [(ngModel)]="theValue" name="my1" >
+  </form>
+  `,
+      })
+      class AppCmp {
+        theValue = 'Hello';
+      }
+
+      @Directive({
+        selector: '[my-cmp]',
+        standalone: true,
+        providers: [
+          {
+            provide: NG_VALUE_ACCESSOR,
+            useExisting: forwardRef(() => MyValueAccessor),
+            multi: true,
+          },
+        ],
+      })
+      class MyValueAccessor implements ControlValueAccessor {
+        writeValue(obj: any): void {
+          valueLog.push(obj);
+        }
+
+        registerOnChange() {}
+        registerOnTouched() {}
+      }
+
+      TestBed.configureTestingModule({providers: [provideExperimentalZonelessChangeDetection()]});
+      const fix = TestBed.createComponent(AppCmp);
+      await fix.whenStable();
+      expect(valueLog).toEqual(['Hello']);
+    });
   });
 
   describe('FormControlName', () => {

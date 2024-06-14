@@ -7,9 +7,11 @@
  */
 
 import {
+  afterNextRender,
   booleanAttribute,
   ChangeDetectorRef,
   Directive,
+  EnvironmentInjector,
   EventEmitter,
   forwardRef,
   Host,
@@ -21,6 +23,7 @@ import {
   Output,
   Provider,
   Self,
+  signal,
   SimpleChanges,
 } from '@angular/core';
 
@@ -53,25 +56,6 @@ const formControlBinding: Provider = {
   provide: NgControl,
   useExisting: forwardRef(() => NgModel),
 };
-
-/**
- * `ngModel` forces an additional change detection run when its inputs change:
- * E.g.:
- * ```
- * <div>{{myModel.valid}}</div>
- * <input [(ngModel)]="myValue" #myModel="ngModel">
- * ```
- * I.e. `ngModel` can export itself on the element and then be used in the template.
- * Normally, this would result in expressions before the `input` that use the exported directive
- * to have an old value as they have been
- * dirty checked before. As this is a very common case for `ngModel`, we added this second change
- * detection run.
- *
- * Notes:
- * - this is just one extra run no matter how many `ngModel`s have been changed.
- * - this is a general problem when using `exportAs` for directives!
- */
-const resolvedPromise = (() => Promise.resolve())();
 
 /**
  * @description
@@ -160,6 +144,7 @@ const resolvedPromise = (() => Promise.resolve())();
  */
 @Directive({
   selector: '[ngModel]:not([formControlName]):not([formControl])',
+  host: {'[class.ngModelNeverUsed]': 'doNotCopyThisPatternPleaseOhPlease()'},
   providers: [formControlBinding],
   exportAs: 'ngModel',
 })
@@ -242,6 +227,7 @@ export class NgModel extends NgControl implements OnChanges, OnDestroy {
     @Optional()
     @Inject(CALL_SET_DISABLED_STATE)
     private callSetDisabledState?: SetDisabledStateOption,
+    private readonly injector?: EnvironmentInjector,
   ) {
     super();
     this._parent = parent;
@@ -250,9 +236,20 @@ export class NgModel extends NgControl implements OnChanges, OnDestroy {
     this.valueAccessor = selectValueAccessor(this, valueAccessors);
   }
 
+  private readonly theseAreNotTheDroidsYouAreLookingFor = signal({});
+  private doNotCopyThisPatternPleaseOhPlease() {
+    this.theseAreNotTheDroidsYouAreLookingFor();
+    return null;
+  }
+
   /** @nodoc */
   ngOnChanges(changes: SimpleChanges) {
     this._checkForErrors();
+
+    if (isPropertyUpdated(changes, this.viewModel)) {
+      this._updateValue(this.model);
+      this.viewModel = this.model;
+    }
     if (!this._registered || 'name' in changes) {
       if (this._registered) {
         this._checkName();
@@ -266,14 +263,15 @@ export class NgModel extends NgControl implements OnChanges, OnDestroy {
         }
       }
       this._setUpControl();
+      // This would have already been done by `addControl` but the emit was skipped
+      // We already setup up the initial value above so we _do_ want to emit it.
+      // Note that this has changed from the initial implementation, which would
+      // not set the value until below. Doing it before setting up the control
+      // prevents an initially written value of `null` when adding the control.
+      this.control.updateValueAndValidity();
     }
     if ('isDisabled' in changes) {
       this._updateDisabled(changes);
-    }
-
-    if (isPropertyUpdated(changes, this.viewModel)) {
-      this._updateValue(this.model);
-      this.viewModel = this.model;
     }
   }
 
@@ -328,7 +326,6 @@ export class NgModel extends NgControl implements OnChanges, OnDestroy {
 
   private _setUpStandalone(): void {
     setUpControl(this.control, this, this.callSetDisabledState);
-    this.control.updateValueAndValidity({emitEvent: false});
   }
 
   private _checkForErrors(): void {
@@ -360,10 +357,24 @@ export class NgModel extends NgControl implements OnChanges, OnDestroy {
   }
 
   private _updateValue(value: any): void {
-    resolvedPromise.then(() => {
-      this.control.setValue(value, {emitViewToModelChange: false});
-      this._changeDetectorRef?.markForCheck();
-    });
+    this.control.setValue(value, {emitViewToModelChange: false});
+    this.theseAreNotTheDroidsYouAreLookingFor.set({});
+    // The signal above addresses any immediate problems with ExpressionChanged for the host reading the value.
+    // We still call `markForCheck` inside a render hook to ensure _all_ parents are refreshed because we
+    // don't know where the form value is read.
+    this.ensureParentsAreRefreshed();
+  }
+
+  private ensureParentsAreRefreshed() {
+    if (!this.injector) {
+      return;
+    }
+    afterNextRender(
+      () => {
+        this._changeDetectorRef?.markForCheck();
+      },
+      {injector: this.injector},
+    );
   }
 
   private _updateDisabled(changes: SimpleChanges) {
@@ -371,15 +382,14 @@ export class NgModel extends NgControl implements OnChanges, OnDestroy {
     // checking for 0 to avoid breaking change
     const isDisabled = disabledValue !== 0 && booleanAttribute(disabledValue);
 
-    resolvedPromise.then(() => {
-      if (isDisabled && !this.control.disabled) {
-        this.control.disable();
-      } else if (!isDisabled && this.control.disabled) {
-        this.control.enable();
-      }
+    if (isDisabled && !this.control.disabled) {
+      this.control.disable();
+    } else if (!isDisabled && this.control.disabled) {
+      this.control.enable();
+    }
 
-      this._changeDetectorRef?.markForCheck();
-    });
+    this.theseAreNotTheDroidsYouAreLookingFor.set({});
+    this.ensureParentsAreRefreshed();
   }
 
   private _getPath(controlName: string): string[] {
