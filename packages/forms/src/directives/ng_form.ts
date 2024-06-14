@@ -16,6 +16,7 @@ import {
   Optional,
   Provider,
   Self,
+  signal,
   ɵWritable as Writable,
 } from '@angular/core';
 
@@ -117,7 +118,11 @@ const resolvedPromise = (() => Promise.resolve())();
 @Directive({
   selector: 'form:not([ngNoForm]):not([formGroup]),ng-form,[ngForm]',
   providers: [formDirectiveProvider],
-  host: {'(submit)': 'onSubmit($event)', '(reset)': 'onReset()'},
+  host: {
+    '(submit)': 'onSubmit($event)',
+    '(reset)': 'onReset()',
+    '[class.ngFormNeverUsed]': 'doNotCopyThisPatternPleaseOhPlease()',
+  },
   outputs: ['ngSubmit'],
   exportAs: 'ngForm',
 })
@@ -210,6 +215,13 @@ export class NgForm extends ControlContainer implements Form, AfterViewInit {
     return this.form.controls;
   }
 
+  // TODO: This should probably be used in all the functions that update state below.
+  private readonly theseAreNotTheDroidsYouAreLookingFor = signal({});
+  private doNotCopyThisPatternPleaseOhPlease() {
+    this.theseAreNotTheDroidsYouAreLookingFor();
+    return null;
+  }
+
   /**
    * @description
    * Method that sets up the control directive in this group, re-calculates its value
@@ -218,15 +230,13 @@ export class NgForm extends ControlContainer implements Form, AfterViewInit {
    * @param dir The `NgModel` directive instance.
    */
   addControl(dir: NgModel): void {
-    resolvedPromise.then(() => {
-      const container = this._findContainer(dir.path);
-      (dir as Writable<NgModel>).control = <FormControl>(
-        container.registerControl(dir.name, dir.control)
-      );
-      setUpControl(dir.control, dir, this.callSetDisabledState);
-      dir.control.updateValueAndValidity({emitEvent: false});
-      this._directives.add(dir);
-    });
+    const container = this._findContainer(dir.path);
+    (dir as Writable<NgModel>).control = <FormControl>(
+      container.registerControl(dir.name, dir.control)
+    );
+    setUpControl(dir.control, dir, this.callSetDisabledState);
+    dir.control.updateValueAndValidity({emitEvent: false});
+    this._directives.add(dir);
   }
 
   /**
@@ -246,13 +256,11 @@ export class NgForm extends ControlContainer implements Form, AfterViewInit {
    * @param dir The `NgModel` directive instance.
    */
   removeControl(dir: NgModel): void {
-    resolvedPromise.then(() => {
-      const container = this._findContainer(dir.path);
-      if (container) {
-        container.removeControl(dir.name);
-      }
-      this._directives.delete(dir);
-    });
+    const container = this._findContainer(dir.path);
+    if (container) {
+      container.removeControl(dir.name);
+    }
+    this._directives.delete(dir);
   }
 
   /**
@@ -262,13 +270,11 @@ export class NgForm extends ControlContainer implements Form, AfterViewInit {
    * @param dir The `NgModelGroup` directive instance.
    */
   addFormGroup(dir: NgModelGroup): void {
-    resolvedPromise.then(() => {
-      const container = this._findContainer(dir.path);
-      const group = new FormGroup({});
-      setUpFormContainer(group, dir);
-      container.registerControl(dir.name, group);
-      group.updateValueAndValidity({emitEvent: false});
-    });
+    const container = this._findContainer(dir.path);
+    const group = new FormGroup({});
+    setUpFormContainer(group, dir);
+    container.registerControl(dir.name, group);
+    group.updateValueAndValidity({emitEvent: false});
   }
 
   /**
@@ -278,12 +284,10 @@ export class NgForm extends ControlContainer implements Form, AfterViewInit {
    * @param dir The `NgModelGroup` directive instance.
    */
   removeFormGroup(dir: NgModelGroup): void {
-    resolvedPromise.then(() => {
-      const container = this._findContainer(dir.path);
-      if (container) {
-        container.removeControl(dir.name);
-      }
-    });
+    const container = this._findContainer(dir.path);
+    if (container) {
+      container.removeControl(dir.name);
+    }
   }
 
   /**
@@ -303,10 +307,8 @@ export class NgForm extends ControlContainer implements Form, AfterViewInit {
    * @param value The new value for the directive's control.
    */
   updateModel(dir: NgControl, value: any): void {
-    resolvedPromise.then(() => {
-      const ctrl = <FormControl>this.form.get(dir.path!);
-      ctrl.setValue(value);
-    });
+    const ctrl = <FormControl>this.form.get(dir.path!);
+    ctrl.setValue(value);
   }
 
   /**
