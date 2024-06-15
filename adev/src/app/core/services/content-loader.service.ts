@@ -37,7 +37,13 @@ export class ContentLoader implements DocsContentLoader {
           ),
         );
       } catch {
-        this.router.navigateByUrl('/404');
+        const currentNavigation = this.router.getCurrentNavigation();
+        if (currentNavigation && currentNavigation.finalUrl) {
+          // If there is a current navigation, redirect to 404 page without changing the target URL
+          this.router.navigateByUrl('/404', {browserUrl: currentNavigation.finalUrl});
+        } else {
+          this.router.navigateByUrl('/404');
+        }
       }
     }
     return this.cache.get(path)!;
