@@ -697,7 +697,7 @@ export interface ExistingSansProvider {
 // @public
 export class ExperimentalPendingTasks {
     add(): () => void;
-    run(fn: Function): Promise<void>;
+    run<T>(fn: () => Promise<T>): Promise<T>;
     // (undocumented)
     static ɵprov: unknown;
 }

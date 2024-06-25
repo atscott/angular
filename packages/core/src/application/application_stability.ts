@@ -1,3 +1,11 @@
+/**
+ * @license
+ * Copyright Google LLC All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+
 import {PendingTasks} from '../pending_tasks';
 import {Injectable} from '../di/injectable';
 import {inject} from '../di/injector_compatibility';

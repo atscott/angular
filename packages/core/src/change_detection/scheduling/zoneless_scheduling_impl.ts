@@ -192,7 +192,7 @@ export class ChangeDetectionSchedulerImpl implements ChangeDetectionScheduler {
    * @param shouldRefreshViews Passed directly to `ApplicationRef._tick` and skips straight to
    *     render hooks when `false`.
    */
-  private tick(shouldRefreshViews: boolean): void {
+  private async tick(shouldRefreshViews: boolean) {
     // When ngZone.run below exits, onMicrotaskEmpty may emit if the zone is
     // stable. We want to prevent double ticking so we track whether the tick is
     // already running and skip it if so.
@@ -218,9 +218,8 @@ export class ChangeDetectionSchedulerImpl implements ChangeDetectionScheduler {
     // ExpressionChanged...Error to still be reflected in a single browser
     // paint, even if that spans multiple rounds of change detection.
     this.useMicrotaskScheduler = true;
-    scheduleCallbackWithMicrotask(() => {
-      this.useMicrotaskScheduler = false;
-    });
+    await Promise.resolve();
+    this.useMicrotaskScheduler = false;
   }
 
   ngOnDestroy() {

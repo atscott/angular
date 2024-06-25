@@ -103,10 +103,10 @@ export class ExperimentalPendingTasks {
    *
    * @param fn The asynchronous function to execute
    */
-  async run(fn: Function): Promise<void> {
+  async run<T>(fn: () => Promise<T>): Promise<T> {
     const task = this.internalPendingTasks.add();
     try {
-      await fn();
+      return await fn();
     } finally {
       this.internalPendingTasks.remove(task);
     }

@@ -97,15 +97,9 @@ describe('public ExperimentalPendingTasks', () => {
     const appRef = TestBed.inject(ApplicationRef);
     const pendingTasks = TestBed.inject(ExperimentalPendingTasks);
 
-    let resolveFn: () => void;
-    const task = pendingTasks.run(() => {
-      return new Promise<void>((r) => {
-        resolveFn = r;
-      });
-    });
+    const result = pendingTasks.run(() => Promise.resolve(1));
     await expectAsync(applicationRefIsStable(appRef)).toBeResolvedTo(false);
-    resolveFn!();
-    await task;
+    await expectAsync(result).toBeResolvedTo(1);
     await expectAsync(whenStable(appRef)).toBeResolved();
   });
 
