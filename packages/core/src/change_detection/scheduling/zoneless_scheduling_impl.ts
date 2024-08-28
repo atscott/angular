@@ -153,6 +153,15 @@ export class ChangeDetectionSchedulerImpl implements ChangeDetectionScheduler {
         force = true;
         break;
       }
+      case NotificationSource.PendingTaskRemoved: {
+        // Removing a pending task via the public API forces a scheduled tick, ensuring that
+        // stability is async and delayed until there was at least an opportunity to run
+        // application synchronization. This prevents some footguns when working with the
+        // public API for pending tasks where developers attempt to update application state
+        // immediately after removing the last task.
+        force = true;
+        break;
+      }
       case NotificationSource.ViewDetachedFromDOM:
       case NotificationSource.ViewAttached:
       case NotificationSource.RenderHook:
