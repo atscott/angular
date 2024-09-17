@@ -40,9 +40,18 @@ import {
   ɵɵelementStart as elementStart,
   ɵɵsetNgModuleScope as setNgModuleScope,
   ɵɵtext as text,
+  signal,
+  computed,
+  provideExperimentalZonelessChangeDetection,
+  provideZoneChangeDetection,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import {DeferBlockBehavior} from '@angular/core/testing';
-import {TestBed, TestBedImpl} from '@angular/core/testing/src/test_bed';
+import {
+  TestBed,
+  TestBedCreateComponentInputs,
+  TestBedImpl,
+} from '@angular/core/testing/src/test_bed';
 import {By} from '@angular/platform-browser';
 import {expect} from '@angular/platform-browser/testing/src/matchers';
 
@@ -50,6 +59,7 @@ import {NgModuleType} from '../src/render3';
 import {depsTracker} from '../src/render3/deps_tracker/deps_tracker';
 import {setClassMetadataAsync} from '../src/render3/metadata';
 import {
+  ComponentFixtureAutoDetect,
   TEARDOWN_TESTING_MODULE_ON_DESTROY_DEFAULT,
   THROW_ON_UNKNOWN_ELEMENTS_DEFAULT,
   THROW_ON_UNKNOWN_PROPERTIES_DEFAULT,
@@ -721,6 +731,87 @@ describe('TestBed', () => {
     const divElement = fixture.debugElement.query(By.css('div'));
     expect(divElement.properties['id']).toEqual('one');
     expect(divElement.properties['title']).toEqual('some title');
+  });
+
+  describe('inputs', () => {
+    beforeEach(() => {
+      TestBed.configureTestingModule({providers: [provideExperimentalZonelessChangeDetection()]});
+    });
+
+    @Component({
+      template: '{{a}}',
+      standalone: true,
+      changeDetection: ChangeDetectionStrategy.OnPush,
+    })
+    class App {
+      @Input({required: true}) a!: string;
+
+      ngOnInit() {
+        if (!this.a) {
+          throw new Error('a not initialized');
+        }
+      }
+      @Input() v!: Function;
+    }
+
+    it('should assign initial values for inputs', async () => {
+      const inputs: TestBedCreateComponentInputs<App> = {a: signal('1')};
+      const fixture = TestBed.createComponent(App, {inputs});
+      await fixture.whenStable();
+      expect(fixture.nativeElement.innerHTML).toEqual('1');
+    });
+
+    it('should react to changing the value of an input', async () => {
+      const inputs = {a: signal('1')};
+      const fixture = TestBed.createComponent(App, {inputs});
+      await fixture.whenStable();
+      expect(fixture.nativeElement.innerHTML).toEqual('1');
+
+      inputs.a.set('2');
+      await fixture.whenStable();
+      expect(fixture.nativeElement.innerHTML).toEqual('2');
+    });
+
+    it('reacts to changing the value of an input with detectChanges', async () => {
+      const inputs = {a: signal('1')};
+      const fixture = TestBed.createComponent(App, {inputs});
+      await fixture.whenStable();
+      expect(fixture.nativeElement.innerHTML).toEqual('1');
+
+      inputs.a.set('2');
+      fixture.detectChanges();
+      expect(fixture.nativeElement.innerHTML).toEqual('2');
+    });
+
+    it('works for inputs with aliases', async () => {
+      @Component({
+        template: '{{a}}',
+      })
+      class AppWithAlias {
+        @Input({alias: 'anAlias'}) a!: string;
+      }
+      const inputs = {a: signal('1')};
+      const fixture = TestBed.createComponent(AppWithAlias, {inputs});
+      await fixture.whenStable();
+      expect(fixture.nativeElement.innerHTML).toEqual('1');
+
+      inputs.a.set('2');
+      fixture.detectChanges();
+      expect(fixture.nativeElement.innerHTML).toEqual('2');
+    });
+
+    it('should assign inputs before change detection with ZoneJS and ComponentFixutureAutoDetect', async () => {
+      TestBed.configureTestingModule({
+        providers: [
+          provideZoneChangeDetection(),
+          {provide: ComponentFixtureAutoDetect, useValue: true},
+        ],
+      });
+      const inputs = {a: signal('1')};
+      const fixture = TestBed.createComponent(App, {inputs});
+      await expectAsync(fixture.whenStable()).not.toBeRejected();
+      expect(fixture.nativeElement.innerHTML).toEqual('1');
+    });
   });
 
   it('should give the ability to access interpolated properties on a node', () => {

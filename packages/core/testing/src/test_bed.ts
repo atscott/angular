@@ -40,6 +40,10 @@ import {
   ɵsetUnknownPropertyStrictMode as setUnknownPropertyStrictMode,
   ɵstringify as stringify,
   ɵMicrotaskEffectScheduler as MicrotaskEffectScheduler,
+  Signal,
+  effect,
+  reflectComponentType,
+  InputSignalWithTransform,
 } from '@angular/core';
 
 import {ComponentFixture} from './component_fixture';
@@ -65,6 +69,51 @@ import {TestBedCompiler} from './test_bed_compiler';
 export interface TestBedStatic extends TestBed {
   new (...args: any[]): TestBed;
 }
+
+/**
+ * Additional options for configuring the component fixture on creation.
+ *
+ * @publicApi
+ * @see TestBed#createComponent
+ */
+export interface TestBedCreateComponentOptions<T> {
+  /**
+   * The initial inputs for the component.
+   *
+   * These key/value pairs will be used with `ComponentRef#setInput` after the
+   * test component is created and before the fixture is returned from `createComponent`.
+   *
+   * Specifying inputs at creation is useful in conjunction with `ComponentFixtureAutoDetect`
+   * to ensure that the inputs are set before change detection runs on the component.
+   *
+   * @see ComponentRef#setInput
+   * @see ComponentFixture#componentRef
+   */
+  inputs?: TestBedCreateComponentInputs<T>;
+}
+
+/**
+ * Represents possible input values for a component.
+ *
+ * This is a combination of the publicly available properties on the component along with
+ * an allowance for any additional property keys for defining inputs that are
+ * protected.
+ *
+ * Limitations:
+ *
+ * - Any `@Input` that uses a transform will only include the output type and not include the
+ * input type, which is generally wider. If you need to test the transform with one of the wider
+ * input types, it will require a type assertion.
+ * - This API excludes functions from the type safe portion since these are generally not inputs.
+ *  Any `@Input()` that accepts a function can still be specified but will not be type safe.
+ *
+ * @publicApi
+ */
+export type TestBedCreateComponentInputs<T> = {
+  [K in keyof T]?: T[K] extends InputSignalWithTransform<any, infer WriteT>
+    ? Signal<WriteT>
+    : Signal<T[K]>;
+} & Record<PropertyKey, Signal<unknown>>;
 
 /**
  * @publicApi
@@ -161,7 +210,10 @@ export interface TestBed {
 
   overrideTemplateUsingTestingModule(component: Type<any>, template: string): TestBed;
 
-  createComponent<T>(component: Type<T>): ComponentFixture<T>;
+  createComponent<T>(
+    component: Type<T>,
+    options?: TestBedCreateComponentOptions<T>,
+  ): ComponentFixture<T>;
 
   /**
    * Execute any pending effects.
@@ -399,8 +451,11 @@ export class TestBedImpl implements TestBed {
     return TestBedImpl.INSTANCE.runInInjectionContext(fn);
   }
 
-  static createComponent<T>(component: Type<T>): ComponentFixture<T> {
-    return TestBedImpl.INSTANCE.createComponent(component);
+  static createComponent<T>(
+    component: Type<T>,
+    options?: TestBedCreateComponentOptions<T>,
+  ): ComponentFixture<T> {
+    return TestBedImpl.INSTANCE.createComponent(component, options);
   }
 
   static resetTestingModule(): TestBed {
@@ -669,7 +724,10 @@ export class TestBedImpl implements TestBed {
     return this.overrideComponent(component, {set: {template, templateUrl: null!}});
   }
 
-  createComponent<T>(type: Type<T>): ComponentFixture<T> {
+  createComponent<T>(
+    type: Type<T>,
+    {inputs = {}}: TestBedCreateComponentOptions<T> = {},
+  ): ComponentFixture<T> {
     const testComponentRenderer = this.inject(TestComponentRenderer);
     const rootElId = `root${_nextRootElementId++}`;
     testComponentRenderer.insertRootElement(rootElId);
@@ -695,7 +753,32 @@ export class TestBedImpl implements TestBed {
         `#${rootElId}`,
         this.testModuleRef,
       ) as ComponentRef<T>;
-      return this.runInInjectionContext(() => new ComponentFixture(componentRef));
+      const fixture = this.runInInjectionContext(() => new ComponentFixture(componentRef));
+
+      const mirror = reflectComponentType(type);
+      const inputPropertyNames = Object.keys(inputs);
+      if (mirror && inputPropertyNames.length > 0) {
+        const propNameToTemplateNameMap = mirror.inputs.reduce(
+          (map, input) => map.set(input.propName, input.templateName),
+          new Map<string, string>(),
+        );
+        this.runInInjectionContext(() => {
+          const effectRef = effect(() => {
+            for (const propertyName of inputPropertyNames) {
+              const templateName = propNameToTemplateNameMap.get(propertyName);
+              if (!templateName) {
+                throw new Error(
+                  `No input with property name '${propertyName}' was not found on the component.`,
+                );
+              }
+              fixture.componentRef.setInput(templateName, inputs[propertyName]());
+            }
+          });
+          fixture.componentRef.onDestroy(() => void effectRef.destroy());
+        });
+      }
+
+      return fixture;
     };
     const noNgZone = this.inject(ComponentFixtureNoNgZone, false);
     const ngZone = noNgZone ? null : this.inject(NgZone, null);
