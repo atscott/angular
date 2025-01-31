@@ -83,10 +83,10 @@ export abstract class StateManager {
   }
 
   protected createBrowserPath(currentTransition: Navigation): string {
-    const rawUrl = this.urlHandlingStrategy.merge(
-      currentTransition.finalUrl!,
-      currentTransition.initialUrl,
-    );
+    const rawUrl =
+      currentTransition.finalUrl !== undefined
+        ? this.urlHandlingStrategy.merge(currentTransition.finalUrl!, currentTransition.initialUrl)
+        : currentTransition.initialUrl;
     const url = currentTransition.targetBrowserUrl ?? rawUrl;
     const path = url instanceof UrlTree ? this.urlSerializer.serialize(url) : url;
     return path;
@@ -149,7 +149,11 @@ export abstract class StateManager {
    * also includes programmatic APIs called by non-Router JavaScript.
    */
   abstract registerNonRouterCurrentEntryChangeListener(
-    listener: (url: string, state: RestoredState | null | undefined) => void,
+    listener: (
+      url: string,
+      state: RestoredState | null | undefined,
+      transitionData?: unknown,
+    ) => void,
   ): SubscriptionLike;
 
   /**
@@ -193,7 +197,11 @@ export class HistoryStateManager extends StateManager {
   ): SubscriptionLike {
     return this.location.subscribe((event) => {
       if (event['type'] === 'popstate') {
-        listener(event['url']!, event.state as RestoredState | null | undefined);
+        // The `setTimeout` was added in #12160 and is likely to support Angular/AngularJS
+        // hybrid apps.
+        setTimeout(() => {
+          listener(event['url']!, event.state as RestoredState | null | undefined);
+        });
       }
     });
   }
@@ -209,6 +217,7 @@ export class HistoryStateManager extends StateManager {
           this.setBrowserUrl(this.createBrowserPath(currentTransition), currentTransition);
         }
       }
+      currentTransition.routesRecognizedHandled.next(true);
     } else if (e instanceof BeforeActivateRoutes) {
       this.commitTransition(currentTransition);
       if (this.urlUpdateStrategy === 'deferred' && !currentTransition.extras.skipLocationChange) {

@@ -751,7 +751,8 @@ interface InternalFakeNavigateEvent extends FakeNavigateEvent {
   readonly sameDocument: boolean;
   readonly commitOption: 'after-transition' | 'immediate';
   readonly result: InternalNavigationResult;
-  interceptionState: 'none' | 'intercepted' | 'committed' | 'scrolled' | 'finished';
+  // TODO(atscott): rejected is not in the spec https://github.com/whatwg/html/issues/11087
+  interceptionState: 'none' | 'intercepted' | 'committed' | 'scrolled' | 'finished' | 'rejected';
   scrollBehavior: 'after-transition' | 'manual' | null;
   focusResetBehavior: 'after-transition' | 'manual' | null;
 
@@ -911,7 +912,9 @@ function dispatchNavigateEvent({
         const navigatesuccessEvent = new Event('navigatesuccess', {bubbles: false, cancelable});
         navigation.eventTarget.dispatchEvent(navigatesuccessEvent);
         result.finishedResolve();
-        // TODO(atscott): If navigation's transition is not null, then resolve navigation's transition's finished promise with undefined.
+        if (navigation.transition !== null) {
+          (navigation.transition as InternalNavigationTransition).finishedResolve();
+        }
         navigation.transition = null;
       },
       (reason) => {
@@ -922,11 +925,14 @@ function dispatchNavigateEvent({
           throw new Error("Navigation's ongoing event not equal to resolved event");
         }
         navigation.navigateEvent = null;
+        event.interceptionState = 'rejected'; // TODO(atscott): this is not in the spec https://github.com/whatwg/html/issues/11087
         finishNavigationEvent(event, false);
         const navigateerrorEvent = new Event('navigateerror', {bubbles: false, cancelable});
         navigation.eventTarget.dispatchEvent(navigateerrorEvent);
         result.finishedReject(reason);
-        // TODO(atscott): If navigation's transition is not null, then resolve navigation's transition's finished promise with undefined.
+        if (navigation.transition !== null) {
+          (navigation.transition as InternalNavigationTransition).finishedResolve();
+        }
         navigation.transition = null;
       },
     );
@@ -945,8 +951,9 @@ function finishNavigationEvent(event: InternalFakeNavigateEvent, didFulfill: boo
   if (event.interceptionState === 'none') {
     return;
   }
-  potentiallyResetFocus(event);
   if (didFulfill) {
+    // TODO(atscott): https://github.com/whatwg/html/issues/11087 focus reset is not guarded by didFulfill in the spec
+    potentiallyResetFocus(event);
     potentiallyResetScroll(event);
   }
   event.interceptionState = 'finished';

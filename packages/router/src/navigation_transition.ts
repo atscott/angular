@@ -43,6 +43,7 @@ import {INPUT_BINDER} from './directives/router_outlet';
 import {
   BeforeActivateRoutes,
   Event,
+  ExcludeButRunGuards,
   GuardsCheckEnd,
   GuardsCheckStart,
   IMPERATIVE_NAVIGATION,
@@ -309,6 +310,12 @@ export interface Navigation {
   previousNavigation: Navigation | null;
 
   abort: () => void;
+
+  /** @internal */
+  privateTransitionData: unknown;
+
+  /** @internal */
+  routesRecognizedHandled: BehaviorSubject<boolean>;
 }
 
 export interface NavigationTransition {
@@ -331,6 +338,8 @@ export interface NavigationTransition {
   guards: Checks;
   guardsResult: GuardResult | null;
   abortController: AbortController;
+  transitionData: unknown;
+  routesRecognizedHandled: BehaviorSubject<boolean>;
 }
 
 /**
@@ -425,14 +434,17 @@ export class NavigationTransitions {
       | 'promise'
       | 'currentSnapshot'
       | 'currentRouterState'
+      | 'transitionData'
     >,
   ) {
     const id = ++this.navigationId;
+    request.transitionData ??= null;
     this.transitions?.next({
       ...this.transitions.value,
       ...request,
       id,
       abortController: new AbortController(),
+      routesRecognizedHandled: new BehaviorSubject(false),
     });
   }
 
@@ -461,6 +473,8 @@ export class NavigationTransitions {
       guards: {canActivateChecks: [], canDeactivateChecks: []},
       guardsResult: null,
       abortController: new AbortController(),
+      transitionData: null,
+      routesRecognizedHandled: new BehaviorSubject(false),
     });
     return this.transitions.pipe(
       filter((t) => t.id !== 0),
@@ -516,6 +530,8 @@ export class NavigationTransitions {
                   },
               abort: (reason?: any) =>
                 overallTransitionState.abortController.abort(reason ?? 'manual cancellation'),
+              privateTransitionData: t.transitionData,
+              routesRecognizedHandled: t.routesRecognizedHandled,
             };
             const urlTransition =
               !router.navigated || this.isUpdatingInternalState() || this.isUpdatedBrowserUrl();
@@ -588,6 +604,13 @@ export class NavigationTransitions {
                   );
                   this.events.next(routesRecognized);
                 }),
+                // puase navigation until the continue subject emits
+                switchTap(() =>
+                  t.routesRecognizedHandled.pipe(
+                    filter((handled) => handled),
+                    take(1),
+                  ),
+                ),
               );
             } else if (
               urlTransition &&
@@ -613,6 +636,9 @@ export class NavigationTransitions {
                 extras: {...extras, skipLocationChange: false, replaceUrl: false},
               };
               this.currentNavigation!.finalUrl = extractedUrl;
+              // TODO: Do this in a more elegant way
+              // potentially just start navigation handling on navigationstart rather than RoutesRecognized
+              this.events.next(new ExcludeButRunGuards());
               return of(overallTransitionState);
             } else {
               /* When neither the current or previous URL can be processed, do

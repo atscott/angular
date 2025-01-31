@@ -350,6 +350,7 @@ export class RoutesRecognized extends RouterEvent {
     return `RoutesRecognized(id: ${this.id}, url: '${this.url}', urlAfterRedirects: '${this.urlAfterRedirects}', state: ${this.state})`;
   }
 }
+export class ExcludeButRunGuards {}
 
 /**
  * An event triggered at the start of the Guard phase of routing.
@@ -620,7 +621,7 @@ export class RedirectRequest {
     readonly navigationBehaviorOptions: NavigationBehaviorOptions | undefined,
   ) {}
 }
-export type PrivateRouterEvents = BeforeActivateRoutes | RedirectRequest;
+export type PrivateRouterEvents = BeforeActivateRoutes | RedirectRequest | ExcludeButRunGuards;
 
 /**
  * Router events that allow you to track the lifecycle of the router.

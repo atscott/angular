@@ -23,6 +23,7 @@ import {RuntimeErrorCode} from './errors';
 import {
   BeforeActivateRoutes,
   Event,
+  ExcludeButRunGuards,
   IMPERATIVE_NAVIGATION,
   NavigationCancel,
   NavigationCancellationCode,
@@ -279,13 +280,11 @@ export class Router {
     // already patch onPopState, so location change callback will
     // run into ngZone
     this.nonRouterCurrentEntryChangeSubscription ??=
-      this.stateManager.registerNonRouterCurrentEntryChangeListener((url, state) => {
-        // The `setTimeout` was added in #12160 and is likely to support Angular/AngularJS
-        // hybrid apps.
-        setTimeout(() => {
-          this.navigateToSyncWithBrowser(url, 'popstate', state);
-        }, 0);
-      });
+      this.stateManager.registerNonRouterCurrentEntryChangeListener(
+        (url, state, transitionData) => {
+          this.navigateToSyncWithBrowser(url, 'popstate', state, transitionData);
+        },
+      );
   }
 
   /**
@@ -299,6 +298,7 @@ export class Router {
     url: string,
     source: NavigationTrigger,
     state: RestoredState | null | undefined,
+    transitionData?: unknown,
   ) {
     const extras: NavigationExtras = {replaceUrl: true};
 
@@ -324,7 +324,7 @@ export class Router {
     }
 
     const urlTree = this.parseUrl(url);
-    this.scheduleNavigation(urlTree, source, restoredState, extras);
+    this.scheduleNavigation(urlTree, source, restoredState, extras, undefined, transitionData);
   }
 
   /** The current URL. */
@@ -626,6 +626,7 @@ export class Router {
       reject: (reason?: any) => void;
       promise: Promise<boolean>;
     },
+    transitionData?: unknown,
   ): Promise<boolean> {
     if (this.disposed) {
       return Promise.resolve(false);
@@ -665,6 +666,7 @@ export class Router {
       promise,
       currentSnapshot: this.routerState.snapshot,
       currentRouterState: this.routerState,
+      transitionData: transitionData ?? null,
     });
 
     // Make sure that the error is propagated even though `processNavigations` catch
@@ -689,5 +691,9 @@ function validateCommands(commands: string[]): void {
 }
 
 function isPublicRouterEvent(e: Event | PrivateRouterEvents): e is Event {
-  return !(e instanceof BeforeActivateRoutes) && !(e instanceof RedirectRequest);
+  return (
+    !(e instanceof BeforeActivateRoutes) &&
+    !(e instanceof RedirectRequest) &&
+    !(e instanceof ExcludeButRunGuards)
+  );
 }
