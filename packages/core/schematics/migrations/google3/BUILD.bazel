@@ -21,9 +21,19 @@ esbuild(
     deps = [":google3"],
 )
 
+esbuild(
+    name = "functional_gaurds_rule_cjs",
+    entry_point = ":functionalGuardsRule.ts",
+    format = "cjs",
+    output = "functionalGuardsCjsRule.js",
+    platform = "node",
+    deps = [":google3"],
+)
+
 filegroup(
     name = "google3_cjs",
     srcs = [
+        ":functional_guards_rule_cjs",
         ":wait_for_async_rule_cjs",
     ],
     visibility = ["//packages/core/schematics/test/google3:__pkg__"],

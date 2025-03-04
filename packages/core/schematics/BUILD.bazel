@@ -58,6 +58,7 @@ rollup_bundle(
     ],
     deps = [
         "//packages/core/schematics/migrations/explicit-standalone-flag",
+        "//packages/core/schematics/migrations/functional-guards",
         "//packages/core/schematics/migrations/pending-tasks",
         "//packages/core/schematics/migrations/provide-initializer",
         "//packages/core/schematics/ng-generate/cleanup-unused-imports",

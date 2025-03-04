@@ -15,6 +15,11 @@
       "description": "Replaces `APP_INITIALIZER`, `ENVIRONMENT_INITIALIZER` & `PLATFORM_INITIALIZER` respectively with `provideAppInitializer`, `provideEnvironmentInitializer` & `providePlatformInitializer`.",
       "factory": "./bundles/provide-initializer#migrate",
       "optional": true
+    },
+    "migration-v20-functional-guards": {
+      "version": "20.0.0",
+      "description": "In Angular v15.2, class and injection-token guards and resolvers were deprecated at the `Route` definition. This migration update `Route` guards and resolvers to map classes and injection tokens to equivalent functions.",
+      "factory": "./bundles/functional-guards#migrate"
     }
   }
 }
