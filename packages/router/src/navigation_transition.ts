@@ -15,6 +15,7 @@ import {
   InjectionToken,
   runInInjectionContext,
   Type,
+  ɵINTERNAL_APPLICATION_ERROR_HANDLER,
 } from '@angular/core';
 import {BehaviorSubject, combineLatest, EMPTY, from, Observable, of, Subject} from 'rxjs';
 import {
@@ -336,7 +337,14 @@ interface InternalRouterInterface {
 
 export const NAVIGATION_ERROR_HANDLER = new InjectionToken<
   (error: NavigationError) => unknown | RedirectCommand
->(typeof ngDevMode === 'undefined' || ngDevMode ? 'navigation error handler' : '');
+>(typeof ngDevMode === 'undefined' || ngDevMode ? 'navigation error handler' : '', {
+  providedIn: 'root',
+  factory: () => {
+    return (navigationError: NavigationError) => {
+      // inject(ɵINTERNAL_APPLICATION_ERROR_HANDLER)(navigationError.error);
+    };
+  },
+});
 
 @Injectable({providedIn: 'root'})
 export class NavigationTransitions {
@@ -366,7 +374,7 @@ export class NavigationTransitions {
     this.options.paramsInheritanceStrategy || 'emptyOnly';
   private readonly urlHandlingStrategy = inject(UrlHandlingStrategy);
   private readonly createViewTransition = inject(CREATE_VIEW_TRANSITION, {optional: true});
-  private readonly navigationErrorHandler = inject(NAVIGATION_ERROR_HANDLER, {optional: true});
+  private readonly navigationErrorHandler = inject(NAVIGATION_ERROR_HANDLER);
 
   navigationId = 0;
   get hasRequestedNavigation() {
@@ -877,10 +885,12 @@ export class NavigationTransitions {
                 overallTransitionState.targetSnapshot ?? undefined,
               );
 
+              let convertedToRedirect = false;
+              let errorFromErrorHandler: unknown;
               try {
                 const navigationErrorHandlerResult = runInInjectionContext(
                   this.environmentInjector,
-                  () => this.navigationErrorHandler?.(navigationError),
+                  () => this.navigationErrorHandler(navigationError),
                 );
 
                 if (navigationErrorHandlerResult instanceof RedirectCommand) {
@@ -902,24 +912,18 @@ export class NavigationTransitions {
                       navigationErrorHandlerResult.navigationBehaviorOptions,
                     ),
                   );
-                } else {
-                  this.events.next(navigationError);
-                  throw e;
+                  convertedToRedirect = true;
                 }
-              } catch (ee) {
-                // TODO(atscott): consider flipping the default behavior of
-                // resolveNavigationPromiseOnError to be `resolve(false)` when
-                // undefined. This is the most sane thing to do given that
-                // applications very rarely handle the promise rejection and, as a
-                // result, would get "unhandled promise rejection" console logs.
-                // The vast majority of applications would not be affected by this
-                // change so omitting a migration seems reasonable. Instead,
-                // applications that rely on rejection can specifically opt-in to the
-                // old behavior.
-                if (this.options.resolveNavigationPromiseOnError) {
-                  overallTransitionState.resolve(false);
+              } catch (newError) {
+                errorFromErrorHandler = newError;
+              }
+
+              if (!convertedToRedirect) {
+                this.events.next(navigationError);
+                if (!this.options.resolveNavigationPromiseOnError) {
+                  overallTransitionState.reject(errorFromErrorHandler ?? e);
                 } else {
-                  overallTransitionState.reject(ee);
+                  overallTransitionState.resolve(false);
                 }
               }
             }

@@ -62,10 +62,12 @@ describe('standalone in Router API', () => {
       const root = TestBed.createComponent(RootCmp);
 
       const router = TestBed.inject(Router);
-      router.navigateByUrl('/lazy/notstandalone');
-      expect(() => advance(root)).toThrowError(
-        /.*lazy\/notstandalone.*component must be standalone/,
-      );
+      let caught;
+      router.navigateByUrl('/lazy/notstandalone').catch((e) => {
+        caught = e;
+      });
+      advance(root);
+      expect(caught).toMatch(/.*lazy\/notstandalone.*component must be standalone/);
     }));
   });
   describe('route providers', () => {
@@ -363,8 +365,14 @@ describe('standalone in Router API', () => {
       });
 
       const root = TestBed.createComponent(RootCmp);
-      TestBed.inject(Router).navigateByUrl('/home');
-      expect(() => advance(root)).toThrowError(/.*home.*component must be standalone/);
+      let caught;
+      TestBed.inject(Router)
+        .navigateByUrl('/home')
+        .catch((e) => {
+          caught = e;
+        });
+      advance(root);
+      expect(caught).toMatch(/.*home.*component must be standalone/);
     }));
 
     it('throws error when loadComponent is used with a module', fakeAsync(() => {
@@ -383,8 +391,14 @@ describe('standalone in Router API', () => {
       });
 
       const root = TestBed.createComponent(RootCmp);
-      TestBed.inject(Router).navigateByUrl('/home');
-      expect(() => advance(root)).toThrowError(/.*home.*Use 'loadChildren' instead/);
+      let caught;
+      TestBed.inject(Router)
+        .navigateByUrl('/home')
+        .catch((e) => {
+          caught = e;
+        });
+      advance(root);
+      expect(caught).toMatch(/.*home.*Use 'loadChildren' instead/);
     }));
   });
   describe('default export unwrapping', () => {

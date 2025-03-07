@@ -327,9 +327,7 @@ export class Router {
     }
 
     const urlTree = this.parseUrl(url);
-    this.scheduleNavigation(urlTree, source, restoredState, extras).catch((e) => {
-      this.injector.get(ɵINTERNAL_APPLICATION_ERROR_HANDLER)(e);
-    });
+    this.scheduleNavigation(urlTree, source, restoredState, extras);
   }
 
   /** The current URL. */
@@ -672,11 +670,9 @@ export class Router {
       currentRouterState: this.routerState,
     });
 
-    // Make sure that the error is propagated even though `processNavigations` catch
-    // handler does not rethrow
-    return promise.catch((e: any) => {
-      return Promise.reject(e);
-    });
+    // prevent unhandled promise rejection
+    promise.catch(() => {});
+    return promise;
   }
 }
 

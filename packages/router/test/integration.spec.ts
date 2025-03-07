@@ -2072,10 +2072,8 @@ for (const browserAPI of ['navigation', 'history'] as const) {
 
         // Try navigating to a component which throws an error during activation.
         ConditionalThrowingCmp.throwError = true;
-        expect(() => {
-          router.navigateByUrl('/throwing');
-          advance(fixture);
-        }).toThrow();
+        router.navigateByUrl('/throwing');
+        advance(fixture);
         expect(location.path()).toEqual('');
         expect(fixture.nativeElement.innerHTML).not.toContain('throwing');
 
@@ -2206,17 +2204,17 @@ for (const browserAPI of ['navigation', 'history'] as const) {
       }),
     ));
 
-    it('should not swallow errors', fakeAsync(
+    it('should not have unhandled errors', fakeAsync(
       inject([Router], (router: Router) => {
         const fixture = createRoot(router, RootCmp);
 
         router.resetConfig([{path: 'simple', component: SimpleCmp}]);
 
         router.navigateByUrl('/invalid');
-        expect(() => advance(fixture)).toThrow();
+        expect(() => advance(fixture)).not.toThrow();
 
         router.navigateByUrl('/invalid2');
-        expect(() => advance(fixture)).toThrow();
+        expect(() => advance(fixture)).not.toThrow();
       }),
     ));
 
