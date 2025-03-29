@@ -1,9 +1,10 @@
 import {PlatformLocation, ɵPlatformNavigation as PlatformNavigation} from '@angular/common';
-import {inject, Injectable} from '@angular/core';
+import {EnvironmentInjector, inject, Injectable, afterNextRender} from '@angular/core';
 import {Subject, SubscriptionLike} from 'rxjs';
 
 import {
   BeforeActivateRoutes,
+  BeforeRoutesRecognized,
   NavigationCancel,
   NavigationCancellationCode,
   NavigationEnd,
@@ -12,7 +13,6 @@ import {
   NavigationStart,
   NavigationTrigger,
   PrivateRouterEvents,
-  RoutesRecognized,
 } from '../events';
 import {Navigation, RestoredState} from '../navigation_transition';
 
@@ -39,6 +39,7 @@ export class NavigationStateManager extends StateManager {
   private readonly base = new URL(inject(PlatformLocation).href).origin;
   private readonly appRootURL = new URL(this.location.prepareExternalUrl('/'), this.base).href;
   private readonly navigation = inject(PlatformNavigation);
+  private readonly injector = inject(EnvironmentInjector);
   private readonly inMemoryScrollingEnabled = inject(ROUTER_SCROLLER, {optional: true}) !== null;
 
   /**
@@ -56,13 +57,14 @@ export class NavigationStateManager extends StateManager {
     state: RestoredState | null | undefined;
   }>();
 
-  private currentNavigation: Readonly<{
+  private currentNavigation: {
     routerTransition?: Navigation;
     navigateEvent?: NavigateEvent;
+    commitUrl?: () => Promise<void>;
     rejectNavigateEvent?: () => void;
-    commitUrl?: (transition: Navigation) => Promise<void>;
-    resolveNavigateEvent?: () => void;
-  }> = {};
+    resolvePostCommitHandler?: () => void;
+    removeAbortListener?: () => void;
+  } = {};
 
   constructor() {
     super();
@@ -99,7 +101,7 @@ export class NavigationStateManager extends StateManager {
     e: Event | PrivateRouterEvents,
     transition: Navigation,
   ): Promise<void> {
-    this.currentNavigation = {...this.currentNavigation, routerTransition: transition};
+    this.currentNavigation.routerTransition = transition;
     if (e instanceof NavigationStart) {
       this.updateStateMemento();
       const path = this.createBrowserPath(transition);
@@ -115,26 +117,39 @@ export class NavigationStateManager extends StateManager {
     } else if (e instanceof NavigationSkipped) {
       this.finishNavigation();
       this.commitTransition(transition);
-    } else if (e instanceof RoutesRecognized) {
+    } else if (e instanceof BeforeRoutesRecognized) {
       if (this.urlUpdateStrategy === 'eager') {
-        await this.currentNavigation.commitUrl?.(transition);
+        await this.currentNavigation.commitUrl?.();
       }
       transition.routesRecognizeHandled.next(true);
     } else if (e instanceof BeforeActivateRoutes) {
       this.commitTransition(transition);
       if (this.urlUpdateStrategy === 'deferred') {
-        await this.currentNavigation.commitUrl?.(transition);
+        await this.currentNavigation.commitUrl?.();
       }
       transition.beforeActivateHandled.next(true);
     } else if (e instanceof NavigationCancel || e instanceof NavigationError) {
+      // we want to retain the navigate event through the redirect
+      // However, if we already committed the URL, then we have to cancel the navigation and start a new one
+      const redirectingBeforeUrlCommit =
+        e instanceof NavigationCancel &&
+        e.code === NavigationCancellationCode.Redirect &&
+        !!this.currentNavigation.commitUrl;
+      if (redirectingBeforeUrlCommit) {
+        return;
+      }
       this.cancel(transition, e);
     } else if (e instanceof NavigationEnd) {
-      this.finishNavigation();
+      const {removeAbortListener, resolvePostCommitHandler} = this.currentNavigation;
+      this.currentNavigation = {};
+      removeAbortListener?.();
+      afterNextRender({read: () => resolvePostCommitHandler?.()}, {injector: this.injector});
     }
   }
 
   private finishNavigation() {
-    this.currentNavigation?.resolveNavigateEvent?.();
+    this.currentNavigation.commitUrl?.();
+    this.currentNavigation?.resolvePostCommitHandler?.();
     this.currentNavigation = {};
   }
 
@@ -228,73 +243,101 @@ export class NavigationStateManager extends StateManager {
       return;
     }
 
+    this.currentNavigation.navigateEvent = event;
     const abortHandler = (reason: any) => {
       this.currentNavigation.routerTransition?.abort();
     };
     event.signal.addEventListener('abort', abortHandler);
+    this.currentNavigation.removeAbortListener = () =>
+      event.signal.removeEventListener('abort', abortHandler);
 
-    const handler = new Promise<void>((resolve, reject) => {
-      this.currentNavigation = {
-        ...this.currentNavigation,
-        rejectNavigateEvent: () => {
-          event.signal.removeEventListener('abort', abortHandler);
-          reject();
-        },
-        resolveNavigateEvent: () => {
-          event.signal.removeEventListener('abort', abortHandler);
-          resolve();
-        },
-        navigateEvent: event,
+    let rejectHandler: () => void;
+    let resolveCommitted: () => void;
+    let committed = new Promise<void>((resolve) => {
+      resolveCommitted = resolve;
+    });
+    const postCommitHandler = new Promise<void>((resolve, reject) => {
+      rejectHandler = reject;
+      this.currentNavigation.resolvePostCommitHandler = () => {
+        event.signal.removeEventListener('abort', abortHandler);
+        resolve();
       };
     });
 
-    const interceptOptions: NavigationInterceptOptions = {handler: () => handler};
+    const interceptOptions: NavigationInterceptOptions = {
+      handler: () => {
+        resolveCommitted();
+        this.currentNavigation.rejectNavigateEvent = () => {
+          event.signal.removeEventListener('abort', abortHandler);
+          rejectHandler();
+        };
+        return postCommitHandler;
+      },
+    };
     if (
       // cannot defer commit if not cancelable
       event.cancelable &&
       // defering a traversal is broken at the moment
       event.navigationType !== 'traverse'
     ) {
+      let redirect: ((url: string) => void) | null = null;
+      let commit: () => Promise<void>;
+      const precommitHandlerPromise = new Promise<void>((resolve, reject) => {
+        this.currentNavigation.rejectNavigateEvent = () => {
+          event.signal.removeEventListener('abort', abortHandler);
+          reject();
+        };
+        commit = () => {
+          resolve();
+          return committed;
+        };
+      });
       // cast to any because deferred commit isn't yet in the spec
-      (interceptOptions as any).commit = 'after-transition';
-      this.currentNavigation = {
-        ...this.currentNavigation,
-        commitUrl: async (transition: Navigation) => {
-          const internalPath = this.createBrowserPath(transition);
-          // this might be a path or an actual URL depending on the baseHref
-          const pathOrUrl = this.location.prepareExternalUrl(internalPath);
-          if (event.navigationType !== 'traverse') {
-            if (!transition.extras.skipLocationChange) {
-              // TODO(atscott): Should add correct state, not just update URL
-              (event as any).redirect(pathOrUrl);
-            }
-            (event as any).commit();
-            return;
-          }
+      (interceptOptions as any).precommitHandler = (controller: any) => {
+        redirect = controller.redirect;
+        return precommitHandlerPromise;
+      };
+      this.currentNavigation.commitUrl = async () => {
+        this.currentNavigation.commitUrl = undefined;
 
-          (event as any).commit();
-          const eventDestination = new URL(event.destination.url);
-          if (new URL(pathOrUrl, eventDestination.origin).href === eventDestination.href) {
-            return;
+        const transition = this.currentNavigation.routerTransition;
+        if (transition === undefined || redirect === null) {
+          return await commit();
+        }
+        const internalPath = this.createBrowserPath(transition);
+        // this might be a path or an actual URL depending on the baseHref
+        const pathOrUrl = this.location.prepareExternalUrl(internalPath);
+        if (event.navigationType !== 'traverse') {
+          if (!transition.extras.skipLocationChange) {
+            // TODO(atscott): Should add correct state, not just update URL
+            redirect(pathOrUrl);
           }
+          await commit();
+          return;
+        }
 
-          // can't redirect a traverse so we commit it, then start new navigation
-          // TODO(atscott): We don't actually have any test cases covering this logic
-          // presumably it could happen if an auth cookie times out and your
-          // traversal to a page requiring auth is then redirected
-          this.currentNavigation?.resolveNavigateEvent?.();
-          const redirectedPromise = new Promise<void>((resolve) =>
-            onNextNavigateEventWithRouterInfo(this.navigation, (newEvent) => {
-              (newEvent as any).commit();
-              resolve();
-            }),
-          );
-          this.navigate(internalPath, {
-            ...transition,
-            extras: {...transition.extras, replaceUrl: true},
-          });
-          await redirectedPromise;
-        },
+        await commit();
+        const eventDestination = new URL(event.destination.url);
+        if (new URL(pathOrUrl, eventDestination.origin).href === eventDestination.href) {
+          return;
+        }
+
+        // can't redirect a traverse so we commit it, then start new navigation
+        // TODO(atscott): We don't actually have any test cases covering this logic
+        // presumably it could happen if an auth cookie times out and your
+        // traversal to a page requiring auth is then redirected
+        this.currentNavigation?.resolvePostCommitHandler?.();
+        const redirectedPromise = new Promise<void>((resolve) =>
+          onNextNavigateEventWithRouterInfo(this.navigation, async () => {
+            await this.currentNavigation.commitUrl?.();
+            resolve();
+          }),
+        );
+        this.navigate(internalPath, {
+          ...transition,
+          extras: {...transition.extras, replaceUrl: true},
+        });
+        await redirectedPromise;
       };
     }
     event.intercept(interceptOptions);
@@ -309,10 +352,10 @@ export class NavigationStateManager extends StateManager {
   private handleNavigateEventTriggeredOutsideRouterAPIs(event: NavigateEvent) {
     if (!this.registered) {
       // Don't convert events to router events until we're supposed to be listening
-      this.currentNavigation.resolveNavigateEvent?.();
-      this.currentNavigation = {routerTransition: this.currentNavigation.routerTransition};
+      this.finishNavigation();
       return;
     }
+    // TODO: if destination URL doesn't start with the appRootURL, should probably finishNavigation or not even intercept in the first place
     const path = event.destination.url.substring(this.appRootURL.length - 1);
     const state = event.destination.getState() as RestoredState | null | undefined;
     this.nonRouterCurrentEntryChangeSubject.next({path, state});

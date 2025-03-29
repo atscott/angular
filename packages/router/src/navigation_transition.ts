@@ -44,6 +44,7 @@ import {createRouterState} from './create_router_state';
 import {INPUT_BINDER} from './directives/router_outlet';
 import {
   BeforeActivateRoutes,
+  BeforeRoutesRecognized,
   Event,
   GuardsCheckEnd,
   GuardsCheckStart,
@@ -571,17 +572,19 @@ export class NavigationTransitions {
                     ...this.currentNavigation!,
                     finalUrl: t.urlAfterRedirects,
                   };
-
-                  // Fire RoutesRecognized
-                  const routesRecognized = new RoutesRecognized(
-                    t.id,
-                    this.urlSerializer.serialize(t.extractedUrl),
-                    this.urlSerializer.serialize(t.urlAfterRedirects!),
-                    t.targetSnapshot!,
-                  );
-                  this.events.next(routesRecognized);
+                  this.events.next(new BeforeRoutesRecognized());
                 }),
                 waitFor(overallTransitionState.routesRecognizeHandled),
+                tap((t) => {
+                  this.events.next(
+                    new RoutesRecognized(
+                      t.id,
+                      this.urlSerializer.serialize(t.extractedUrl),
+                      this.urlSerializer.serialize(t.urlAfterRedirects!),
+                      t.targetSnapshot!,
+                    ),
+                  );
+                }),
               );
             } else if (
               urlTransition &&

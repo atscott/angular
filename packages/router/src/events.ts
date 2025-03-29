@@ -618,13 +618,14 @@ export class Scroll {
 }
 
 export class BeforeActivateRoutes {}
+export class BeforeRoutesRecognized {}
 export class RedirectRequest {
   constructor(
     readonly url: UrlTree,
     readonly navigationBehaviorOptions: NavigationBehaviorOptions | undefined,
   ) {}
 }
-export type PrivateRouterEvents = BeforeActivateRoutes | RedirectRequest;
+export type PrivateRouterEvents = BeforeActivateRoutes | RedirectRequest | BeforeRoutesRecognized;
 
 /**
  * Router events that allow you to track the lifecycle of the router.

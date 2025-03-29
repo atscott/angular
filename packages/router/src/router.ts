@@ -24,6 +24,7 @@ import {INPUT_BINDER} from './directives/router_outlet';
 import {RuntimeErrorCode} from './errors';
 import {
   BeforeActivateRoutes,
+  BeforeRoutesRecognized,
   Event,
   IMPERATIVE_NAVIGATION,
   NavigationCancel,
@@ -689,5 +690,9 @@ function validateCommands(commands: string[]): void {
 }
 
 function isPublicRouterEvent(e: Event | PrivateRouterEvents): e is Event {
-  return !(e instanceof BeforeActivateRoutes) && !(e instanceof RedirectRequest);
+  return (
+    !(e instanceof BeforeActivateRoutes) &&
+    !(e instanceof RedirectRequest) &&
+    !(e instanceof BeforeRoutesRecognized)
+  );
 }
