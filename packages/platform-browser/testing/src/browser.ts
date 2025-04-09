@@ -6,6 +6,7 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 import {PlatformLocation} from '@angular/common';
+import {ɵprovideFakePlatformNavigation} from '@angular/common/testing';
 import {MockPlatformLocation} from '@angular/common/testing';
 import {
   APP_ID,
@@ -38,6 +39,7 @@ export const platformBrowserTesting = createPlatformFactory(platformBrowser, 'br
     {provide: APP_ID, useValue: 'a'},
     internalProvideZoneChangeDetection({}),
     {provide: ChangeDetectionScheduler, useExisting: ChangeDetectionSchedulerImpl},
+    ɵprovideFakePlatformNavigation(),
     {provide: PlatformLocation, useClass: MockPlatformLocation},
     {provide: TestComponentRenderer, useClass: DOMTestComponentRenderer},
   ],

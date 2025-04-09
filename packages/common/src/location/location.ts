@@ -332,13 +332,19 @@ export class NavigationAdapterForLocation extends Location {
     return this.navigation.currentEntry?.getState();
   }
 
+  // note that we could make router ignore these navigations like before but this isn't a good idea
+  // hiding a navigation from router makes things inconsistent -- router won't be able to
+  // modify state with navigation ID effectively because traversals don't have
+  // redirect ability. Previously, those were just reloaded but now we can intercept them.
   override replaceState(path: string, query: string = '', state: any = null): void {
     const url = this.prepareExternalUrl(path + normalizeQueryParams(query));
+    // use navigation to avoid using history API for state, keeping consistent with Router
     this.navigation.navigate(url, {state, history: 'replace'});
   }
 
   override go(path: string, query: string = '', state: any = null): void {
     const url = this.prepareExternalUrl(path + normalizeQueryParams(query));
+    // use navigation to avoid using history API for state, keeping consistent with Router
     this.navigation.navigate(url, {state, history: 'push'});
   }
 

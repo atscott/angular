@@ -1,3 +1,10 @@
+/**
+ * @license
+ * Copyright Google LLC All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.dev/license
+ */
 import {PlatformLocation, ɵPlatformNavigation as PlatformNavigation} from '@angular/common';
 import {EnvironmentInjector, inject, Injectable, afterNextRender} from '@angular/core';
 import {Subject, SubscriptionLike} from 'rxjs';
@@ -37,7 +44,8 @@ interface RollbackNavigationInfo {
 @Injectable({providedIn: 'root'})
 export class NavigationStateManager extends StateManager {
   private readonly base = new URL(inject(PlatformLocation).href).origin;
-  private readonly appRootURL = new URL(this.location.prepareExternalUrl('/'), this.base).href;
+  private readonly appRootURL = new URL(this.location.prepareExternalUrl?.('/') ?? '/', this.base)
+    .href;
   private readonly navigation = inject(PlatformNavigation);
   private readonly injector = inject(EnvironmentInjector);
   private readonly inMemoryScrollingEnabled = inject(ROUTER_SCROLLER, {optional: true}) !== null;
@@ -123,10 +131,20 @@ export class NavigationStateManager extends StateManager {
       }
       transition.routesRecognizeHandled.next(true);
     } else if (e instanceof BeforeActivateRoutes) {
-      this.commitTransition(transition);
       if (this.urlUpdateStrategy === 'deferred') {
         await this.currentNavigation.commitUrl?.();
       }
+      // TODO(atscott): Add test which covers the need for moving commitTransition to after the URL commit
+      // There was a problem with a navigation being cancelled after the commit transition but before the
+      // commit URL finished. And then the rollback is skipped as well.
+      // Also, while moving this to after the commit is probably the right move, it was likely only necessary
+      // for that failing test because there's something off with the internal state restoration on canceled
+      // navigations. It probably needs to be called in more situations. History would advance synchronously
+      // to the activation stage after synchronously setting the URL so there was no opportunity to cancel
+      // a navigation there. Now there is so that probably presents a problem where state needs to be reset.
+      // Also check what happens if navigation is cancelled while we are waiting for the commit. I think
+      // maybe the commitUrl rejects? But not sure.
+      this.commitTransition(transition);
       transition.beforeActivateHandled.next(true);
     } else if (e instanceof NavigationCancel || e instanceof NavigationError) {
       // we want to retain the navigate event through the redirect
@@ -138,7 +156,7 @@ export class NavigationStateManager extends StateManager {
       if (redirectingBeforeUrlCommit) {
         return;
       }
-      this.cancel(transition, e);
+      void this.cancel(transition, e);
     } else if (e instanceof NavigationEnd) {
       const {removeAbortListener, resolvePostCommitHandler} = this.currentNavigation;
       this.currentNavigation = {};
@@ -275,6 +293,8 @@ export class NavigationStateManager extends StateManager {
           return committed;
         };
       });
+      // Prevent unhandled rejections if ZoneJS microtasks queue drain causes this to reject before its handled by Navigation
+      precommitHandlerPromise.catch(() => {});
       // cast to any because deferred commit isn't yet in the spec
       (interceptOptions as any).precommitHandler = (controller: any) => {
         redirect = controller.redirect;

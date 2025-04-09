@@ -102,6 +102,10 @@ for (const browserAPI of ['navigation', 'history'] as const) {
               ? withDomNavigation()
               : (makeEnvironmentProviders([]) as any),
           ),
+          // TODO(atscott): This should be automatic if `withDomNavigation` is used
+          // platform-browser should use FakeNavigationPlatformLocation for Location
+          // automatically. Probably provide some token from common that indicates
+          // platformNavigation is being used.
           browserAPI === 'navigation' ? ɵprovideFakePlatformNavigation() : [],
         ],
       });
