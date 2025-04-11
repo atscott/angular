@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 import {PlatformLocation, ɵPlatformNavigation as PlatformNavigation} from '@angular/common';
-import {EnvironmentInjector, inject, Injectable, afterNextRender} from '@angular/core';
+import {afterNextRender, EnvironmentInjector, inject, Injectable} from '@angular/core';
 import {Subject, SubscriptionLike} from 'rxjs';
 
 import {
@@ -22,10 +22,9 @@ import {
   PrivateRouterEvents,
 } from '../events';
 import {Navigation, RestoredState} from '../navigation_transition';
+import {ROUTER_SCROLLER} from '../router_scroller';
 
 import {StateManager} from './state_manager';
-import {ROUTER_SCROLLER} from '../router_scroller';
-import {ROUTER_CONFIGURATION} from '../router_config';
 
 type NavigationInfo = RouterTransitionNavigationInfo | RollbackNavigationInfo;
 
@@ -40,6 +39,7 @@ interface RouterTransitionNavigationInfo {
 interface RollbackNavigationInfo {
   intercept: false;
 }
+const rollbackNavigationInfo = {ɵrouterInfo: {intercept: false} satisfies RollbackNavigationInfo};
 
 @Injectable({providedIn: 'root'})
 export class NavigationStateManager extends StateManager {
@@ -49,6 +49,8 @@ export class NavigationStateManager extends StateManager {
   private readonly navigation = inject(PlatformNavigation);
   private readonly injector = inject(EnvironmentInjector);
   private readonly inMemoryScrollingEnabled = inject(ROUTER_SCROLLER, {optional: true}) !== null;
+  override readonly canceledNavigationResolution =
+    this.options.canceledNavigationResolution || /*'computed'*/ 'replace';
 
   /**
    * The NavigationHistoryEntry for the active state. This enables restoring history if an ongoing
@@ -77,12 +79,6 @@ export class NavigationStateManager extends StateManager {
   constructor() {
     super();
 
-    const options = inject(ROUTER_CONFIGURATION, {optional: true}) || {};
-    if (options.canceledNavigationResolution === 'replace') {
-      throw new Error(
-        'Navigation API-based router only supports `computed` canceledNavigationResolution.',
-      );
-    }
     this.navigation.addEventListener('navigate', (event: NavigateEvent) => {
       this.handleNavigate(event);
     });
@@ -202,11 +198,18 @@ export class NavigationStateManager extends StateManager {
   }
 
   private async cancel(transition: Navigation, event: NavigationCancel | NavigationError) {
-    const {currentNavigation} = this;
+    const isTraversalReset =
+      this.canceledNavigationResolution === 'computed' &&
+      this.navigation.currentEntry!.key !== this.activeHistoryEntry.key;
+    this.resetInternalState(transition, isTraversalReset);
 
-    currentNavigation.rejectNavigateEvent?.();
+    this.currentNavigation.rejectNavigateEvent?.();
     const clearedState = {};
     this.currentNavigation = clearedState;
+
+    if (this.navigation.currentEntry!.id === this.activeHistoryEntry.id) {
+      return;
+    }
 
     // kind of have no choice but to wait because we need to not do a rollback if
     // the navigation was canceled due to another navigation coming in (i.e. 2 back button clicks)
@@ -218,31 +221,23 @@ export class NavigationStateManager extends StateManager {
       event.code !== NavigationCancellationCode.NoDataFromResolver
     ) {
       await new Promise((resolve) => setTimeout(resolve));
+      if (this.currentNavigation !== clearedState) {
+        return;
+      }
     }
 
-    // skip rollback if we already moved on to a new navigation
-    if (this.currentNavigation !== clearedState) {
-      return;
-    }
-
-    if (this.navigation.currentEntry!.id === this.activeHistoryEntry.id) {
-      // nothing to roll back. Finish cleanup and return
-      return;
-    }
-
-    const ɵrouterInfo: RollbackNavigationInfo = {intercept: false};
-    this.resetInternalState(transition);
-    if (this.navigation.currentEntry!.key !== this.activeHistoryEntry.key) {
+    if (isTraversalReset) {
       handleResultRejections(
-        this.navigation.traverseTo(this.activeHistoryEntry.key, {info: {ɵrouterInfo}}),
+        this.navigation.traverseTo(this.activeHistoryEntry.key, {
+          info: rollbackNavigationInfo,
+        }),
       );
     } else {
-      // If ID differs but key is the same, we were doing a replace navigation
       handleResultRejections(
         this.navigation.navigate(this.urlSerializer.serialize(this.getCurrentUrlTree()), {
           state: this.activeHistoryEntry.getState(),
           history: 'replace',
-          info: {ɵrouterInfo},
+          info: rollbackNavigationInfo,
         }),
       );
     }
