@@ -723,6 +723,11 @@ export interface ListenerOp extends Op<CreateOp> {
   name: string;
 
   /**
+   * If the view should be marked dirty when the listener is invoked.
+   */
+  markForCheck: boolean;
+
+  /**
    * Tag name of the element on which this listener is placed. Might be null, if this listener
    * belongs to a host binding.
    */
@@ -774,6 +779,7 @@ export function createListenerOp(
   eventTarget: string | null,
   hostListener: boolean,
   sourceSpan: ParseSourceSpan,
+  markForCheck: boolean,
 ): ListenerOp {
   const handlerList = new OpList<UpdateOp>();
   handlerList.push(handlerOps);
@@ -790,6 +796,7 @@ export function createListenerOp(
     isAnimationListener: animationPhase !== null,
     animationPhase,
     eventTarget,
+    markForCheck,
     sourceSpan,
     ...NEW_OP,
   };

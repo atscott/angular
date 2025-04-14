@@ -38,6 +38,7 @@ export function ɵɵlistener(
   eventName: string,
   listenerFn: EventCallback,
   eventTargetResolver?: GlobalTargetResolver,
+  markForCheck = true,
 ): typeof ɵɵlistener {
   const lView = getLView<{} | null>();
   const tView = getTView();
@@ -49,6 +50,7 @@ export function ɵɵlistener(
     tNode,
     eventName,
     listenerFn,
+    markForCheck,
     eventTargetResolver,
   );
   return ɵɵlistener;
@@ -78,13 +80,14 @@ export function ɵɵlistener(
 export function ɵɵsyntheticHostListener(
   eventName: string,
   listenerFn: EventCallback,
+  markForCheck = true,
 ): typeof ɵɵsyntheticHostListener {
   const tNode = getCurrentTNode()!;
   const lView = getLView<{} | null>();
   const tView = getTView();
   const currentDef = getCurrentDirectiveDef(tView.data);
   const renderer = loadComponentRenderer(currentDef, tNode, lView);
-  listenerInternal(tView, lView, renderer, tNode, eventName, listenerFn);
+  listenerInternal(tView, lView, renderer, tNode, eventName, listenerFn, markForCheck);
   return ɵɵsyntheticHostListener;
 }
 
@@ -95,6 +98,7 @@ export function listenerInternal(
   tNode: TNode,
   eventName: string,
   listenerFn: EventCallback,
+  markForCheck: boolean,
   eventTargetResolver?: GlobalTargetResolver,
 ): void {
   ngDevMode && assertTNodeType(tNode, TNodeType.AnyRNode | TNodeType.AnyContainer);
@@ -107,7 +111,7 @@ export function listenerInternal(
   // - The event target has a resolver (usually resulting in a global object,
   //   such as `window` or `document`).
   if (tNode.type & TNodeType.AnyRNode || eventTargetResolver) {
-    wrappedListener ??= wrapListener(tNode, lView, listenerFn);
+    wrappedListener ??= wrapListener(tNode, lView, listenerFn, markForCheck);
     const hasCoalescedDomEvent = listenToDomEvent(
       tNode,
       tView,
@@ -133,14 +137,14 @@ export function listenerInternal(
       for (let i = 0; i < hostDirectiveOutputConfig.length; i += 2) {
         const index = hostDirectiveOutputConfig[i] as number;
         const lookupName = hostDirectiveOutputConfig[i + 1] as string;
-        wrappedListener ??= wrapListener(tNode, lView, listenerFn);
+        wrappedListener ??= wrapListener(tNode, lView, listenerFn, markForCheck);
         listenToOutput(tNode, lView, index, lookupName, eventName, wrappedListener);
       }
     }
 
     if (outputConfig && outputConfig.length) {
       for (const index of outputConfig) {
-        wrappedListener ??= wrapListener(tNode, lView, listenerFn);
+        wrappedListener ??= wrapListener(tNode, lView, listenerFn, markForCheck);
         listenToOutput(tNode, lView, index, eventName, eventName, wrappedListener);
       }
     }

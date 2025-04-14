@@ -660,9 +660,14 @@ export class BindingParser {
     return calcPossibleSecurityContexts(this._schemaRegistry, selector, prop, isAttribute);
   }
 
-  parseEventListenerName(rawName: string): {eventName: string; target: string | null} {
-    const [target, eventName] = splitAtColon(rawName, [null, rawName]);
-    return {eventName: eventName!, target};
+  parseEventListenerName(rawName: string): {
+    eventName: string;
+    target: string | null;
+    markForCheck: boolean;
+  } {
+    const [unchecked, eventAndTarget] = splitAtColon(rawName, [null, rawName]);
+    const [target, eventName] = splitAtColon(eventAndTarget!, [null, eventAndTarget]);
+    return {eventName: eventName!, target, markForCheck: unchecked?.toLowerCase() !== 'unchecked'};
   }
 
   parseAnimationEventName(rawName: string): {eventName: string; phase: string | null} {
@@ -684,6 +689,7 @@ export class BindingParser {
       new ParsedEvent(
         eventName,
         phase,
+        true,
         ParsedEventType.Animation,
         ast,
         sourceSpan,
@@ -720,8 +726,8 @@ export class BindingParser {
     targetEvents: ParsedEvent[],
     keySpan: ParseSourceSpan,
   ): void {
-    // long format: 'target: eventName'
-    const {eventName, target} = this.parseEventListenerName(name);
+    // long format: 'unchecked.target:eventName'
+    const {eventName, target, markForCheck} = this.parseEventListenerName(name);
     const prevErrorCount = this.errors.length;
     const ast = this._parseAction(expression, handlerSpan);
     const isValid = this.errors.length === prevErrorCount;
@@ -737,6 +743,7 @@ export class BindingParser {
       new ParsedEvent(
         eventName,
         target,
+        markForCheck,
         isAssignmentEvent ? ParsedEventType.TwoWay : ParsedEventType.Regular,
         ast,
         sourceSpan,

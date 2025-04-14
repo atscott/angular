@@ -59,6 +59,7 @@ export function wrapListener(
   tNode: TNode,
   lView: LView<{} | null>,
   listenerFn: EventCallback,
+  markForCheck: boolean,
 ): WrappedEventCallback {
   // Note: we are performing most of the work in the listener function itself
   // to optimize listener registration.
@@ -66,7 +67,9 @@ export function wrapListener(
     // In order to be backwards compatible with View Engine, events on component host nodes
     // must also mark the component view itself dirty (i.e. the view that it owns).
     const startView = isComponentHost(tNode) ? getComponentLViewByIndex(tNode.index, lView) : lView;
-    markViewDirty(startView, NotificationSource.Listener);
+    if (markForCheck) {
+      markViewDirty(startView, NotificationSource.Listener);
+    }
 
     const context = lView[CONTEXT];
     let result = executeListenerWithErrorHandling(lView, context, listenerFn, event);

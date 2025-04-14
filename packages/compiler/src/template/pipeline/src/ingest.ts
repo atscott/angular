@@ -200,6 +200,7 @@ export function ingestHostEvent(job: HostBindingCompilationJob, event: e.ParsedE
     target,
     true,
     event.sourceSpan,
+    event.markForCheck,
   );
   job.root.create.push(eventBinding);
 }
@@ -1371,6 +1372,7 @@ function ingestElementBindings(
           output.target,
           false,
           output.sourceSpan,
+          output.markForCheck,
         ),
       );
     }
@@ -1507,6 +1509,7 @@ function ingestTemplateBindings(
             output.target,
             false,
             output.sourceSpan,
+            output.markForCheck,
           ),
         );
       }

@@ -155,11 +155,15 @@ export function listener(
   eventTargetResolver: o.ExternalReference | null,
   syntheticHost: boolean,
   sourceSpan: ParseSourceSpan,
+  markForCheck: boolean,
 ): ir.CreateOp {
   const args = [o.literal(name), handlerFn];
-  if (eventTargetResolver !== null) {
-    args.push(o.importExpr(eventTargetResolver));
+  if (!syntheticHost) {
+    args.push(
+      eventTargetResolver !== null ? o.importExpr(eventTargetResolver) : o.literal(undefined),
+    );
   }
+  args.push(o.literal(markForCheck));
   return call(
     syntheticHost ? Identifiers.syntheticHostListener : Identifiers.listener,
     args,

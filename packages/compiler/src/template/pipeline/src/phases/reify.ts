@@ -210,6 +210,7 @@ function reifyCreateOperations(unit: CompilationUnit, ops: ir.OpList<ir.CreateOp
             eventTargetResolver,
             op.hostListener && op.isAnimationListener,
             op.sourceSpan,
+            op.markForCheck,
           ),
         );
         break;

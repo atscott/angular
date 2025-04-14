@@ -391,6 +391,7 @@ function createNodeFromListenerDecorator(
   let eventName: string;
   let phase: string | null;
   let target: string | null;
+  let markForCheck = true;
 
   if (eventNameNode.text.startsWith('@')) {
     const parsedName = parser.parseAnimationEventName(eventNameNode.text);
@@ -403,6 +404,7 @@ function createNodeFromListenerDecorator(
     type = ParsedEventType.Regular;
     eventName = parsedName.eventName;
     target = parsedName.target;
+    markForCheck = parsedName.markForCheck;
     phase = null;
   }
 
@@ -413,6 +415,7 @@ function createNodeFromListenerDecorator(
       callNode,
       target,
       phase,
+      markForCheck,
       createSourceSpan(decorator),
       createSourceSpan(decorator),
       createStaticExpressionSpan(eventNameNode),

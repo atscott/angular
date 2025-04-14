@@ -791,6 +791,7 @@ export class ParsedEvent {
   constructor(
     name: string,
     targetOrPhase: string | null,
+    markForCheck: boolean,
     type: ParsedEventType.TwoWay,
     handler: ASTWithSource<NonNullAssert | PropertyRead | KeyedRead>,
     sourceSpan: ParseSourceSpan,
@@ -801,6 +802,7 @@ export class ParsedEvent {
   constructor(
     name: string,
     targetOrPhase: string | null,
+    markForCheck: boolean,
     type: ParsedEventType,
     handler: ASTWithSource,
     sourceSpan: ParseSourceSpan,
@@ -811,6 +813,7 @@ export class ParsedEvent {
   constructor(
     public name: string,
     public targetOrPhase: string | null,
+    readonly markForCheck: boolean,
     public type: ParsedEventType,
     public handler: ASTWithSource,
     public sourceSpan: ParseSourceSpan,
