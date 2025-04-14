@@ -610,7 +610,10 @@ export class NavigationTransitions {
                 extras: {...extras, skipLocationChange: false, replaceUrl: false},
               };
               this.currentNavigation!.finalUrl = extractedUrl;
-              return of(overallTransitionState);
+              // TODO(atscott): This is a bit scary. what do we do with shouldProcessUrl: false in the navigation state manager?
+              // presumably another router is supposed to process it? So we should already have a NavigateEvent?
+              // Probably shouldn't do any rollbacks for it??
+              return of(overallTransitionState).pipe(waitFor(t.navigationStartHandled));
             } else {
               /* When neither the current or previous URL can be processed, do
                * nothing other than update router's internal reference to the
