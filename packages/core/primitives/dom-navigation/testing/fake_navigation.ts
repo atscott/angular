@@ -879,15 +879,9 @@ function dispatchNavigateEvent({
     if (result.signal.aborted) {
       return;
     }
+    (navigation.transition as InternalNavigationTransition | null)?.committedResolve();
     if (event.interceptionState !== 'none') {
       event.interceptionState = 'committed';
-      if (!navigation.currentEntry) {
-        throw new Error('from history entry should not be null');
-      }
-      navigation.transition = new InternalNavigationTransition(
-        navigation.currentEntry,
-        navigationType,
-      );
       switch (event.navigationType) {
         case 'push':
         case 'replace': {
@@ -923,9 +917,7 @@ function dispatchNavigateEvent({
         const navigatesuccessEvent = new Event('navigatesuccess', {bubbles: false, cancelable});
         navigation.eventTarget.dispatchEvent(navigatesuccessEvent);
         result.finishedResolve();
-        if (navigation.transition !== null) {
-          (navigation.transition as InternalNavigationTransition).finishedResolve();
-        }
+        (navigation.transition as InternalNavigationTransition | null)?.finishedResolve();
         navigation.transition = null;
       })
       .catch((reason) => event.cancel(reason));
@@ -942,21 +934,36 @@ function dispatchNavigateEvent({
       throw new Error("Navigation's ongoing event not equal to resolved event");
     }
     navigation.navigateEvent = null;
+    // TODO: this isn't in the spec (yet)
+    const shouldRejectCommittedPromise =
+      event.interceptionState === 'none' || event.interceptionState === 'intercepted';
     if (event.interceptionState !== 'intercepted') {
       finishNavigationEvent(event, false);
     }
+
     const navigateerrorEvent = new Event('navigateerror', {bubbles: false, cancelable});
     navigation.eventTarget.dispatchEvent(navigateerrorEvent);
     result.finishedReject(reason);
-    if (navigation.transition !== null) {
-      (navigation.transition as InternalNavigationTransition).finishedReject(reason);
+    if (shouldRejectCommittedPromise) {
+      (navigation.transition as InternalNavigationTransition | null)?.committedReject(reason);
     }
+    (navigation.transition as InternalNavigationTransition | null)?.finishedReject(reason);
     navigation.transition = null;
   };
 
   function dispatch() {
     navigation.navigateEvent = event;
     navigation.eventTarget.dispatchEvent(event);
+
+    if (event.interceptionState !== 'none') {
+      if (!navigation.currentEntry) {
+        throw new Error("Navigation's current entry should not be null.");
+      }
+      navigation.transition = new InternalNavigationTransition(
+        navigation.currentEntry,
+        navigationType,
+      );
+    }
 
     if (precommitHandlers.length === 0) {
       commit();
@@ -967,7 +974,14 @@ function dispatchNavigateEvent({
       );
       Promise.all(precommitPromisesList)
         .then(() => commit())
-        .catch((reason: Error) => event.cancel(reason));
+        .catch((reason: Error) => {
+          // TODO: doesn't match spec (yet)
+          if (result.signal.aborted) {
+            return;
+          }
+          (navigation.transition as InternalNavigationTransition | null)?.committedReject(reason);
+          event.cancel(reason);
+        });
     }
   }
 
@@ -1135,8 +1149,11 @@ function isHashChange(from: URL, to: URL): boolean {
 
 class InternalNavigationTransition implements NavigationTransition {
   readonly finished: Promise<void>;
+  readonly committed: Promise<void>;
   finishedResolve!: () => void;
   finishedReject!: (reason: Error) => void;
+  committedResolve!: () => void;
+  committedReject!: (reason: Error) => void;
   constructor(
     readonly from: NavigationHistoryEntry,
     readonly navigationType: NavigationTypeString,
@@ -1145,7 +1162,13 @@ class InternalNavigationTransition implements NavigationTransition {
       this.finishedReject = reject;
       this.finishedResolve = resolve;
     });
+    this.committed = new Promise<void>((resolve, reject) => {
+      this.committedReject = reject;
+      this.committedResolve = resolve;
+    });
+    // All rejections are handled.
     this.finished.catch(() => {});
+    this.committed.catch(() => {});
   }
 }
 

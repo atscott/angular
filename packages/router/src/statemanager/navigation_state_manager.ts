@@ -123,12 +123,20 @@ export class NavigationStateManager extends StateManager {
       this.commitTransition(transition);
     } else if (e instanceof BeforeRoutesRecognized) {
       if (this.urlUpdateStrategy === 'eager') {
-        await this.currentNavigation.commitUrl?.();
+        try {
+          await this.currentNavigation.commitUrl?.();
+        } catch {
+          return;
+        }
       }
       transition.routesRecognizeHandled.next(true);
     } else if (e instanceof BeforeActivateRoutes) {
       if (this.urlUpdateStrategy === 'deferred') {
-        await this.currentNavigation.commitUrl?.();
+        try {
+          await this.currentNavigation.commitUrl?.();
+        } catch {
+          return;
+        }
       }
       // TODO(atscott): Add test which covers the need for moving commitTransition to after the URL commit
       // There was a problem with a navigation being cancelled after the commit transition but before the
@@ -264,11 +272,6 @@ export class NavigationStateManager extends StateManager {
     this.currentNavigation.removeAbortListener = () =>
       event.signal.removeEventListener('abort', abortHandler);
 
-    let resolveCommitted: () => void;
-    // TODO(atscott): Change to Navigation.transition.committed (https://github.com/WICG/navigation-api/issues/285)
-    const committed = new Promise<void>((resolve) => {
-      resolveCommitted = resolve;
-    });
     const interceptOptions: NavigationInterceptOptions = {};
     if (
       // cannot defer commit if not cancelable
@@ -283,9 +286,9 @@ export class NavigationStateManager extends StateManager {
           event.signal.removeEventListener('abort', abortHandler);
           reject();
         };
-        commit = () => {
+        commit = async () => {
           resolve();
-          return committed;
+          await this.navigation.transition?.committed;
         };
       });
       // Prevent unhandled rejections if ZoneJS microtasks queue drain causes this to reject before its handled by Navigation
@@ -310,8 +313,7 @@ export class NavigationStateManager extends StateManager {
             // TODO(atscott): Should add correct state, not just update URL
             redirect(pathOrUrl);
           }
-          await commit();
-          return;
+          return await commit();
         }
 
         await commit();
@@ -336,7 +338,6 @@ export class NavigationStateManager extends StateManager {
       };
     });
     interceptOptions.handler = () => {
-      resolveCommitted();
       this.currentNavigation.rejectNavigateEvent = rejectPostCommitHandler;
       return postCommitHandler;
     };
@@ -362,10 +363,14 @@ export class NavigationStateManager extends StateManager {
   private commitRedirectedTraversal(redirectedPath: string, currentTransition: Navigation) {
     this.currentNavigation.resolvePostCommitHandler?.();
     this.currentNavigation.removeAbortListener?.();
-    return new Promise<void>((resolve) => {
+    return new Promise<void>((resolve, reject) => {
       onNextNavigateEventWithRouterInfo(this.navigation, async () => {
-        await this.currentNavigation.commitUrl?.();
-        resolve();
+        try {
+          await this.currentNavigation.commitUrl?.();
+          resolve();
+        } catch {
+          reject();
+        }
       });
       this.navigate(redirectedPath, {
         ...currentTransition,
