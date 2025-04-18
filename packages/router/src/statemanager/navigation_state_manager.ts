@@ -138,16 +138,6 @@ export class NavigationStateManager extends StateManager {
           return;
         }
       }
-      // TODO(atscott): Add test which covers the need for moving commitTransition to after the URL commit
-      // There was a problem with a navigation being cancelled after the commit transition but before the
-      // commit URL finished. And then the rollback is skipped as well.
-      // Also, while moving this to after the commit is probably the right move, it was likely only necessary
-      // for that failing test because there's something off with the internal state restoration on canceled
-      // navigations. It probably needs to be called in more situations. History would advance synchronously
-      // to the activation stage after synchronously setting the URL so there was no opportunity to cancel
-      // a navigation there. Now there is so that probably presents a problem where state needs to be reset.
-      // Also check what happens if navigation is cancelled while we are waiting for the commit. I think
-      // maybe the commitUrl rejects? But not sure.
       this.commitTransition(transition);
       transition.beforeActivateHandled.next(true);
     } else if (e instanceof NavigationCancel || e instanceof NavigationError) {
@@ -279,7 +269,7 @@ export class NavigationStateManager extends StateManager {
       // defering a traversal is broken at the moment
       event.navigationType !== 'traverse'
     ) {
-      let redirect: ((url: string) => void) | null = null;
+      let redirect: ((url: string, options: {state: unknown}) => void) | null = null;
       let commit: () => Promise<void>;
       const precommitHandlerPromise = new Promise<void>((resolve, reject) => {
         this.currentNavigation.rejectNavigateEvent = () => {
@@ -310,8 +300,11 @@ export class NavigationStateManager extends StateManager {
         const pathOrUrl = this.location.prepareExternalUrl(internalPath);
         if (event.navigationType !== 'traverse') {
           if (!transition.extras.skipLocationChange) {
-            // TODO(atscott): Should add correct state, not just update URL
-            redirect(pathOrUrl);
+            const state = {
+              ...transition.extras.state,
+              navigationId: transition.id,
+            };
+            redirect(pathOrUrl, {state});
           }
           return await commit();
         }

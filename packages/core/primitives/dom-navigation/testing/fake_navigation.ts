@@ -729,7 +729,7 @@ export interface ExperimentalNavigationInterceptOptions extends NavigationInterc
 }
 
 export interface NavigationPrecommitController {
-  redirect: (url: string) => void;
+  redirect: (url: string, options?: NavigationReloadOptions) => void;
 }
 
 export interface ExperimentalNavigateEvent extends NavigateEvent {
@@ -853,7 +853,7 @@ function dispatchNavigateEvent({
   };
 
   // https://whatpr.org/html/10919/nav-history-apis.html#dom-navigationprecommitcontroller-redirect
-  function redirect(url: string) {
+  function redirect(url: string, options: NavigationReloadOptions = {}) {
     if (event.interceptionState === 'none') {
       throw new Error('cannot redirect when event is not intercepted');
     }
@@ -869,8 +869,14 @@ function dispatchNavigateEvent({
         'InvalidStateError',
       );
     }
-    const toUrl = new URL(url, navigation.currentEntry.url!);
-    event.destination.url = toUrl.href;
+    const destinationUrl = new URL(url, navigation.currentEntry.url!);
+    if (options.hasOwnProperty('state')) {
+      event.destination.state = options.state;
+    }
+    event.destination.url = destinationUrl.href;
+    if (options.hasOwnProperty('info')) {
+      event.info = options.info;
+    }
   }
 
   // https://whatpr.org/html/10919/nav-history-apis.html#inner-navigate-event-firing-algorithm
@@ -1099,7 +1105,7 @@ export class FakeNavigationDestination implements NavigationDestination {
   readonly id: string | null;
   readonly index: number;
 
-  private readonly state?: unknown;
+  state?: unknown;
   private readonly historyState: unknown;
 
   constructor({
