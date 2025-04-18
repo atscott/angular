@@ -72,11 +72,6 @@ for (const browserAPI of ['navigation', 'history'] as const) {
       TestBed.configureTestingModule({
         imports: [TestModule],
         providers: [
-          // TODO(atscott): This should be automatic if `withDomNavigation` is used
-          // platform-browser should use FakeNavigationPlatformLocation for Location
-          // automatically. Probably provide some token from common that indicates
-          // platformNavigation is being used.
-          browserAPI === 'navigation' ? ɵprovideFakePlatformNavigation() : [],
           provideRouter(
             [
               {
@@ -424,8 +419,6 @@ for (const browserAPI of ['navigation', 'history'] as const) {
         advance(fixture);
         expect(location.path()).toEqual('/initial');
         expectPageIndex(3);
-
-        TestBed.inject(MyCanActivateGuard).redirectTo = null;
 
         router.navigateByUrl('redirectTo');
         advance(fixture);

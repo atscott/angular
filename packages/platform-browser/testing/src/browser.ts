@@ -5,8 +5,14 @@
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.dev/license
  */
-import {PlatformLocation} from '@angular/common';
-import {ɵprovideFakePlatformNavigation} from '@angular/common/testing';
+import {
+  PlatformLocation,
+  ɵUSE_PLATFORM_NAVIGATION as USE_PLATFORM_NAVIGATION,
+} from '@angular/common';
+import {
+  ɵprovideFakePlatformNavigation,
+  ɵFakeNavigationPlatformLocation as FakeNavigationPlatformLocation,
+} from '@angular/common/testing';
 import {MockPlatformLocation} from '@angular/common/testing';
 import {
   APP_ID,
@@ -16,6 +22,7 @@ import {
   ɵinternalProvideZoneChangeDetection as internalProvideZoneChangeDetection,
   ɵChangeDetectionScheduler as ChangeDetectionScheduler,
   ɵChangeDetectionSchedulerImpl as ChangeDetectionSchedulerImpl,
+  inject,
 } from '@angular/core';
 import {TestComponentRenderer} from '@angular/core/testing';
 import {BrowserModule, platformBrowser} from '../../index';
@@ -40,7 +47,15 @@ export const platformBrowserTesting = createPlatformFactory(platformBrowser, 'br
     internalProvideZoneChangeDetection({}),
     {provide: ChangeDetectionScheduler, useExisting: ChangeDetectionSchedulerImpl},
     ɵprovideFakePlatformNavigation(),
-    {provide: PlatformLocation, useClass: MockPlatformLocation},
+    {
+      provide: PlatformLocation,
+      useFactory: () => {
+        const usePlatfromNavigation = inject(USE_PLATFORM_NAVIGATION, {optional: true}) ?? false;
+        return usePlatfromNavigation
+          ? new FakeNavigationPlatformLocation()
+          : new MockPlatformLocation();
+      },
+    },
     {provide: TestComponentRenderer, useClass: DOMTestComponentRenderer},
   ],
 })

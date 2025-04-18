@@ -8,6 +8,7 @@
 
 import {
   Injectable,
+  InjectionToken,
   ɵNavigateEvent as NavigateEvent,
   ɵNavigation as Navigation,
   ɵNavigationCurrentEntryChangeEvent as NavigationCurrentEntryChangeEvent,
@@ -19,6 +20,11 @@ import {
   ɵNavigationTransition as NavigationTransition,
   ɵNavigationUpdateCurrentEntryOptions as NavigationUpdateCurrentEntryOptions,
 } from '@angular/core';
+
+// TODO(atscott): This token is not necessary if we change MockPlatformLocation to be MockNavigationPlatformLocation
+export const USE_PLATFORM_NAVIGATION = new InjectionToken<boolean>(
+  typeof ngDevMode === 'undefined' || ngDevMode ? 'use platform navigation' : '',
+);
 
 /**
  * This class wraps the platform Navigation API which allows server-specific and test

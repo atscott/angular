@@ -13,6 +13,7 @@ import {
   ViewportScroller,
   Location,
   ɵNavigationAdapterForLocation,
+  ɵUSE_PLATFORM_NAVIGATION as USE_PLATFORM_NAVIGATION,
 } from '@angular/common';
 import {
   APP_BOOTSTRAP_LISTENER,
@@ -30,6 +31,7 @@ import {
   runInInjectionContext,
   Type,
   ɵperformanceMarkFeature as performanceMarkFeature,
+  provideEnvironmentInitializer,
 } from '@angular/core';
 import {of, Subject} from 'rxjs';
 
@@ -231,6 +233,19 @@ export function withDomNavigation() {
   const providers = [
     {provide: StateManager, useExisting: NavigationStateManager},
     {provide: Location, useClass: ɵNavigationAdapterForLocation},
+    typeof ngDevMode === 'undefined' || ngDevMode
+      ? [
+          {provide: USE_PLATFORM_NAVIGATION, useValue: true},
+          provideEnvironmentInitializer(() => {
+            if (!(inject(Location) instanceof ɵNavigationAdapterForLocation)) {
+              // TODO(atscott): add specific checks for SpyLocation and mention not to use RouterTestingModule or provideLocationMocks
+              throw new Error(
+                'Using PlatformNavigation for app navigations but Location does not use Navigation APIs',
+              );
+            }
+          }),
+        ]
+      : [],
   ];
   return routerFeature(RouterFeatureKind.InMemoryScrollingFeature, providers);
 }

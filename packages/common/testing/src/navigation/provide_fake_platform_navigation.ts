@@ -8,10 +8,18 @@
 
 import {
   DOCUMENT,
+  Location,
   PlatformLocation,
   ɵPlatformNavigation as PlatformNavigation,
+  ɵNavigationAdapterForLocation as NavigationAdapterForLocation,
+  ɵUSE_PLATFORM_NAVIGATION as USE_PLATFORM_NAVIGATION,
 } from '../../../index';
-import {inject, Provider} from '@angular/core';
+import {
+  EnvironmentProviders,
+  inject,
+  makeEnvironmentProviders,
+  provideEnvironmentInitializer,
+} from '@angular/core';
 
 import {
   FakeNavigationPlatformLocation,
@@ -23,8 +31,8 @@ import {FakeNavigation} from './fake_navigation';
 /**
  * Return a provider for the `FakeNavigation` in place of the real Navigation API.
  */
-export function provideFakePlatformNavigation(): Provider[] {
-  return [
+export function provideFakePlatformNavigation(): EnvironmentProviders {
+  return makeEnvironmentProviders([
     {
       provide: PlatformNavigation,
       useFactory: () => {
@@ -36,5 +44,16 @@ export function provideFakePlatformNavigation(): Provider[] {
       },
     },
     {provide: PlatformLocation, useClass: FakeNavigationPlatformLocation},
-  ];
+    provideEnvironmentInitializer(() => {
+      // One might use FakeNavigationPlatformLocation without wanting to use Navigation APIs everywhere
+      if (!inject(USE_PLATFORM_NAVIGATION, {optional: true})) {
+        return;
+      }
+      if (!(inject(PlatformLocation) instanceof FakeNavigationPlatformLocation)) {
+        throw new Error(
+          'FakePlatformNavigation was provided but PlatformLocation may not get its information from PlatformNavigation',
+        );
+      }
+    }),
+  ]);
 }

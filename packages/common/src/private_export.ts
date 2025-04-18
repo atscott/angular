@@ -11,5 +11,8 @@ export {
   getDOM as ɵgetDOM,
   setRootDomAdapter as ɵsetRootDomAdapter,
 } from './dom_adapter';
-export {PlatformNavigation as ɵPlatformNavigation} from './navigation/platform_navigation';
+export {
+  PlatformNavigation as ɵPlatformNavigation,
+  USE_PLATFORM_NAVIGATION as ɵUSE_PLATFORM_NAVIGATION,
+} from './navigation/platform_navigation';
 export {NavigationAdapterForLocation as ɵNavigationAdapterForLocation} from './location/location';
