@@ -8,11 +8,13 @@
 
 import {Location} from '@angular/common';
 import {ɵprovideFakePlatformNavigation} from '@angular/common/testing';
+import {ɵPlatformNavigation as PlatformNavigation} from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
   NgModule,
   ɵConsole as Console,
+  makeEnvironmentProviders,
   signal,
 } from '@angular/core';
 import {TestBed} from '@angular/core/testing';
@@ -35,7 +37,7 @@ import {
   RoutesRecognized,
 } from '../../index';
 
-import {provideRouter} from '../../src/provide_router';
+import {provideRouter, withDomNavigation} from '../../src/provide_router';
 import {
   BlankCmp,
   CollectParamsCmp,
@@ -81,8 +83,12 @@ for (const browserAPI of ['navigation', 'history'] as const) {
         imports: [...ROUTER_DIRECTIVES, TestModule],
         providers: [
           {provide: Console, useValue: noopConsole},
-          provideRouter([{path: 'simple', component: SimpleCmp}]),
-          browserAPI === 'navigation' ? ɵprovideFakePlatformNavigation() : [],
+          provideRouter(
+            [{path: 'simple', component: SimpleCmp}],
+            browserAPI === 'navigation'
+              ? withDomNavigation()
+              : (makeEnvironmentProviders([]) as any),
+          ),
         ],
       });
     });

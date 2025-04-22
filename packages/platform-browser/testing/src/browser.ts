@@ -5,7 +5,14 @@
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.dev/license
  */
-import {PlatformLocation} from '@angular/common';
+import {
+  PlatformLocation,
+  ɵUSE_PLATFORM_NAVIGATION as USE_PLATFORM_NAVIGATION,
+} from '@angular/common';
+import {
+  ɵprovideFakePlatformNavigation,
+  ɵFakeNavigationPlatformLocation as FakeNavigationPlatformLocation,
+} from '@angular/common/testing';
 import {MockPlatformLocation} from '@angular/common/testing';
 import {
   APP_ID,
@@ -15,7 +22,9 @@ import {
   ɵinternalProvideZoneChangeDetection as internalProvideZoneChangeDetection,
   ɵChangeDetectionScheduler as ChangeDetectionScheduler,
   ɵChangeDetectionSchedulerImpl as ChangeDetectionSchedulerImpl,
+  inject,
   PlatformRef,
+  provideEnvironmentInitializer,
 } from '@angular/core';
 import {TestComponentRenderer} from '@angular/core/testing';
 import {BrowserModule, platformBrowser} from '../../index';
@@ -40,7 +49,27 @@ export const platformBrowserTesting: (extraProviders?: StaticProvider[]) => Plat
     {provide: APP_ID, useValue: 'a'},
     internalProvideZoneChangeDetection({}),
     {provide: ChangeDetectionScheduler, useExisting: ChangeDetectionSchedulerImpl},
-    {provide: PlatformLocation, useClass: MockPlatformLocation},
+    ɵprovideFakePlatformNavigation(),
+    {
+      provide: PlatformLocation,
+      useFactory: () => {
+        return inject(USE_PLATFORM_NAVIGATION)
+          ? new FakeNavigationPlatformLocation()
+          : new MockPlatformLocation();
+      },
+    },
+    provideEnvironmentInitializer(() => {
+      if (!inject(USE_PLATFORM_NAVIGATION)) {
+        return;
+      }
+      const instance = inject(PlatformLocation);
+      if (!(instance instanceof FakeNavigationPlatformLocation)) {
+        throw new Error(
+          `PlatformLocation was expected to be an instance that gets its information from 'PlatformNavigation' ` +
+            `but got an instance of ${(instance as any).constructor.name} instead.`,
+        );
+      }
+    }),
     {provide: TestComponentRenderer, useClass: DOMTestComponentRenderer},
   ],
 })

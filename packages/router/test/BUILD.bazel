@@ -16,6 +16,7 @@ ts_project(
     visibility = ["//:__pkg__"],
     deps = [
         "//:node_modules/rxjs",
+        "//:node_modules/@types/dom-navigation",
         "//packages/core:core_rjs",
         "//packages/core/rxjs-interop:rxjs-interop_rjs",
         "//packages/core/testing:testing_rjs",
