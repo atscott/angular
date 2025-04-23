@@ -257,82 +257,91 @@ export class NavigationStateManager extends StateManager {
     this.currentNavigation.navigateEvent = event;
     const abortHandler = () => {
       this.currentNavigation.routerTransition?.abort();
+      rejectCommitted();
     };
+    const [committedPromise, resolveCommitted, rejectCommitted] = promiseWithResolvers();
+    let committed = false;
+    committedPromise.then(() => (committed = true)).catch(() => {});
+    const [precommitHandlerPromise, resolvePrecommitHandler, rejectPrecommitHandler] =
+      promiseWithResolvers();
+    const commit = async () => {
+      resolvePrecommitHandler();
+      await committedPromise;
+    };
+    // Prevent unhandled rejections if ZoneJS microtasks queue drain causes this to reject before its handled by Navigation
+    precommitHandlerPromise.catch(() => {});
     event.signal.addEventListener('abort', abortHandler);
     this.currentNavigation.removeAbortListener = () =>
       event.signal.removeEventListener('abort', abortHandler);
 
     const interceptOptions: NavigationInterceptOptions = {};
+    let redirect: ((url: string, options: {state: unknown}) => void) | null = null;
     if (
       // cannot defer commit if not cancelable
       event.cancelable &&
       // defering a traversal is broken at the moment
       event.navigationType !== 'traverse'
     ) {
-      let redirect: ((url: string, options: {state: unknown}) => void) | null = null;
-      let commit: () => Promise<void>;
-      const precommitHandlerPromise = new Promise<void>((resolve, reject) => {
-        this.currentNavigation.rejectNavigateEvent = () => {
-          event.signal.removeEventListener('abort', abortHandler);
-          reject();
-        };
-        commit = async () => {
-          resolve();
-          await this.navigation.transition?.committed;
-        };
-      });
-      // Prevent unhandled rejections if ZoneJS microtasks queue drain causes this to reject before its handled by Navigation
-      precommitHandlerPromise.catch(() => {});
       // cast to any because deferred commit isn't yet in the spec
       (interceptOptions as any).precommitHandler = (controller: any) => {
-        redirect = controller.redirect;
+        if (event.navigationType !== 'traverse') {
+          redirect = controller.redirect;
+        }
         return precommitHandlerPromise;
       };
-      this.currentNavigation.commitUrl = async () => {
-        this.currentNavigation.commitUrl = undefined;
-
-        const transition = this.currentNavigation.routerTransition;
-        if (transition === undefined || redirect === null) {
-          return await commit();
-        }
-        const internalPath = this.createBrowserPath(transition);
-        // this might be a path or an actual URL depending on the baseHref
-        const pathOrUrl = this.location.prepareExternalUrl(internalPath);
-        if (event.navigationType !== 'traverse') {
-          if (!transition.extras.skipLocationChange) {
-            const state = {
-              ...transition.extras.state,
-              navigationId: transition.id,
-            };
-            redirect(pathOrUrl, {state});
-          }
-          return await commit();
-        }
-
-        await commit();
-        const eventDestination = new URL(event.destination.url);
-        if (new URL(pathOrUrl, eventDestination.origin).href === eventDestination.href) {
-          return;
-        }
-
-        await this.commitRedirectedTraversal(internalPath, transition);
+      this.currentNavigation.rejectNavigateEvent = () => {
+        event.signal.removeEventListener('abort', abortHandler);
+        rejectPrecommitHandler();
+        rejectCommitted();
       };
     }
+    this.currentNavigation.commitUrl = async () => {
+      this.currentNavigation.commitUrl = undefined;
 
-    let rejectPostCommitHandler: () => void;
-    const postCommitHandler = new Promise<void>((resolve, reject) => {
-      rejectPostCommitHandler = () => {
-        event.signal.removeEventListener('abort', abortHandler);
-        reject();
-      };
-      this.currentNavigation.resolvePostCommitHandler = () => {
-        event.signal.removeEventListener('abort', abortHandler);
-        resolve();
-      };
-    });
+      const transition = this.currentNavigation.routerTransition;
+      if (transition === undefined) {
+        // we might not have a transition if navigation is triggered outside the Router and we have not yet registered the listener
+        // so navigate events don't get converted to router transitions
+        return await commit();
+      }
+      const internalPath = this.createBrowserPath(transition);
+      // this might be a path or an actual URL depending on the baseHref
+      const pathOrUrl = this.location.prepareExternalUrl(internalPath);
+      if (committed || event.navigationType === 'traverse' || redirect === null) {
+        await commit();
+        const eventDestination = new URL(event.destination.url);
+        if (
+          !transition.extras.skipLocationChange &&
+          new URL(pathOrUrl, eventDestination.origin).href !== eventDestination.href
+        ) {
+          await this.redirectNavigationWithAlreadyCommittedUrl(internalPath, transition);
+        }
+        return;
+      }
+
+      if (!transition.extras.skipLocationChange) {
+        const state = {
+          ...transition.extras.state,
+          navigationId: transition.id,
+        };
+        redirect(pathOrUrl, {state});
+      }
+      return await commit();
+    };
+
+    const [postCommitHandlerPromise, resolvePostCommitHandler, rejectPostCommitHandler] =
+      promiseWithResolvers();
+    this.currentNavigation.resolvePostCommitHandler = () => {
+      event.signal.removeEventListener('abort', abortHandler);
+      resolvePostCommitHandler();
+    };
     interceptOptions.handler = () => {
-      this.currentNavigation.rejectNavigateEvent = rejectPostCommitHandler;
-      return postCommitHandler;
+      resolveCommitted();
+      this.currentNavigation.rejectNavigateEvent = () => {
+        event.signal.removeEventListener('abort', abortHandler);
+        rejectPostCommitHandler();
+      };
+      return postCommitHandlerPromise;
     };
 
     event.intercept(interceptOptions);
@@ -353,7 +362,10 @@ export class NavigationStateManager extends StateManager {
    * presumably it could happen if an auth cookie times out and your
    * traversal to a page requiring auth is then redirected
    */
-  private commitRedirectedTraversal(redirectedPath: string, currentTransition: Navigation) {
+  private redirectNavigationWithAlreadyCommittedUrl(
+    redirectedPath: string,
+    currentTransition: Navigation,
+  ) {
     this.currentNavigation.resolvePostCommitHandler?.();
     this.currentNavigation.removeAbortListener?.();
     return new Promise<void>((resolve, reject) => {
@@ -383,6 +395,20 @@ export class NavigationStateManager extends StateManager {
     const state = event.destination.getState() as RestoredState | null | undefined;
     this.nonRouterCurrentEntryChangeSubject.next({path, state});
   }
+}
+
+function promiseWithResolvers<T = void>(): [
+  promise: Promise<T>,
+  resolve: (v: T) => void,
+  reject: () => void,
+] {
+  let resolve: (v: T) => void;
+  let reject: () => void;
+  const promise = new Promise<T>((r, rej) => {
+    resolve = r;
+    reject = rej;
+  });
+  return [promise, resolve!, reject!] as const;
 }
 
 function handleResultRejections(result: NavigationResult): NavigationResult {
