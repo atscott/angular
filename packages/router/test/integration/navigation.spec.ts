@@ -302,6 +302,7 @@ export function navigationIntegrationTestSuite(browserAPI: 'history' | 'navigati
         // Manually set state rather than using navigate()
         state = {bar: 'foo'};
         location.replaceState(location.path(), '', state);
+        tick();
         location.back();
         tick();
         location.forward();

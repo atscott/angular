@@ -37,10 +37,12 @@ export function provideFakePlatformNavigation(): EnvironmentProviders {
       provide: PlatformNavigation,
       useFactory: () => {
         const config = inject(MOCK_PLATFORM_LOCATION_CONFIG, {optional: true});
-        return new FakeNavigation(
+        const nav = new FakeNavigation(
           inject(DOCUMENT).defaultView!,
           (config?.startUrl as `http${string}`) ?? 'http://_empty_/',
         );
+        nav.setSynchronousTraversalsForTesting(true);
+        return nav;
       },
     },
     {provide: PlatformLocation, useClass: FakeNavigationPlatformLocation},
