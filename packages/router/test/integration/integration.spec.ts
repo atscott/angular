@@ -96,6 +96,14 @@ for (const browserAPI of ['navigation', 'history'] as const) {
           browserAPI === 'navigation' ? ɵprovideFakePlatformNavigation() : [],
         ],
       });
+
+      jasmine.clock().uninstall();
+      jasmine.clock().install();
+      (jasmine.clock() as any).autoTick();
+    });
+
+    afterEach(() => {
+      jasmine.clock().uninstall();
     });
 
     it('should navigate with a provided config', fakeAsync(
