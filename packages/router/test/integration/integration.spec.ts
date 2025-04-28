@@ -42,6 +42,7 @@ import {RouterTestingHarness} from '../../testing';
 import {RedirectCommand} from '../../src/models';
 import {
   provideRouter,
+  withDebugTracing,
   withNavigationErrorHandler,
   withRouterConfig,
 } from '../../src/provide_router';
@@ -82,6 +83,8 @@ import {navigationIntegrationTestSuite} from './navigation.spec';
 import {eagerUrlUpdateStrategyIntegrationSuite} from './eager_url_update_strategy.spec';
 import {duplicateInFlightNavigationsIntegrationSuite} from './duplicate_in_flight_navigations.spec';
 import {navigationErrorsIntegrationSuite} from './navigation_errors.spec';
+
+jasmine.DEFAULT_TIMEOUT_INTERVAL = 500;
 
 for (const browserAPI of ['navigation', 'history'] as const) {
   describe(`${browserAPI}-based routing`, () => {

@@ -374,6 +374,25 @@ export function createRoot<T>(router: Router, type: Type<T>): ComponentFixture<T
   return f;
 }
 
+export async function advanceAsync(
+  fixture: ComponentFixture<unknown>,
+  millis: number = 1,
+): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, millis));
+  fixture.detectChanges();
+}
+
+export async function createRootAsync<T>(
+  router: Router,
+  type: Type<T>,
+): Promise<ComponentFixture<T>> {
+  const f = TestBed.createComponent<T>(type);
+  await advanceAsync(f);
+  router.initialNavigation();
+  await advanceAsync(f);
+  return f;
+}
+
 @Component({
   selector: 'lazy',
   template: 'lazy-loaded',
