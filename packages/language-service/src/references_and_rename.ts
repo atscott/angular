@@ -11,6 +11,7 @@ import {absoluteFrom} from '@angular/compiler-cli/src/ngtsc/file_system';
 import {MetaKind, PipeMeta} from '@angular/compiler-cli/src/ngtsc/metadata';
 import {PerfPhase} from '@angular/compiler-cli/src/ngtsc/perf';
 import {
+  OptimizeFor,
   SelectorlessComponentSymbol,
   SelectorlessDirectiveSymbol,
   SymbolKind,
@@ -21,6 +22,7 @@ import ts from 'typescript';
 import {
   convertToTemplateDocumentSpan,
   FilePosition,
+  generateTypeCheckBlocks,
   getParentClassMeta,
   getRenameTextAndSpanAtPosition,
   getSelectorlessTemplateSpanFromTcbLocations,
@@ -40,8 +42,12 @@ export class ReferencesBuilder {
     this.ttc = this.compiler.getTemplateTypeChecker();
   }
 
-  getReferencesAtPosition(filePath: string, position: number): ts.ReferenceEntry[] | undefined {
-    this.ttc.generateAllTypeCheckBlocks();
+  getReferencesAtPosition(
+    filePath: string,
+    position: number,
+    optimizeFor: OptimizeFor,
+  ): ts.ReferenceEntry[] | undefined {
+    generateTypeCheckBlocks(filePath, this.compiler, optimizeFor);
     const typeCheckInfo = getTypeCheckInfoAtPosition(filePath, position, this.compiler);
     if (typeCheckInfo === undefined) {
       return this.getReferencesAtTypescriptPosition(filePath, position);
@@ -268,21 +274,23 @@ export class RenameBuilder {
     });
   }
 
-  findRenameLocations(filePath: string, position: number): readonly ts.RenameLocation[] | null {
-    this.ttc.generateAllTypeCheckBlocks();
-    return this.compiler.perfRecorder.inPhase(PerfPhase.LsReferencesAndRenames, () => {
-      const typeCheckInfo = getTypeCheckInfoAtPosition(filePath, position, this.compiler);
-      // We could not get a template at position so we assume the request came from outside the
-      // template.
-      if (typeCheckInfo === undefined) {
-        const renameRequest = this.buildRenameRequestAtTypescriptPosition(filePath, position);
-        if (renameRequest === null) {
-          return null;
-        }
-        return this.findRenameLocationsAtTypescriptPosition(renameRequest);
+  findRenameLocations(
+    filePath: string,
+    position: number,
+    optimizeFor: OptimizeFor,
+  ): readonly ts.RenameLocation[] | null {
+    generateTypeCheckBlocks(filePath, this.compiler, optimizeFor);
+    const typeCheckInfo = getTypeCheckInfoAtPosition(filePath, position, this.compiler);
+    // We could not get a template at position so we assume the request came from outside the
+    // template.
+    if (typeCheckInfo === undefined) {
+      const renameRequest = this.buildRenameRequestAtTypescriptPosition(filePath, position);
+      if (renameRequest === null) {
+        return null;
       }
-      return this.findRenameLocationsAtTemplatePosition(typeCheckInfo, position);
-    });
+      return this.findRenameLocationsAtTypescriptPosition(renameRequest);
+    }
+    return this.findRenameLocationsAtTemplatePosition(typeCheckInfo, position);
   }
 
   private findRenameLocationsAtTemplatePosition(

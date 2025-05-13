@@ -2550,6 +2550,69 @@ describe('find references and rename locations', () => {
     });
   });
 
+  describe('local optimization mode', () => {
+    let project: Project;
+    let file: OpenBuffer;
+
+    beforeEach(() => {
+      const files = {
+        'app.ts': `import {Component} from '@angular/core';
+
+          @Component({
+            selector: 'app',
+            template: '{{myProp}}',
+          })
+          export class AppCmp {
+            myProp!: string;
+          }`,
+        'other-cmp.ts': `import {Component} from '@angular/core';
+          import {AppCmp} from './app';
+
+          @Component({
+            template: '{{app.myProp}}',
+          })
+          export class OtherCmp {
+            constructor(readonly app: AppCmp) {}
+          }
+        `,
+      };
+      env = LanguageServiceTestEnv.setup();
+      project = env.addProject('test', files, {}, {}, {referencesAndRenameMode: 'local'});
+      file = project.openFile('app.ts');
+      file.moveCursorToText('{{myP¦rop');
+    });
+
+    it('should not include references from other templates when not already compiled', () => {
+      const result = file.getReferencesAtPosition();
+      const refs = result?.map((item) => humanizeDocumentSpanLike(item, env));
+      expect(refs?.length).toBe(2);
+    });
+
+    it('should include references from if used in TypeScript source', () => {
+      project.openFile('other-cmp.ts').contents = `import {Component} from '@angular/core';
+          import {AppCmp} from './app';
+
+          @Component({template: '{{app.myProp}}'})
+          export class OtherCmp {
+            constructor(readonly app: AppCmp) {
+              const x = app.myProp;
+            }
+          }
+        `;
+      const result = file.getReferencesAtPosition();
+      const refs = result?.map((item) => humanizeDocumentSpanLike(item, env));
+      // 2 references in app component, 1 in OtherCmp constructor, and omits the OtherCmp template.
+      expect(refs?.length).toBe(3);
+    });
+
+    it('includes references from other templates if they are compiled already', () => {
+      project.expectNoTemplateDiagnostics('other-cmp.ts', 'OtherCmp');
+      const result = file.getReferencesAtPosition();
+      const refs = result?.map((item) => humanizeDocumentSpanLike(item, env));
+      expect(refs?.length).toBe(3);
+    });
+  });
+
   function getReferencesAtPosition(file: OpenBuffer) {
     env.expectNoSourceDiagnostics();
     const result = file.getReferencesAtPosition();

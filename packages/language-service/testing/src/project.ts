@@ -22,7 +22,7 @@ import {OptimizeFor, TemplateTypeChecker} from '@angular/compiler-cli/src/ngtsc/
 import ts from 'typescript';
 
 import {LanguageService} from '../../src/language_service';
-import {ApplyRefactoringProgressFn, ApplyRefactoringResult} from '../../api';
+import {ApplyRefactoringProgressFn, ApplyRefactoringResult, PluginConfig} from '../../api';
 
 import {OpenBuffer} from './buffer';
 import {patchLanguageServiceProjectsWithTestHost} from './language_service_test_cache';
@@ -80,8 +80,9 @@ export class Project {
     projectName: string,
     projectService: ts.server.ProjectService,
     files: ProjectFiles,
-    angularCompilerOptions: TestableOptions = {},
-    tsCompilerOptions = {},
+    angularCompilerOptions: TestableOptions,
+    tsCompilerOptions: {},
+    config: Omit<PluginConfig, 'angularOnly'>,
   ): Project {
     const fs = getFileSystem();
     const tsConfigPath = absoluteFrom(`/${projectName}/tsconfig.json`);
@@ -107,13 +108,14 @@ export class Project {
     projectService.openClientFile(entryFiles[0]);
     projectService.closeClientFile(entryFiles[0]);
 
-    return new Project(projectName, projectService, tsConfigPath);
+    return new Project(projectName, projectService, tsConfigPath, config);
   }
 
   private constructor(
     readonly name: string,
     private projectService: ts.server.ProjectService,
     private tsConfigPath: AbsoluteFsPath,
+    config: Omit<PluginConfig, 'angularOnly'>,
   ) {
     // LS for project
     const tsProject = projectService.findProject(tsConfigPath);
@@ -125,7 +127,7 @@ export class Project {
 
     // The following operation forces a ts.Program to be created.
     this.tsLS = tsProject.getLanguageService();
-    this.ngLS = new LanguageService(tsProject, this.tsLS, {});
+    this.ngLS = new LanguageService(tsProject, this.tsLS, config);
   }
 
   openFile(projectFileName: string): OpenBuffer {

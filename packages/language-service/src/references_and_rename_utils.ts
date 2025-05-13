@@ -28,6 +28,7 @@ import {absoluteFrom} from '@angular/compiler-cli/src/ngtsc/file_system';
 import {DirectiveMeta, PipeMeta} from '@angular/compiler-cli/src/ngtsc/metadata';
 import {
   DirectiveSymbol,
+  OptimizeFor,
   SelectorlessComponentSymbol,
   SelectorlessDirectiveSymbol,
   Symbol,
@@ -50,6 +51,7 @@ import {
   isWithin,
   TypeCheckInfo,
   toTextSpan,
+  isTypeScriptFile,
 } from './utils';
 
 /** Represents a location in a file. */
@@ -479,4 +481,28 @@ export function getSelectorlessTemplateSpanFromTcbLocations(
   }
 
   return spans;
+}
+
+export function generateTypeCheckBlocks(
+  filePath: string,
+  compiler: NgCompiler,
+  optimizeFor: OptimizeFor,
+) {
+  const ttc = compiler.getTemplateTypeChecker();
+  if (optimizeFor === OptimizeFor.WholeProgram) {
+    ttc.generateAllTypeCheckBlocks();
+  } else if (isTypeScriptFile(filePath)) {
+    const program = compiler.getCurrentProgram();
+    const sourceFile = program.getSourceFile(filePath);
+    if (sourceFile) {
+      ttc.generateTypeCheckBlocksForFile(sourceFile);
+    }
+  } else {
+    const files = Array.from(compiler.getComponentsWithTemplateFile(filePath))
+      .filter((c) => ts.isClassDeclaration(c))
+      .map((c) => c.getSourceFile());
+    for (const sf of files) {
+      ttc.generateTypeCheckBlocksForFile(sf);
+    }
+  }
 }

@@ -224,6 +224,9 @@ export class LanguageService {
       const results = new ReferencesBuilder(this.tsLS, compiler).getReferencesAtPosition(
         fileName,
         position,
+        this.config.referencesAndRenameMode === 'local'
+          ? OptimizeFor.SingleFile
+          : OptimizeFor.WholeProgram,
       );
       return results === undefined ? undefined : getUniqueLocations(results);
     });
@@ -256,6 +259,9 @@ export class LanguageService {
       const results = new RenameBuilder(this.tsLS, compiler).findRenameLocations(
         fileName,
         position,
+        this.config.referencesAndRenameMode === 'local'
+          ? OptimizeFor.SingleFile
+          : OptimizeFor.WholeProgram,
       );
       return results === null ? undefined : getUniqueLocations(results);
     });

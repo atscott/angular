@@ -301,6 +301,10 @@ export class TemplateTypeCheckerImpl implements TemplateTypeChecker {
     this.ensureAllShimsForAllFiles();
   }
 
+  generateTypeCheckBlocksForFile(sf: ts.SourceFile) {
+    this.ensureAllShimsForOneFile(sf);
+  }
+
   /**
    * Retrieve type-checking and template parse diagnostics from the given `ts.SourceFile` using the
    * most recent type-checking program.

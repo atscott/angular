@@ -51,6 +51,11 @@ export interface PluginConfig {
    * A list of diagnostic codes that should be supressed in the language service.
    */
   suppressAngularDiagnosticCodes?: number[];
+
+  /**
+   *
+   */
+  referencesAndRenameMode?: 'local' | 'global';
 }
 
 export type GetTcbResponse = {

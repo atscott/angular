@@ -13,6 +13,7 @@ import ts from 'typescript';
 
 import {MockServerHost} from './host';
 import {Project, ProjectFiles, TestableOptions} from './project';
+import {PluginConfig} from '../../api';
 
 /**
  * Testing environment for the Angular Language Service, which creates an in-memory tsserver
@@ -58,6 +59,7 @@ export class LanguageServiceTestEnv {
     files: ProjectFiles,
     angularCompilerOptions: TestableOptions = {},
     tsCompilerOptions = {},
+    pluginConfig: Omit<PluginConfig, 'angularOnly'> = {},
   ): Project {
     if (this.projects.has(name)) {
       throw new Error(`Project ${name} is already defined`);
@@ -69,6 +71,7 @@ export class LanguageServiceTestEnv {
       files,
       angularCompilerOptions,
       tsCompilerOptions,
+      pluginConfig,
     );
     this.projects.set(name, project);
     return project;
