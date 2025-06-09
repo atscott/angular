@@ -142,7 +142,7 @@ export class RouterPreloader implements OnDestroy {
     return this.preloadingStrategy.preload(route, () => {
       let loadedChildren$: Observable<LoadedRouterConfig | null>;
       if (route.loadChildren && route.canLoad === undefined) {
-        loadedChildren$ = this.loader.loadChildren(injector, route);
+        loadedChildren$ = from(this.loader.loadChildren(injector, route));
       } else {
         loadedChildren$ = of(null);
       }
@@ -160,8 +160,8 @@ export class RouterPreloader implements OnDestroy {
         }),
       );
       if (route.loadComponent && !route._loadedComponent) {
-        const loadComponent$ = this.loader.loadComponent(route);
-        return from([recursiveLoadChildren$, loadComponent$]).pipe(mergeAll());
+        const loadComponentObs$ = from(this.loader.loadComponent(route));
+        return from([recursiveLoadChildren$, loadComponentObs$]).pipe(mergeAll());
       } else {
         return recursiveLoadChildren$;
       }

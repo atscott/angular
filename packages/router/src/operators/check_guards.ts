@@ -16,6 +16,8 @@ import {
   of,
   OperatorFunction,
   pipe,
+  isObservable,
+  firstValueFrom,
 } from 'rxjs';
 import {concatMap, first, map, mergeMap, tap} from 'rxjs/operators';
 
@@ -239,55 +241,82 @@ function runCanDeactivate(
   return of(canDeactivateObservables).pipe(prioritizedGuardValue());
 }
 
-export function runCanLoadGuards(
+export async function runCanLoadGuards(
   injector: EnvironmentInjector,
   route: Route,
   segments: UrlSegment[],
   urlSerializer: UrlSerializer,
-): Observable<boolean> {
+): Promise<boolean> {
   const canLoad = route.canLoad;
   if (canLoad === undefined || canLoad.length === 0) {
-    return of(true);
+    return true;
   }
 
-  const canLoadObservables = canLoad.map((injectionToken: any) => {
+  const guardPromises = canLoad.map((injectionToken: any) => {
     const guard = getTokenOrFunctionIdentity<any>(injectionToken, injector);
     const guardVal = isCanLoad(guard)
       ? guard.canLoad(route, segments)
       : runInInjectionContext(injector, () => (guard as CanLoadFn)(route, segments));
-    return wrapIntoObservable(guardVal);
+    return convertToPromise(guardVal);
   });
 
-  return of(canLoadObservables).pipe(prioritizedGuardValue(), redirectIfUrlTree(urlSerializer));
+  const prioritizedResult = await getPrioritizedGuardValue(guardPromises);
+  return handleRedirectAndGetBoolean(prioritizedResult, urlSerializer);
 }
 
-function redirectIfUrlTree(urlSerializer: UrlSerializer): OperatorFunction<GuardResult, boolean> {
-  return pipe(
-    tap((result: GuardResult) => {
-      if (typeof result === 'boolean') return;
-
-      throw redirectingNavigationError(urlSerializer, result);
-    }),
-    map((result) => result === true),
-  );
+// Helper to convert various guard return types to a Promise<GuardResult>
+async function convertToPromise(
+  guardResult: GuardResult | Observable<GuardResult> | Promise<GuardResult>,
+): Promise<GuardResult> {
+  if (isObservable(guardResult)) {
+    return await firstValueFrom(guardResult);
+  }
+  return await Promise.resolve(guardResult);
 }
 
-export function runCanMatchGuards(
+async function getPrioritizedGuardValue(
+  guardPromises: Array<Promise<GuardResult>>,
+): Promise<GuardResult> {
+  for (const guardPromise of guardPromises) {
+    const result = await guardPromise;
+    if (typeof result !== 'boolean') {
+      return result; // UrlTree takes precedence
+    }
+    if (result === false) {
+      return false; // False means failure
+    }
+    // True means continue checking other guards
+  }
+  return true; // All guards returned true or the array was empty
+}
+
+function handleRedirectAndGetBoolean(result: GuardResult, urlSerializer: UrlSerializer): boolean {
+  if (typeof result === 'boolean') {
+    return result;
+  }
+  // Result is a UrlTree, throw a redirect error.
+  throw redirectingNavigationError(urlSerializer, result);
+}
+
+export async function runCanMatchGuards(
   injector: EnvironmentInjector,
   route: Route,
   segments: UrlSegment[],
   urlSerializer: UrlSerializer,
-): Observable<GuardResult> {
+): Promise<boolean> {
   const canMatch = route.canMatch;
-  if (!canMatch || canMatch.length === 0) return of(true);
+  if (!canMatch || canMatch.length === 0) {
+    return true;
+  }
 
-  const canMatchObservables = canMatch.map((injectionToken) => {
+  const guardPromises = canMatch.map((injectionToken) => {
     const guard = getTokenOrFunctionIdentity(injectionToken as ProviderToken<any>, injector);
     const guardVal = isCanMatch(guard)
       ? guard.canMatch(route, segments)
       : runInInjectionContext(injector, () => (guard as CanMatchFn)(route, segments));
-    return wrapIntoObservable(guardVal);
+    return convertToPromise(guardVal);
   });
 
-  return of(canMatchObservables).pipe(prioritizedGuardValue(), redirectIfUrlTree(urlSerializer));
+  const prioritizedResult = await getPrioritizedGuardValue(guardPromises);
+  return handleRedirectAndGetBoolean(prioritizedResult, urlSerializer);
 }

@@ -16,11 +16,9 @@ import {
   NgModuleFactory,
   Type,
 } from '@angular/core';
-import {ConnectableObservable, from, Observable, of, Subject} from 'rxjs';
-import {finalize, map, mergeMap, refCount, tap} from 'rxjs/operators';
+import {isObservable, firstValueFrom, Observable} from 'rxjs';
 
 import {DefaultExport, LoadedRouterConfig, Route, Routes} from './models';
-import {wrapIntoObservable} from './utils/collection';
 import {assertStandalone, validateConfig} from './utils/config';
 import {standardizeConfig} from './components/empty_outlet';
 
@@ -36,128 +34,169 @@ import {standardizeConfig} from './components/empty_outlet';
  */
 export const ROUTES = new InjectionToken<Route[][]>(ngDevMode ? 'ROUTES' : '');
 
-type ComponentLoader = Observable<Type<unknown>>;
-
 @Injectable({providedIn: 'root'})
 export class RouterConfigLoader {
-  private componentLoaders = new WeakMap<Route, ComponentLoader>();
-  private childrenLoaders = new WeakMap<Route, Observable<LoadedRouterConfig>>();
+  // Update componentLoaders to store Promises
+  private componentLoaders = new WeakMap<Route, Promise<Type<unknown>>>();
+  // Update childrenLoaders to store Promises
+  private childrenLoaders = new WeakMap<Route, Promise<LoadedRouterConfig>>();
   onLoadStartListener?: (r: Route) => void;
   onLoadEndListener?: (r: Route) => void;
   private readonly compiler = inject(Compiler);
 
-  loadComponent(route: Route): Observable<Type<unknown>> {
-    if (this.componentLoaders.get(route)) {
-      return this.componentLoaders.get(route)!;
-    } else if (route._loadedComponent) {
-      return of(route._loadedComponent);
+  async loadComponent(route: Route): Promise<Type<unknown>> {
+    const existingLoader = this.componentLoaders.get(route);
+    if (existingLoader) {
+      return existingLoader;
+    }
+    if (route._loadedComponent) {
+      return route._loadedComponent;
     }
 
-    if (this.onLoadStartListener) {
-      this.onLoadStartListener(route);
-    }
-    const loadRunner = wrapIntoObservable(route.loadComponent!()).pipe(
-      map(maybeUnwrapDefaultExport),
-      tap((component) => {
-        if (this.onLoadEndListener) {
-          this.onLoadEndListener(route);
-        }
-        (typeof ngDevMode === 'undefined' || ngDevMode) &&
-          assertStandalone(route.path ?? '', component);
-        route._loadedComponent = component;
-      }),
-      finalize(() => {
-        this.componentLoaders.delete(route);
-      }),
-    );
-    // Use custom ConnectableObservable as share in runners pipe increasing the bundle size too much
-    const loader = new ConnectableObservable(loadRunner, () => new Subject<Type<unknown>>()).pipe(
-      refCount(),
-    );
-    this.componentLoaders.set(route, loader);
-    return loader;
+    const loaderPromise = loadComponentInternal(
+      route,
+      this.onLoadStartListener,
+      this.onLoadEndListener,
+    ).finally(() => {
+      this.componentLoaders.delete(route);
+    });
+
+    this.componentLoaders.set(route, loaderPromise);
+    return loaderPromise;
   }
 
-  loadChildren(parentInjector: Injector, route: Route): Observable<LoadedRouterConfig> {
-    if (this.childrenLoaders.get(route)) {
-      return this.childrenLoaders.get(route)!;
-    } else if (route._loadedRoutes) {
-      return of({routes: route._loadedRoutes, injector: route._loadedInjector});
+  async loadChildren(parentInjector: Injector, route: Route): Promise<LoadedRouterConfig> {
+    const existingLoader = this.childrenLoaders.get(route);
+    if (existingLoader) {
+      return existingLoader;
+    }
+    if (route._loadedRoutes && route._loadedInjector) {
+      return {routes: route._loadedRoutes, injector: route._loadedInjector};
     }
 
-    if (this.onLoadStartListener) {
-      this.onLoadStartListener(route);
-    }
-    const moduleFactoryOrRoutes$ = loadChildren(
+    // The Route._loadedRoutes check is now inside loadChildrenInternal,
+    // but this one is for already loaded (not pending) routes.
+    // The one in loadChildrenInternal handles the case where it got loaded by another process
+    // while this one was yielding.
+
+    const loaderPromise = loadChildrenInternal(
       route,
       this.compiler,
       parentInjector,
+      this.onLoadStartListener,
       this.onLoadEndListener,
-    );
-    const loadRunner = moduleFactoryOrRoutes$.pipe(
-      finalize(() => {
-        this.childrenLoaders.delete(route);
-      }),
-    );
-    // Use custom ConnectableObservable as share in runners pipe increasing the bundle size too much
-    const loader = new ConnectableObservable(
-      loadRunner,
-      () => new Subject<LoadedRouterConfig>(),
-    ).pipe(refCount());
-    this.childrenLoaders.set(route, loader);
-    return loader;
+    ).finally(() => {
+      this.childrenLoaders.delete(route);
+    });
+
+    this.childrenLoaders.set(route, loaderPromise);
+    return loaderPromise;
+  }
+}
+
+async function loadComponentInternal(
+  route: Route,
+  onLoadStartListener?: (r: Route) => void,
+  onLoadEndListener?: (r: Route) => void,
+): Promise<Type<unknown>> {
+  if (route._loadedComponent) {
+    // Check if already loaded by another process
+    return route._loadedComponent;
+  }
+
+  if (onLoadStartListener) {
+    onLoadStartListener(route);
+  }
+
+  try {
+    const loadedComponentInput = route.loadComponent!();
+    const loadedComponent = await convertToPromiseInternal(loadedComponentInput);
+    const unwrappedComponent = maybeUnwrapDefaultExport(loadedComponent);
+
+    (typeof ngDevMode === 'undefined' || ngDevMode) &&
+      assertStandalone(route.path ?? '', unwrappedComponent);
+    route._loadedComponent = unwrappedComponent;
+
+    if (onLoadEndListener) {
+      onLoadEndListener(route);
+    }
+    return unwrappedComponent;
+  } catch (e) {
+    if (onLoadEndListener) {
+      onLoadEndListener(route);
+    }
+    throw e;
   }
 }
 
 /**
  * Executes a `route.loadChildren` callback and converts the result to an array of child routes and
  * an injector if that callback returned a module.
- *
- * This function is used for the route discovery during prerendering
- * in @angular-devkit/build-angular. If there are any updates to the contract here, it will require
- * an update to the extractor.
  */
-export function loadChildren(
+export async function loadChildrenInternal(
   route: Route,
   compiler: Compiler,
   parentInjector: Injector,
+  onLoadStartListener?: (r: Route) => void,
   onLoadEndListener?: (r: Route) => void,
-): Observable<LoadedRouterConfig> {
-  return wrapIntoObservable(route.loadChildren!()).pipe(
-    map(maybeUnwrapDefaultExport),
-    mergeMap((t) => {
-      if (t instanceof NgModuleFactory || Array.isArray(t)) {
-        return of(t);
-      } else {
-        return from(compiler.compileModuleAsync(t));
-      }
-    }),
-    map((factoryOrRoutes: NgModuleFactory<any> | Routes) => {
-      if (onLoadEndListener) {
-        onLoadEndListener(route);
-      }
-      // This injector comes from the `NgModuleRef` when lazy loading an `NgModule`. There is
-      // no injector associated with lazy loading a `Route` array.
-      let injector: EnvironmentInjector | undefined;
-      let rawRoutes: Route[];
-      let requireStandaloneComponents = false;
-      if (Array.isArray(factoryOrRoutes)) {
-        rawRoutes = factoryOrRoutes;
-        requireStandaloneComponents = true;
-      } else {
-        injector = factoryOrRoutes.create(parentInjector).injector;
-        // When loading a module that doesn't provide `RouterModule.forChild()` preloader
-        // will get stuck in an infinite loop. The child module's Injector will look to
-        // its parent `Injector` when it doesn't find any ROUTES so it will return routes
-        // for it's parent module instead.
-        rawRoutes = injector.get(ROUTES, [], {optional: true, self: true}).flat();
-      }
-      const routes = rawRoutes.map(standardizeConfig);
-      (typeof ngDevMode === 'undefined' || ngDevMode) &&
-        validateConfig(routes, route.path, requireStandaloneComponents);
-      return {routes, injector};
-    }),
-  );
+): Promise<LoadedRouterConfig> {
+  if (route._loadedRoutes && route._loadedInjector) {
+    // Check if already loaded by another process
+    return {routes: route._loadedRoutes, injector: route._loadedInjector};
+  }
+
+  if (onLoadStartListener) {
+    onLoadStartListener(route);
+  }
+
+  try {
+    const loadedChildInput = route.loadChildren!();
+    const loadedChild = await convertToPromiseInternal(loadedChildInput);
+    const unwrappedChild = maybeUnwrapDefaultExport(loadedChild);
+
+    let factoryOrRoutes: NgModuleFactory<any> | Routes;
+    if (unwrappedChild instanceof NgModuleFactory || Array.isArray(unwrappedChild)) {
+      factoryOrRoutes = unwrappedChild;
+    } else {
+      factoryOrRoutes = await compiler.compileModuleAsync(unwrappedChild);
+    }
+
+    let injector: EnvironmentInjector | undefined;
+    let rawRoutes: Route[];
+    let requireStandaloneComponents = false;
+    if (Array.isArray(factoryOrRoutes)) {
+      rawRoutes = factoryOrRoutes;
+      requireStandaloneComponents = true;
+    } else {
+      injector = factoryOrRoutes.create(parentInjector).injector;
+      rawRoutes = injector.get(ROUTES, [], {optional: true, self: true}).flat();
+    }
+    const routes = rawRoutes.map(standardizeConfig);
+    (typeof ngDevMode === 'undefined' || ngDevMode) &&
+      validateConfig(routes, route.path, requireStandaloneComponents);
+
+    // Cache on the route itself
+    route._loadedRoutes = routes;
+    route._loadedInjector = injector;
+
+    if (onLoadEndListener) {
+      onLoadEndListener(route);
+    }
+    return {routes, injector};
+  } catch (e) {
+    // Ensure listeners are called on error too, and rethrow
+    if (onLoadEndListener) {
+      onLoadEndListener(route);
+    }
+    throw e;
+  }
+}
+
+async function convertToPromiseInternal<T>(value: T | Observable<T> | Promise<T>): Promise<T> {
+  if (isObservable(value)) {
+    return await firstValueFrom(value);
+  }
+  return await Promise.resolve(value);
 }
 
 function isWrappedDefaultExport<T>(value: T | DefaultExport<T>): value is DefaultExport<T> {

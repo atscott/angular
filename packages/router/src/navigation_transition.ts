@@ -695,7 +695,7 @@ export class NavigationTransitions {
               const loaders: Array<Observable<void>> = [];
               if (route.routeConfig?.loadComponent && !route.routeConfig._loadedComponent) {
                 loaders.push(
-                  this.configLoader.loadComponent(route.routeConfig).pipe(
+                  from(this.configLoader.loadComponent(route.routeConfig)).pipe(
                     tap((loadedComponent) => {
                       route.component = loadedComponent;
                     }),

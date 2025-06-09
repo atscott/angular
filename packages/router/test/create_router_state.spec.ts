@@ -8,7 +8,6 @@
 
 import {EnvironmentInjector} from '@angular/core';
 import {TestBed} from '@angular/core/testing';
-import {map} from 'rxjs/operators';
 
 import {createRouterState} from '../src/create_router_state';
 import {Routes} from '../src/models';
@@ -181,16 +180,16 @@ function advanceNode(node: TreeNode<ActivatedRoute>): void {
 }
 
 async function createState(config: Routes, url: string): Promise<RouterStateSnapshot> {
-  return recognize(
+  const result = await recognize(
     TestBed.inject(EnvironmentInjector),
     TestBed.inject(RouterConfigLoader),
     RootComponent,
     config,
     tree(url),
-    new DefaultUrlSerializer(),
-  )
-    .pipe(map((result) => result.state))
-    .toPromise() as Promise<RouterStateSnapshot>;
+    new DefaultUrlSerializer(), // urlSerializer
+    'emptyOnly', // paramsInheritanceStrategy
+  );
+  return result.state;
 }
 
 function checkActivatedRoute(

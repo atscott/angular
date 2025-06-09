@@ -7,8 +7,6 @@
  */
 
 import {EnvironmentInjector} from '@angular/core';
-import {Observable, of} from 'rxjs';
-import {map} from 'rxjs/operators';
 
 import {Route} from '../models';
 import {runCanMatchGuards} from '../operators/check_guards';
@@ -34,24 +32,23 @@ const noMatch: MatchResult = {
   positionalParamSegments: {},
 };
 
-export function matchWithChecks(
+export async function matchWithChecks(
   segmentGroup: UrlSegmentGroup,
   route: Route,
   segments: UrlSegment[],
   injector: EnvironmentInjector,
   urlSerializer: UrlSerializer,
-): Observable<MatchResult> {
+): Promise<MatchResult> {
   const result = match(segmentGroup, route, segments);
   if (!result.matched) {
-    return of(result);
+    return result;
   }
 
   // Only create the Route's `EnvironmentInjector` if it matches the attempted
   // navigation
   injector = getOrCreateRouteInjectorIfNeeded(route, injector);
-  return runCanMatchGuards(injector, route, segments, urlSerializer).pipe(
-    map((v) => (v === true ? result : {...noMatch})),
-  );
+  const canMatchResult = await runCanMatchGuards(injector, route, segments, urlSerializer);
+  return canMatchResult === true ? result : {...noMatch};
 }
 
 export function match(
