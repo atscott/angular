@@ -47,6 +47,7 @@ export function recognize(
   urlTree: UrlTree,
   urlSerializer: UrlSerializer,
   paramsInheritanceStrategy: ParamsInheritanceStrategy = 'emptyOnly',
+  abortSignal?: AbortSignal,
 ): Promise<{state: RouterStateSnapshot; tree: UrlTree}> {
   return new Recognizer(
     injector,
@@ -56,6 +57,7 @@ export function recognize(
     urlTree,
     paramsInheritanceStrategy,
     urlSerializer,
+    abortSignal,
   ).recognize();
 }
 
@@ -74,6 +76,7 @@ export class Recognizer {
     private urlTree: UrlTree,
     private paramsInheritanceStrategy: ParamsInheritanceStrategy,
     private readonly urlSerializer: UrlSerializer,
+    private readonly abortSignal?: AbortSignal,
   ) {
     this.applyRedirects = new ApplyRedirects(this.urlSerializer, this.urlTree);
   }
@@ -204,31 +207,34 @@ export class Recognizer {
     for (const childOutlet of childOutlets) {
       const child = segmentGroup.children[childOutlet];
       const sortedConfig = sortByMatchingOutlets(config, childOutlet);
-      try {
-        const outletChildren = await this.processSegmentGroup(
-          injector,
-          sortedConfig,
-          child,
-          childOutlet,
-          parentRoute,
-        );
-        accumulatedChildren.push(...outletChildren);
-        hasSuccessfullyProcessedAtLeastOneOutlet = true;
-      } catch (e) {
-        if (e instanceof AbsoluteRedirect) {
-          throw e;
-        }
-        if (e instanceof NoMatch) {
-          // This specific outlet did not match. Continue to the next.
-        } else {
-          throw e;
-        }
-      }
+      // try {
+      const outletChildren = await this.processSegmentGroup(
+        injector,
+        sortedConfig,
+        child,
+        childOutlet,
+        parentRoute,
+      );
+      accumulatedChildren.push(...outletChildren);
+      // hasSuccessfullyProcessedAtLeastOneOutlet = true;
+      // } catch (e) {
+      //   if (e instanceof AbsoluteRedirect) {
+      //     throw e;
+      //   }
+      //   if (e instanceof NoMatch) {
+      //     // This specific outlet did not match. Continue to the next.
+      //   } else {
+      //     throw e;
+      //   }
+      // }
     }
 
-    if (!hasSuccessfullyProcessedAtLeastOneOutlet) {
-      return noMatch(segmentGroup);
-    }
+    // if (!accumulatedChildren.length) {
+    //   return noMatch(segmentGroup);
+    // }
+    // if (!hasSuccessfullyProcessedAtLeastOneOutlet) {
+    //   return noMatch(segmentGroup);
+    // }
 
     const mergedChildren = mergeEmptyPathMatches(accumulatedChildren);
     if (typeof ngDevMode === 'undefined' || ngDevMode) {
@@ -506,6 +512,7 @@ export class Recognizer {
         route,
         segments,
         this.urlSerializer,
+        // this.abortSignal,
       );
       if (shouldLoadResult) {
         const cfg = await this.configLoader.loadChildren(injector, route);

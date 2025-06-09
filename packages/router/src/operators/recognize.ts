@@ -23,6 +23,7 @@ export function recognize(
   config: Route[],
   serializer: UrlSerializer,
   paramsInheritanceStrategy: 'emptyOnly' | 'always',
+  abortSignal?: AbortSignal,
 ): MonoTypeOperatorFunction<NavigationTransition> {
   return mergeMap(async (t: NavigationTransition) => {
     const {state: targetSnapshot, tree: urlAfterRedirects} = await recognizeFn(
@@ -33,6 +34,7 @@ export function recognize(
       t.extractedUrl,
       serializer,
       paramsInheritanceStrategy,
+      abortSignal,
     );
     return {...t, targetSnapshot, urlAfterRedirects};
   });

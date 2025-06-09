@@ -527,6 +527,7 @@ export class NavigationTransitions {
                   router.config,
                   this.urlSerializer,
                   this.paramsInheritanceStrategy,
+                  overallTransitionState.abortController.signal,
                 ),
 
                 // Update URL if in `eager` update mode
@@ -823,6 +824,7 @@ export class NavigationTransitions {
                 typeof ngDevMode === 'undefined' || ngDevMode
                   ? `Navigation ID ${overallTransitionState.id} is not equal to the current navigation id ${this.navigationId}`
                   : '';
+              overallTransitionState.abortController.abort(cancelationReason);
               this.cancelNavigationTransition(
                 overallTransitionState,
                 cancelationReason,

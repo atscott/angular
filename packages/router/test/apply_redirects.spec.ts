@@ -1178,7 +1178,7 @@ describe('redirects', () => {
           {path: 'c', component: ComponentC},
         ];
         try {
-          await recognize(
+          const result = await recognize(
             TestBed.inject(EnvironmentInjector),
             null!,
             null,
