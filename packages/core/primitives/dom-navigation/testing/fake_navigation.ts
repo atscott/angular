@@ -100,6 +100,12 @@ export class FakeNavigation implements Navigation {
     return this.currentEntryIndex < this.entriesArr.length - 1;
   }
 
+  // Properties for spec alignment for ongoing navigation state
+  /** @internal */
+  public focusChangedDuringOngoingNavigation: boolean = false;
+  /** @internal */
+  public suppressNormalScrollRestorationDuringOngoingNavigation: boolean = false;
+
   constructor(
     private readonly window: Window,
     startURL: `http${string}`,
@@ -161,7 +167,6 @@ export class FakeNavigation implements Navigation {
 
     let navigationType: NavigationTypeString;
     if (!options?.history || options.history === 'auto') {
-      // Auto defaults to push, but if the URLs are the same, is a replace.
       if (fromUrl.toString() === toUrl.toString()) {
         navigationType = 'replace';
       } else {
@@ -175,22 +180,32 @@ export class FakeNavigation implements Navigation {
 
     const destination = new FakeNavigationDestination({
       url: toUrl.toString(),
-      state: options?.state,
-      sameDocument: hashChange,
-      historyState: null,
+      state: options?.state, // This is navigation API state
+      sameDocument: hashChange, // Assuming non-hash change means new document for simplicity here
+      historyState: null, // history API state, not used by navigate() directly
     });
-    const result = new InternalNavigationResult(this);
+    // Create the apiMethodTracker (InternalNavigationResult)
+    const result = new InternalNavigationResult(this, options?.info, options?.state);
 
-    const intercepted = this.userAgentNavigate(destination, result, {
-      navigationType,
-      cancelable: true,
-      canIntercept: true,
-      // Always false for navigate().
-      userInitiated: false,
-      hashChange,
-      info: options?.info,
-    });
-    if (!intercepted) {
+
+    const intercepted = this.userAgentNavigate(
+      destination,
+      result,
+      {
+        navigationType,
+        cancelable: true,
+        canIntercept: destination.sameDocument, // Per spec, canIntercept depends on URL rewritability and not being a cross-document traverse
+        userInitiated: false,
+        hashChange,
+        info: options?.info, // This info is for the InternalNavigateOptions, distinct from result.info
+      },
+      null, // sourceElement for navigate() is null
+      null, // formDataEntryList for navigate() is null
+      null, // downloadRequestFilename for navigate() is null
+      false, // hasUAVisualTransition for navigate() is false by default
+    );
+
+    if (!intercepted && this.navigateEvent?.sameDocument && this.navigateEvent.interceptionState === 'none') {
       this.updateNavigationEntriesForSameDocumentNavigation(this.navigateEvent!);
     }
 
@@ -212,7 +227,7 @@ export class FakeNavigation implements Navigation {
 
   private pushOrReplaceState(
     navigationType: NavigationTypeString,
-    data: unknown,
+    data: unknown, // This is Classic History API state
     _title: string,
     url?: string,
   ): void {
@@ -223,23 +238,34 @@ export class FakeNavigation implements Navigation {
 
     const destination = new FakeNavigationDestination({
       url: toUrl.toString(),
-      sameDocument: true,
-      historyState: data,
+      sameDocument: true, // history.pushState/replaceState are always same-document
+      historyState: data, // This is the history API state
+      state: undefined, // No Navigation API state directly from history.pushState
     });
-    const result = new InternalNavigationResult(this);
+    // For history.pushState/replaceState, info is undefined for the event.
+    // The classicHistoryAPIState is `data`.
+    const result = new InternalNavigationResult(this, undefined, data);
 
-    const intercepted = this.userAgentNavigate(destination, result, {
-      navigationType,
-      cancelable: true,
-      canIntercept: true,
-      // Always false for pushState() or replaceState().
-      userInitiated: false,
-      hashChange,
-    });
-    if (intercepted) {
-      return;
+    const intercepted = this.userAgentNavigate(
+      destination,
+      result,
+      {
+        navigationType,
+        cancelable: true,
+        canIntercept: true,
+        userInitiated: false,
+        hashChange,
+        // info for the event will be undefined.
+      },
+      null,
+      null,
+      null,
+      false,
+    );
+
+    if (!intercepted && this.navigateEvent?.sameDocument && this.navigateEvent.interceptionState === 'none') {
+      this.updateNavigationEntriesForSameDocumentNavigation(this.navigateEvent!);
     }
-    this.updateNavigationEntriesForSameDocumentNavigation(this.navigateEvent!);
   }
 
   /** Equivalent to `navigation.traverseTo()`. */
@@ -274,28 +300,35 @@ export class FakeNavigation implements Navigation {
     const hashChange = isHashChange(fromUrl, new URL(entry.url!, this.currentEntry.url!));
     const destination = new FakeNavigationDestination({
       url: entry.url!,
-      state: entry.getState(),
-      historyState: entry.getHistoryState(),
+      state: entry.getState(), // Navigation API state from the target entry
+      historyState: entry.getHistoryState(), // Classic history API state from the target entry
       key: entry.key,
       id: entry.id,
       index: entry.index,
       sameDocument: entry.sameDocument,
     });
     this.prospectiveEntryIndex = entry.index;
-    const result = new InternalNavigationResult(this);
+    const result = new InternalNavigationResult(this, options?.info, entry.getState());
     this.traversalQueue.set(entry.key, result);
     this.runTraversal(() => {
       this.traversalQueue.delete(entry.key);
-      const intercepted = this.userAgentNavigate(destination, result, {
-        navigationType: 'traverse',
-        cancelable: true,
-        canIntercept: true,
-        // Always false for traverseTo().
-        userInitiated: false,
-        hashChange,
-        info: options?.info,
-      });
-      if (!intercepted) {
+      const intercepted = this.userAgentNavigate(
+        destination,
+        result,
+        {
+          navigationType: 'traverse',
+          cancelable: destination.sameDocument,
+          canIntercept: destination.sameDocument,
+          userInitiated: false,
+          hashChange,
+          info: options?.info,
+        },
+        null,
+        null,
+        null,
+        false,
+      );
+      if (!intercepted && this.navigateEvent?.sameDocument && this.navigateEvent.interceptionState === 'none') {
         this.userAgentTraverse(this.navigateEvent!);
       }
     });
@@ -339,13 +372,6 @@ export class FakeNavigation implements Navigation {
     return this.traverseTo(entry.key, options);
   }
 
-  /**
-   * Equivalent to `history.go()`.
-   * Note that this method does not actually work precisely to how Chrome
-   * does, instead choosing a simpler model with less unexpected behavior.
-   * Chrome has a few edge case optimizations, for instance with repeated
-   * `back(); forward()` chains it collapses certain traversals.
-   */
   go(direction: number): void {
     const targetIndex = this.prospectiveEntryIndex + direction;
     if (targetIndex >= this.entriesArr.length || targetIndex < 0) {
@@ -353,7 +379,6 @@ export class FakeNavigation implements Navigation {
     }
     this.prospectiveEntryIndex = targetIndex;
     this.runTraversal(() => {
-      // Check again that destination is in the entries array.
       if (targetIndex >= this.entriesArr.length || targetIndex < 0) {
         return;
       }
@@ -369,31 +394,33 @@ export class FakeNavigation implements Navigation {
         index: entry.index,
         sameDocument: entry.sameDocument,
       });
-      const result = new InternalNavigationResult(this);
-      const intercepted = this.userAgentNavigate(destination, result, {
-        navigationType: 'traverse',
-        cancelable: true,
-        canIntercept: true,
-        // Always false for go().
-        userInitiated: false,
-        hashChange,
-      });
-      if (!intercepted) {
+      const result = new InternalNavigationResult(this); // history.go() has no info/state for the tracker
+      const intercepted = this.userAgentNavigate(
+        destination,
+        result,
+        {
+          navigationType: 'traverse',
+          cancelable: destination.sameDocument,
+          canIntercept: destination.sameDocument,
+          userInitiated: false,
+          hashChange,
+        },
+        null,
+        null,
+        null,
+        false,
+      );
+      if (!intercepted && this.navigateEvent?.sameDocument && this.navigateEvent.interceptionState === 'none') {
         this.userAgentTraverse(this.navigateEvent!);
       }
     });
   }
 
-  /** Runs a traversal synchronously or asynchronously */
   private runTraversal(traversal: () => void) {
     if (this.synchronousTraversals) {
       traversal();
       return;
     }
-
-    // Each traversal occupies a single timeout resolution.
-    // This means that Promises added to commit and finish should resolve
-    // before the next traversal.
     this.nextTraversal = this.nextTraversal.then(() => {
       return new Promise<void>((resolve) => {
         setTimeout(() => {
@@ -404,7 +431,6 @@ export class FakeNavigation implements Navigation {
     });
   }
 
-  /** Equivalent to `navigation.addEventListener()`. */
   addEventListener(
     type: string,
     callback: EventListenerOrEventListenerObject,
@@ -413,7 +439,6 @@ export class FakeNavigation implements Navigation {
     this.eventTarget.addEventListener(type, callback, options);
   }
 
-  /** Equivalent to `navigation.removeEventListener()`. */
   removeEventListener(
     type: string,
     callback: EventListenerOrEventListenerObject,
@@ -422,80 +447,74 @@ export class FakeNavigation implements Navigation {
     this.eventTarget.removeEventListener(type, callback, options);
   }
 
-  /** Equivalent to `navigation.dispatchEvent()` */
   dispatchEvent(event: Event): boolean {
     return this.eventTarget.dispatchEvent(event);
   }
 
-  /** Cleans up resources. */
   dispose(): void {
-    // Recreate eventTarget to release current listeners.
-    // `document.createElement` because NodeJS `EventTarget` is incompatible with Domino's `Event`.
     this.eventTarget = this.window.document.createElement('div');
     this.disposed = true;
   }
 
-  /** Returns whether this fake is disposed. */
   isDisposed(): boolean {
     return this.disposed;
   }
 
-  /**
-   * Implementation for all navigations and traversals.
-   * @returns true if the event was intercepted, otherwise false
-   */
+  abortTheOngoingNavigation(eventToAbort: InternalFakeNavigateEvent, reason?: Error) {
+    if (!this.navigateEvent || this.navigateEvent !== eventToAbort) {
+      return;
+    }
+    if (this.navigateEvent.abortController!.signal.aborted) {
+      return;
+    }
+    const abortReason = reason ?? new DOMException('Navigation aborted', 'AbortError');
+    this.navigateEvent.abortController!.abort(abortReason);
+    if (this.navigateEvent === eventToAbort) {
+        this.navigateEvent.cancel(abortReason);
+    }
+  }
+
   private userAgentNavigate(
     destination: FakeNavigationDestination,
     result: InternalNavigationResult,
     options: InternalNavigateOptions,
+    sourceElement: Element | null = null,
+    formDataEntryList: any[] | null = null,
+    downloadRequestFilename: string | null = null,
+    hasUAVisualTransition: boolean = false,
   ): boolean {
-    // The first navigation should disallow any future calls to set the initial
-    // entry.
     this.canSetInitialEntry = false;
     if (this.navigateEvent) {
-      this.navigateEvent.cancel(new DOMException('Navigation was aborted', 'AbortError'));
-      this.navigateEvent = null;
+      this.abortTheOngoingNavigation(this.navigateEvent, new DOMException('Navigation superseded by a new navigation.', 'AbortError'));
     }
-
-    return dispatchNavigateEvent({
+    if (this.disposed) {
+        return false;
+    }
+    const dispatchResultIsTrueIfNoInterception = dispatchNavigateEvent({
       navigationType: options.navigationType,
       cancelable: options.cancelable,
       canIntercept: options.canIntercept,
       userInitiated: options.userInitiated,
       hashChange: options.hashChange,
-      signal: result.signal,
       destination,
-      info: options.info,
+      info: options.info ?? result.info,
       sameDocument: destination.sameDocument,
       result,
+      sourceElement,
+      formDataEntryList,
+      downloadRequestFilename,
+      hasUAVisualTransition,
     });
+    return !dispatchResultIsTrueIfNoInterception;
   }
 
-  /**
-   * Implementation for a push or replace navigation.
-   * https://whatpr.org/html/10919/browsing-the-web.html#url-and-history-update-steps
-   * https://whatpr.org/html/10919/nav-history-apis.html#update-the-navigation-api-entries-for-a-same-document-navigation
-   * @internal
-   */
   urlAndHistoryUpdateSteps(navigateEvent: InternalFakeNavigateEvent) {
     this.updateNavigationEntriesForSameDocumentNavigation(navigateEvent);
   }
 
-  /**
-   * Implementation for a traverse navigation.
-   *
-   * https://whatpr.org/html/10919/browsing-the-web.html#apply-the-traverse-history-step
-   * ...
-   * > Let updateDocument be an algorithm step which performs update document for history step application given targetEntry's document, targetEntry, changingNavigableContinuation's update-only, scriptHistoryLength, scriptHistoryIndex, navigationType, entriesForNavigationAPI, and previousEntry.
-   * > If targetEntry's document is equal to displayedDocument, then perform updateDocument.
-   * https://whatpr.org/html/10919/browsing-the-web.html#update-document-for-history-step-application
-   * which then goes to https://whatpr.org/html/10919/nav-history-apis.html#update-the-navigation-api-entries-for-a-same-document-navigation
-   * @internal
-   */
   userAgentTraverse(navigateEvent: InternalFakeNavigateEvent) {
     const oldUrl = this.currentEntry.url!;
     this.updateNavigationEntriesForSameDocumentNavigation(navigateEvent);
-    // Happens as part of "updating the document" steps https://whatpr.org/html/10919/browsing-the-web.html#updating-the-document
     const popStateEvent = createPopStateEvent({
       state: navigateEvent.destination.getHistoryState(),
     });
@@ -506,10 +525,6 @@ export class FakeNavigation implements Navigation {
     }
   }
 
-  /**
-   * https://whatpr.org/html/10919/nav-history-apis.html#update-the-navigation-api-entries-for-a-same-document-navigation
-   * @internal
-   */
   updateNavigationEntriesForSameDocumentNavigation({
     destination,
     navigationType,
@@ -524,14 +539,14 @@ export class FakeNavigation implements Navigation {
       }
     } else if (navigationType === 'push') {
       this.currentEntryIndex++;
-      this.prospectiveEntryIndex = this.currentEntryIndex; // prospectiveEntryIndex isn't in the spec but is an implementation detail
+      this.prospectiveEntryIndex = this.currentEntryIndex;
       disposedNHEs.push(...this.entriesArr.splice(this.currentEntryIndex));
     } else if (navigationType === 'replace') {
       disposedNHEs.push(oldCurrentNHE);
     }
     if (navigationType === 'push' || navigationType === 'replace') {
       const index = this.currentEntryIndex;
-      const key = navigationType === 'push' ? String(this.nextKey++) : this.currentEntry.key;
+      const key = navigationType === 'push' ? String(this.nextKey++) : (oldCurrentNHE?.key ?? String(this.nextKey++));
       const newNHE = new FakeNavigationHistoryEntry(
         this.window.document.createElement('div'),
         destination.url,
@@ -540,8 +555,8 @@ export class FakeNavigation implements Navigation {
           key,
           index,
           sameDocument: true,
-          state: destination.getState(),
-          historyState: destination.getHistoryState(),
+          state: destination.getState(), // Navigation API state
+          historyState: destination.getHistoryState(), // Classic history API state
         },
       );
       this.entriesArr[this.currentEntryIndex] = newNHE;
@@ -557,7 +572,6 @@ export class FakeNavigation implements Navigation {
     }
   }
 
-  /** Utility method for finding entries with the given `key`. */
   private findEntry(key: string) {
     for (const entry of this.entriesArr) {
       if (entry.key === key) return entry;
@@ -566,55 +580,39 @@ export class FakeNavigation implements Navigation {
   }
 
   set onnavigate(
-    // tslint:disable-next-line:no-any
     _handler: ((this: Navigation, ev: NavigateEvent) => any) | null,
   ) {
     throw new Error('unimplemented');
   }
-
-  // tslint:disable-next-line:no-any
   get onnavigate(): ((this: Navigation, ev: NavigateEvent) => any) | null {
     throw new Error('unimplemented');
   }
-
   set oncurrententrychange(
-    _handler: // tslint:disable-next-line:no-any
-    ((this: Navigation, ev: NavigationCurrentEntryChangeEvent) => any) | null,
+    _handler: ((this: Navigation, ev: NavigationCurrentEntryChangeEvent) => any) | null,
   ) {
     throw new Error('unimplemented');
   }
-
-  get oncurrententrychange(): // tslint:disable-next-line:no-any
-  ((this: Navigation, ev: NavigationCurrentEntryChangeEvent) => any) | null {
+  get oncurrententrychange(): ((this: Navigation, ev: NavigationCurrentEntryChangeEvent) => any) | null {
     throw new Error('unimplemented');
   }
-
   set onnavigatesuccess(
-    // tslint:disable-next-line:no-any
     _handler: ((this: Navigation, ev: Event) => any) | null,
   ) {
     throw new Error('unimplemented');
   }
-
-  // tslint:disable-next-line:no-any
   get onnavigatesuccess(): ((this: Navigation, ev: Event) => any) | null {
     throw new Error('unimplemented');
   }
-
   set onnavigateerror(
-    // tslint:disable-next-line:no-any
     _handler: ((this: Navigation, ev: ErrorEvent) => any) | null,
   ) {
     throw new Error('unimplemented');
   }
-
-  // tslint:disable-next-line:no-any
   get onnavigateerror(): ((this: Navigation, ev: ErrorEvent) => any) | null {
     throw new Error('unimplemented');
   }
 
   private _transition: NavigationTransition | null = null;
-  /** @internal */
   set transition(t: NavigationTransition | null) {
     this._transition = t;
   }
@@ -625,34 +623,24 @@ export class FakeNavigation implements Navigation {
   updateCurrentEntry(_options: NavigationUpdateCurrentEntryOptions): void {
     throw new Error('unimplemented');
   }
-
   reload(_options?: NavigationReloadOptions): NavigationResult {
     throw new Error('unimplemented');
   }
 }
 
-/**
- * Fake equivalent of the `NavigationResult` interface with
- * `FakeNavigationHistoryEntry`.
- */
 interface FakeNavigationResult extends NavigationResult {
   readonly committed: Promise<FakeNavigationHistoryEntry>;
   readonly finished: Promise<FakeNavigationHistoryEntry>;
 }
 
-/**
- * Fake equivalent of `NavigationHistoryEntry`.
- */
 export class FakeNavigationHistoryEntry implements NavigationHistoryEntry {
   readonly sameDocument: boolean;
-
   readonly id: string;
   readonly key: string;
   readonly index: number;
-  private readonly state: unknown;
-  private readonly historyState: unknown;
+  private readonly state: unknown; // Navigation API state
+  private readonly historyState: unknown; // Classic history API state
 
-  // tslint:disable-next-line:no-any
   ondispose: ((this: NavigationHistoryEntry, ev: Event) => any) | null = null;
 
   constructor(
@@ -663,8 +651,8 @@ export class FakeNavigationHistoryEntry implements NavigationHistoryEntry {
       key,
       index,
       sameDocument,
-      state,
-      historyState,
+      state, // Navigation API state
+      historyState, // Classic history API state
     }: {
       id: string;
       key: string;
@@ -683,12 +671,10 @@ export class FakeNavigationHistoryEntry implements NavigationHistoryEntry {
   }
 
   getState(): unknown {
-    // Budget copy.
     return this.state ? (JSON.parse(JSON.stringify(this.state)) as unknown) : this.state;
   }
 
   getHistoryState(): unknown {
-    // Budget copy.
     return this.historyState
       ? (JSON.parse(JSON.stringify(this.historyState)) as unknown)
       : this.historyState;
@@ -701,7 +687,6 @@ export class FakeNavigationHistoryEntry implements NavigationHistoryEntry {
   ): void {
     this.eventTarget.addEventListener(type, callback, options);
   }
-
   removeEventListener(
     type: string,
     callback: EventListenerOrEventListenerObject,
@@ -709,38 +694,26 @@ export class FakeNavigationHistoryEntry implements NavigationHistoryEntry {
   ): void {
     this.eventTarget.removeEventListener(type, callback, options);
   }
-
   dispatchEvent(event: Event): boolean {
     return this.eventTarget.dispatchEvent(event);
   }
-
-  /** internal */
   dispose() {
     const disposeEvent = new Event('disposed');
     this.dispatchEvent(disposeEvent);
-    // release current listeners
     this.eventTarget = null!;
   }
 }
 
-/** `NavigationInterceptOptions` with experimental commit option. */
 export interface ExperimentalNavigationInterceptOptions extends NavigationInterceptOptions {
   precommitHandler?: (controller: NavigationPrecommitController) => Promise<void>;
 }
-
 export interface NavigationPrecommitController {
   redirect: (url: string, options?: NavigationReloadOptions) => void;
 }
-
 export interface ExperimentalNavigateEvent extends NavigateEvent {
   intercept(options?: ExperimentalNavigationInterceptOptions): void;
-
   precommitHandler?: () => Promise<void>;
 }
-
-/**
- * Fake equivalent of `NavigateEvent`.
- */
 export interface FakeNavigateEvent extends ExperimentalNavigateEvent {
   readonly destination: FakeNavigationDestination;
 }
@@ -751,63 +724,76 @@ interface InternalFakeNavigateEvent extends FakeNavigateEvent {
   interceptionState: 'none' | 'intercepted' | 'committed' | 'scrolled' | 'finished';
   scrollBehavior: 'after-transition' | 'manual' | null;
   focusResetBehavior: 'after-transition' | 'manual' | null;
-
+  hasUAVisualTransition?: boolean;
+  sourceElement?: Element | null;
+  classicHistoryAPIState?: any | null;
+  abortController?: AbortController;
   cancel(reason: Error): void;
 }
 
-/**
- * Create a fake equivalent of `NavigateEvent`. This is not a class because ES5
- * transpiled JavaScript cannot extend native Event.
- *
- * https://html.spec.whatwg.org/multipage/nav-history-apis.html#navigate-event-firing
- */
 function dispatchNavigateEvent({
+  navigationType,
   cancelable,
   canIntercept,
   userInitiated,
   hashChange,
-  navigationType,
-  signal,
   destination,
   info,
   sameDocument,
   result,
+  sourceElement,
+  formDataEntryList,
+  downloadRequestFilename,
+  hasUAVisualTransition,
 }: {
+  navigationType: NavigationTypeString;
   cancelable: boolean;
   canIntercept: boolean;
   userInitiated: boolean;
   hashChange: boolean;
-  navigationType: NavigationTypeString;
-  signal: AbortSignal;
   destination: FakeNavigationDestination;
   info: unknown;
   sameDocument: boolean;
   result: InternalNavigationResult;
+  sourceElement: Element | null;
+  formDataEntryList: any[] | null;
+  downloadRequestFilename: string | null;
+  hasUAVisualTransition: boolean;
 }) {
   const {navigation} = result;
+
+  const eventAbortController = new AbortController();
   const event = new Event('navigate', {bubbles: false, cancelable}) as {
     -readonly [P in keyof InternalFakeNavigateEvent]: InternalFakeNavigateEvent[P];
   };
-  event.focusResetBehavior = null;
-  event.scrollBehavior = null;
-  event.interceptionState = 'none';
+
+  event.navigationType = navigationType;
+  event.destination = destination;
   event.canIntercept = canIntercept;
   event.userInitiated = userInitiated;
   event.hashChange = hashChange;
-  event.navigationType = navigationType;
-  event.signal = signal;
-  event.destination = destination;
+  event.signal = eventAbortController.signal;
+  event.abortController = eventAbortController;
   event.info = info;
-  event.downloadRequest = null;
-  event.formData = null;
+  event.downloadRequest = downloadRequestFilename;
+  event.hasUAVisualTransition = hasUAVisualTransition;
+  event.sourceElement = sourceElement;
+  event.formData = formDataEntryList ? new FormData() : null;
+  event.focusResetBehavior = null;
+  event.scrollBehavior = null;
+  event.interceptionState = 'none';
   event.result = result;
-
   event.sameDocument = sameDocument;
+
+  if (navigationType === 'push' || navigationType === 'replace') {
+    event.classicHistoryAPIState = result.serializedState;
+  } else {
+    event.classicHistoryAPIState = null;
+  }
 
   let precommitHandlers: Array<(controller: NavigationPrecommitController) => Promise<void>> = [];
   let handlers: Array<() => Promise<void>> = [];
 
-  // https://whatpr.org/html/10919/nav-history-apis.html#dom-navigateevent-intercept
   event.intercept = function (
     this: InternalFakeNavigateEvent,
     options?: ExperimentalNavigationInterceptOptions,
@@ -816,7 +802,7 @@ function dispatchNavigateEvent({
       throw new DOMException(`Cannot intercept when canIntercept is 'false'`, 'SecurityError');
     }
     this.interceptionState = 'intercepted';
-    event.sameDocument = true;
+    event.sameDocument = true; // Intercepted navigations are always treated as same-document for their handling phase
     const precommitHandler = options?.precommitHandler;
     if (precommitHandler) {
       if (!this.cancelable) {
@@ -828,19 +814,17 @@ function dispatchNavigateEvent({
       precommitHandlers.push(precommitHandler);
     }
     if (event.interceptionState !== 'none' && event.interceptionState !== 'intercepted') {
-      throw new Error('Event interceptionState should be "none" or "intercepted"');
+      throw new Error('Event interceptionState should be "none" or "intercepted" when intercept() is called.');
     }
-    event.interceptionState = 'intercepted';
+    event.interceptionState = 'intercepted'; // Ensure it's marked
     const handler = options?.handler;
     if (handler) {
       handlers.push(handler);
     }
-    // override old options with new ones. UA _may_ report a console warning if new options differ from previous
     event.focusResetBehavior = options?.focusReset ?? event.focusResetBehavior;
     event.scrollBehavior = options?.scroll ?? event.scrollBehavior;
   };
 
-  // https://whatpr.org/html/10919/nav-history-apis.html#dom-navigateevent-scroll
   event.scroll = function (this: InternalFakeNavigateEvent): void {
     if (event.interceptionState !== 'committed') {
       throw new DOMException(
@@ -852,7 +836,6 @@ function dispatchNavigateEvent({
     processScrollBehavior(event);
   };
 
-  // https://whatpr.org/html/10919/nav-history-apis.html#dom-navigationprecommitcontroller-redirect
   function redirect(url: string, options: NavigationReloadOptions = {}) {
     if (event.interceptionState === 'none') {
       throw new Error('cannot redirect when event is not intercepted');
@@ -871,22 +854,24 @@ function dispatchNavigateEvent({
     }
     const destinationUrl = new URL(url, navigation.currentEntry.url!);
     if (options.hasOwnProperty('state')) {
-      event.destination.state = options.state;
+      event.destination.state = options.state; // This updates the Navigation API state on the destination
+      if (result) result.serializedState = options.state; // Also update tracker's serialized state
     }
     event.destination.url = destinationUrl.href;
     if (options.hasOwnProperty('info')) {
       event.info = options.info;
+      if (result) result.info = options.info; // Also update tracker's info
     }
   }
 
-  // https://whatpr.org/html/10919/nav-history-apis.html#inner-navigate-event-firing-algorithm
-  // "Let commit be the following steps:"
   function commit() {
-    if (result.signal.aborted) {
+    if (event.abortController!.signal.aborted) {
       return;
     }
-    (navigation.transition as InternalNavigationTransition | null)?.committedResolve();
-    if (event.interceptionState !== 'none') {
+    if (navigation.transition) {
+      (navigation.transition as InternalNavigationTransition).committedResolve();
+    }
+    if (event.interceptionState === 'intercepted') {
       event.interceptionState = 'committed';
       switch (event.navigationType) {
         case 'push':
@@ -899,103 +884,154 @@ function dispatchNavigateEvent({
           break;
         }
         case 'traverse': {
+          navigation.suppressNormalScrollRestorationDuringOngoingNavigation = true;
           navigation.userAgentTraverse(event);
           break;
         }
       }
     }
-    const promisesList = handlers.map((handler) => handler());
-    if (promisesList.length === 0) {
-      promisesList.push(Promise.resolve());
+    const endResultIsSameDocument = event.interceptionState !== 'none' || event.destination.sameDocument;
+
+    if (endResultIsSameDocument) {
+        const promisesList = handlers.map((handler) => handler());
+        if (promisesList.length === 0) {
+          promisesList.push(Promise.resolve(undefined));
+        }
+        Promise.all(promisesList)
+          .then(() => {
+            if (event.abortController!.signal.aborted) {
+              return;
+            }
+            if (event !== navigation.navigateEvent) {
+              if (result && !result.signal.aborted && result.committedTo) {
+                 result.finishedReject(new DOMException("Navigation superseded before handler completion", "AbortError"));
+              }
+              return;
+            }
+            navigation.navigateEvent = null;
+            finishNavigationEvent(event, true);
+            const navigatesuccessEvent = new Event('navigatesuccess', {bubbles: false, cancelable: false});
+            navigation.eventTarget.dispatchEvent(navigatesuccessEvent);
+            if (result) {
+              result.finishedResolve();
+            }
+            if (navigation.transition) {
+              (navigation.transition as InternalNavigationTransition).finishedResolve();
+              navigation.transition = null;
+            }
+          })
+          .catch((reason) => {
+              if (!event.abortController!.signal.aborted) {
+                event.cancel(reason);
+              }
+          });
+    } else {
+        if (result) {
+            if (!result.signal.aborted) {
+                const reason = new DOMException("Cross-document navigation, promises will not settle for this tracker.", "AbortError");
+                if (result.committedTo === null) {
+                    result.committedReject(reason);
+                }
+                result.finishedReject(reason);
+            }
+        }
+        if (navigation.navigateEvent === event) {
+            navigation.navigateEvent = null;
+        }
+        if (navigation.transition) {
+            navigation.transition = null;
+        }
     }
-    Promise.all(promisesList)
-      .then(() => {
-        // Follows steps outlined under "Wait for all of promisesList, with the following success steps:"
-        // in the spec https://html.spec.whatwg.org/multipage/nav-history-apis.html#navigate-event-firing.
-        if (result.signal.aborted) {
-          return;
-        }
-        if (event !== navigation.navigateEvent) {
-          throw new Error("Navigation's ongoing event not equal to resolved event");
-        }
-        navigation.navigateEvent = null;
-        finishNavigationEvent(event, true);
-        const navigatesuccessEvent = new Event('navigatesuccess', {bubbles: false, cancelable});
-        navigation.eventTarget.dispatchEvent(navigatesuccessEvent);
-        result.finishedResolve();
-        (navigation.transition as InternalNavigationTransition | null)?.finishedResolve();
-        navigation.transition = null;
-      })
-      .catch((reason) => event.cancel(reason));
   }
 
-  // Internal only.
-  // https://whatpr.org/html/10919/nav-history-apis.html#inner-navigate-event-firing-algorithm
-  // "Let cancel be the following steps given reason"
   event.cancel = function (this: InternalFakeNavigateEvent, reason: Error) {
-    if (result.signal.aborted) {
+    if (this.abortController!.signal.aborted && this.abortController!.signal.reason === reason) {
       return;
     }
-    if (event !== navigation.navigateEvent) {
-      throw new Error("Navigation's ongoing event not equal to resolved event");
+    if (!this.abortController!.signal.aborted) {
+      this.abortController!.abort(reason);
     }
-    navigation.navigateEvent = null;
-    // TODO: this isn't in the spec (yet)
-    const shouldRejectCommittedPromise =
-      event.interceptionState === 'none' || event.interceptionState === 'intercepted';
-    if (event.interceptionState !== 'intercepted') {
-      finishNavigationEvent(event, false);
+    const isCurrentGlobalNavigationEvent = (this === navigation.navigateEvent);
+    if (isCurrentGlobalNavigationEvent) {
+      navigation.navigateEvent = null;
     }
-
-    const navigateerrorEvent = new Event('navigateerror', {bubbles: false, cancelable});
-    navigation.eventTarget.dispatchEvent(navigateerrorEvent);
-    result.finishedReject(reason);
-    if (shouldRejectCommittedPromise) {
-      (navigation.transition as InternalNavigationTransition | null)?.committedReject(reason);
+    if (this.interceptionState !== 'intercepted' && this.interceptionState !== 'finished') {
+      finishNavigationEvent(this, false);
+    } else if (this.interceptionState === 'intercepted') {
+      this.interceptionState = 'finished';
     }
-    (navigation.transition as InternalNavigationTransition | null)?.finishedReject(reason);
-    navigation.transition = null;
+    if (this.abortController!.signal.reason === reason) {
+        const navigateerrorEvent = new ErrorEvent('navigateerror', {error: reason, bubbles: false, cancelable: false});
+        navigation.eventTarget.dispatchEvent(navigateerrorEvent);
+    }
+    if (result) {
+        if (result.committedTo === null && (!result.signal.aborted || result.signal.reason !== reason)) {
+           result.committedReject(reason);
+        }
+        result.finishedReject(reason);
+    }
+    if (isCurrentGlobalNavigationEvent && navigation.transition) {
+      const transition = navigation.transition as InternalNavigationTransition;
+      const committedPending = !Object.prototype.hasOwnProperty.call(transition.committed, '[[PromiseResult]]');
+      const finishedPending = !Object.prototype.hasOwnProperty.call(transition.finished, '[[PromiseResult]]');
+      if (committedPending) transition.committedReject(reason);
+      if (finishedPending) transition.finishedReject(reason);
+      navigation.transition = null;
+    }
   };
 
   function dispatch() {
     navigation.navigateEvent = event;
-    navigation.eventTarget.dispatchEvent(event);
+    navigation.focusChangedDuringOngoingNavigation = false;
+    navigation.suppressNormalScrollRestorationDuringOngoingNavigation = false;
+    const dispatchResult = navigation.eventTarget.dispatchEvent(event);
 
-    if (event.interceptionState !== 'none') {
+    if (event.interceptionState === 'intercepted') {
       if (!navigation.currentEntry) {
-        throw new Error("Navigation's current entry should not be null.");
+        event.cancel(new DOMException("Cannot create transition without a currentEntry for intercepted navigation.", "InvalidStateError"));
+        return;
       }
       navigation.transition = new InternalNavigationTransition(
         navigation.currentEntry,
         navigationType,
       );
-    }
+      // Mark transition.finished as handled (Spec Step 33.4)
+      navigation.transition.finished.catch(() => {});
+      navigation.transition.committed.catch(() => {});
 
-    if (precommitHandlers.length === 0) {
-      commit();
+
+    }
+    if (!dispatchResult && event.cancelable) {
+      if (!event.abortController!.signal.aborted) {
+        event.cancel(new DOMException('Navigation prevented by event.preventDefault()', 'AbortError'));
+      }
     } else {
-      const precommitController: NavigationPrecommitController = {redirect};
-      const precommitPromisesList = precommitHandlers.map((handler) =>
-        handler(precommitController),
-      );
-      Promise.all(precommitPromisesList)
-        .then(() => commit())
-        .catch((reason: Error) => {
-          // TODO: doesn't match spec (yet)
-          if (result.signal.aborted) {
-            return;
-          }
-          (navigation.transition as InternalNavigationTransition | null)?.committedReject(reason);
-          event.cancel(reason);
-        });
+      if (precommitHandlers.length === 0) {
+        commit();
+      } else {
+        const precommitController: NavigationPrecommitController = {redirect};
+        const precommitPromisesList = precommitHandlers.map((handler) =>
+          handler(precommitController),
+        );
+        Promise.all(precommitPromisesList)
+          .then(() => commit())
+          .catch((reason: Error) => {
+            if (event.abortController!.signal.aborted) {
+              return;
+            }
+            if (navigation.transition) {
+              (navigation.transition as InternalNavigationTransition).committedReject(reason);
+            }
+            event.cancel(reason);
+          });
+      }
     }
   }
 
   dispatch();
-  return event.interceptionState !== 'none';
+  return event.interceptionState === 'none';
 }
 
-/** https://whatpr.org/html/10919/nav-history-apis.html#navigateevent-finish */
 function finishNavigationEvent(event: InternalFakeNavigateEvent, didFulfill: boolean) {
   if (event.interceptionState === 'finished') {
     throw new Error('Attempting to finish navigation event that was already finished');
@@ -1004,7 +1040,6 @@ function finishNavigationEvent(event: InternalFakeNavigateEvent, didFulfill: boo
     if (didFulfill === true) {
       throw new Error('didFulfill should be false');
     }
-    // assert precommit handlers is not empty
     event.interceptionState = 'finished';
     return;
   }
@@ -1018,42 +1053,56 @@ function finishNavigationEvent(event: InternalFakeNavigateEvent, didFulfill: boo
   event.interceptionState = 'finished';
 }
 
-/** https://whatpr.org/html/10919/nav-history-apis.html#potentially-reset-the-focus */
 function potentiallyResetFocus(event: InternalFakeNavigateEvent) {
   if (event.interceptionState !== 'committed' && event.interceptionState !== 'scrolled') {
     throw new Error('cannot reset focus if navigation event is not committed or scrolled');
   }
-  // TODO(atscott): The rest of the steps
+  const navigation = event.result.navigation;
+  const focusChanged = navigation.focusChangedDuringOngoingNavigation;
+  navigation.focusChangedDuringOngoingNavigation = false;
+  if (focusChanged) {
+    return;
+  }
+  if (event.focusResetBehavior === 'manual') {
+    return;
+  }
+  // console.log('TODO: Actual focus reset logic (potentiallyResetFocus) would run here.');
 }
 
 function potentiallyResetScroll(event: InternalFakeNavigateEvent) {
   if (event.interceptionState !== 'committed' && event.interceptionState !== 'scrolled') {
-    throw new Error('cannot reset scroll if navigation event is not committed or scrolled');
+    throw new Error('Cannot reset scroll if navigation event is not committed or scrolled (potentiallyResetScroll)');
   }
-  if (event.interceptionState === 'scrolled' || event.scrollBehavior === 'manual') {
+  if (event.interceptionState === 'scrolled') {
+    return;
+  }
+  if (event.scrollBehavior === 'manual') {
     return;
   }
   processScrollBehavior(event);
 }
 
-/* https://whatpr.org/html/10919/nav-history-apis.html#process-scroll-behavior */
 function processScrollBehavior(event: InternalFakeNavigateEvent) {
   if (event.interceptionState !== 'committed') {
-    throw new Error('invalid event interception state when processing scroll behavior');
+    throw new Error('Invalid event interception state when processing scroll behavior (processScrollBehavior)');
   }
   event.interceptionState = 'scrolled';
-  // TODO(atscott): the rest of the steps
+  const navigation = event.result.navigation;
+  if (event.navigationType === 'traverse' && navigation.suppressNormalScrollRestorationDuringOngoingNavigation) {
+      navigation.suppressNormalScrollRestorationDuringOngoingNavigation = false;
+      return;
+  }
+  if (event.navigationType === 'traverse' || event.navigationType === 'reload') {
+    // console.log('TODO: Spec (processScrollBehavior): restore scroll position data for traverse/reload.');
+  } else {
+    // console.log('TODO: Spec (processScrollBehavior): scroll to fragment or top of document for push/replace.');
+  }
 }
 
-/** Fake equivalent of `NavigationCurrentEntryChangeEvent`. */
 export interface FakeNavigationCurrentEntryChangeEvent extends NavigationCurrentEntryChangeEvent {
   readonly from: FakeNavigationHistoryEntry;
 }
 
-/**
- * Create a fake equivalent of `NavigationCurrentEntryChange`. This does not use
- * a class because ES5 transpiled JavaScript cannot extend native Event.
- */
 function createFakeNavigationCurrentEntryChangeEvent({
   from,
   navigationType,
@@ -1072,10 +1121,6 @@ function createFakeNavigationCurrentEntryChangeEvent({
   return event as FakeNavigationCurrentEntryChangeEvent;
 }
 
-/**
- * Create a fake equivalent of `PopStateEvent`. This does not use a class
- * because ES5 transpiled JavaScript cannot extend native Event.
- */
 function createPopStateEvent({state}: {state: unknown}) {
   const event = new Event('popstate', {
     bubbles: false,
@@ -1095,18 +1140,14 @@ function createHashChangeEvent(newURL: string, oldURL: string) {
   return event as HashChangeEvent;
 }
 
-/**
- * Fake equivalent of `NavigationDestination`.
- */
 export class FakeNavigationDestination implements NavigationDestination {
   url: string;
   readonly sameDocument: boolean;
   readonly key: string | null;
   readonly id: string | null;
   readonly index: number;
-
-  state?: unknown;
-  private readonly historyState: unknown;
+  state?: unknown; // Navigation API state
+  private readonly historyState: unknown; // Classic history API state
 
   constructor({
     url,
@@ -1143,7 +1184,6 @@ export class FakeNavigationDestination implements NavigationDestination {
   }
 }
 
-/** Utility function to determine whether two UrlLike have the same hash. */
 function isHashChange(from: URL, to: URL): boolean {
   return (
     to.hash !== from.hash &&
@@ -1172,16 +1212,11 @@ class InternalNavigationTransition implements NavigationTransition {
       this.committedReject = reject;
       this.committedResolve = resolve;
     });
-    // All rejections are handled.
     this.finished.catch(() => {});
     this.committed.catch(() => {});
   }
 }
 
-/**
- * Internal utility class for representing the result of a navigation.
- * Generally equivalent to the "apiMethodTracker" in the spec.
- */
 class InternalNavigationResult {
   committedTo: FakeNavigationHistoryEntry | null = null;
   committedResolve!: (entry: FakeNavigationHistoryEntry) => void;
@@ -1195,7 +1230,13 @@ class InternalNavigationResult {
   }
   private readonly abortController = new AbortController();
 
-  constructor(readonly navigation: FakeNavigation) {
+  public info?: unknown;
+  public serializedState?: any | null;
+
+  constructor(readonly navigation: FakeNavigation, info?: unknown, serializedState?: any | null) {
+    this.info = info;
+    this.serializedState = serializedState;
+
     this.committed = new Promise<FakeNavigationHistoryEntry>((resolve, reject) => {
       this.committedResolve = (entry) => {
         this.committedTo = entry;
@@ -1218,13 +1259,11 @@ class InternalNavigationResult {
         this.abortController.abort(reason);
       };
     });
-    // All rejections are handled.
     this.committed.catch(() => {});
     this.finished.catch(() => {});
   }
 }
 
-/** Internal options for performing a navigate. */
 interface InternalNavigateOptions {
   navigationType: NavigationTypeString;
   cancelable: boolean;

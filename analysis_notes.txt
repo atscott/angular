@@ -1,0 +1,53 @@
+The `dispatchNavigateEvent` function in `packages/core/primitives/dom-navigation/testing/fake_navigation.ts` was analyzed against the WHATWG HTML spec's "inner navigate event firing algorithm" (https://whatpr.org/html/10919/nav-history-apis.html#inner-navigate-event-firing-algorithm).
+
+The following discrepancies or points of note were observed:
+
+1.  **Initial Check for Disabled Navigation (Spec Step 1):**
+    *   **Spec:** Algorithm starts with a check if "navigation has entries and events disabled" and associated assertions about API method trackers, returning `true` if so.
+    *   **FakeNavigation:** `dispatchNavigateEvent` itself doesn't perform this check. The calling context in `FakeNavigation.userAgentNavigate` checks `this.disposed`. Assertions about various API method trackers being null/empty in this specific disabled case are not explicitly mirrored as preconditions for `dispatchNavigateEvent`.
+
+2.  **Event `downloadRequest` Initialization (Spec Step 15):**
+    *   **Spec:** Initialize event's `downloadRequest` to `downloadRequestFilename`.
+    *   **FakeNavigation:** `event.downloadRequest` is hardcoded to `null` within `dispatchNavigateEvent`. The `downloadRequestFilename` parameter from the spec's algorithm is not accepted by `dispatchNavigateEvent`.
+
+3.  **Event `hasUAVisualTransition` Initialization (Spec Step 17):**
+    *   **Spec:** Initialize event's `hasUAVisualTransition` based on whether a UA visual transition was done.
+    *   **FakeNavigation:** The `event.hasUAVisualTransition` property is not set on the event object in `dispatchNavigateEvent`.
+
+4.  **Event `sourceElement` Initialization (Spec Step 18):**
+    *   **Spec:** Initialize event's `sourceElement` to `sourceElement`.
+    *   **FakeNavigation:** The `event.sourceElement` property is not set on the event object in `dispatchNavigateEvent`.
+
+5.  **Event's Own `AbortController` (Spec Step 19):**
+    *   **Spec:** "Set event's abort controller to a new AbortController... Initialize event's signal to event's abort controller's signal."
+    *   **FakeNavigation:** An `AbortSignal` (`signal`) is passed into `dispatchNavigateEvent` (from the `InternalNavigationResult` which has an `AbortController`) and assigned to `event.signal`. The event does not create or own its AbortController directly. This is a structural difference.
+
+6.  **Event `formData` Initialization (Spec Step 24):**
+    *   **Spec:** Initialize event's `formData` based on `formDataEntryList`.
+    *   **FakeNavigation:** `event.formData` is hardcoded to `null`. The `formDataEntryList` parameter from the spec's algorithm is not accepted by `dispatchNavigateEvent`.
+
+7.  **`focusChangedDuringOngoingNavigation` Flag (Spec Step 27):**
+    *   **Spec:** "Set navigation's focus changed during ongoing navigation to false."
+    *   **FakeNavigation:** This specific flag is not explicitly visible or managed within `dispatchNavigateEvent` or the `FakeNavigation` class by this name. Focus behavior is partially handled by `event.focusResetBehavior` and `potentiallyResetFocus`.
+
+8.  **`suppressNormalScrollRestorationDuringOngoingNavigation` Flag (Spec Step 28):**
+    *   **Spec:** "Set navigation's suppress normal scroll restoration during ongoing navigation to false."
+    *   **FakeNavigation:** This specific flag is not explicitly visible or managed. Scroll behavior is partially handled by `event.scrollBehavior` and `potentiallyResetScroll`/`processScrollBehavior`.
+
+9.  **Return Value Meaning (Spec Steps 36 & 37):**
+    *   **Spec:** The algorithm returns `true` if event's interception state is "none", and `false` otherwise.
+    *   **FakeNavigation:** The `dispatch()` function (which `dispatchNavigateEvent` effectively returns the result of) returns `event.interceptionState !== 'none'`. This means it returns `false` if state is "none" and `true` otherwise – the opposite boolean meaning of the spec.
+
+10. **`event.cancel()` - `committedPromise` Rejection (Part of Spec Step 31):**
+    *   **Spec:** The "cancel" algorithm for the event details rejecting the "finishedPromise" of the `apiMethodTracker`.
+    *   **FakeNavigation:** `event.cancel()` also rejects `result.committedReject(reason)` (where `result` is the `apiMethodTracker`) if `shouldRejectCommittedPromise` is true (i.e., if interception state was 'none' or 'intercepted'). The spec does not explicitly mention rejecting the "committedPromise" in these "cancel" steps.
+
+11. **Pre-computation of `canIntercept` and `cancelable`:**
+    *   **Spec (Steps 9-11):** Details logic for determining `canIntercept` and `cancelable` for the event based on current conditions.
+    *   **FakeNavigation:** These boolean values (`canIntercept`, `cancelable`) are passed as direct parameters into `dispatchNavigateEvent`. The logic to determine them resides in the calling methods like `FakeNavigation.navigate` or `FakeNavigation.traverseTo`, rather than within `dispatchNavigateEvent` itself. This is a structural difference in where the decision logic lies but might not be a functional discrepancy if the callers implement the spec's logic correctly.
+
+12. **Pre-computation of `hashChange`:**
+    *   **Spec (Step 22):** Details logic for determining `hashChange`.
+    *   **FakeNavigation:** `hashChange` is passed as a direct parameter. The `isHashChange` utility function is used by callers. Similar to `canIntercept` and `cancelable`.
+
+It's important to note that `dispatchNavigateEvent` is an internal, lower-level function within `FakeNavigation`. Some of the spec's algorithmic steps, especially those concerning the broader state of the navigation object (`FakeNavigation` instance) or decisions made *before* the event dispatch machinery truly kicks in, are handled in the calling methods within `FakeNavigation` (e.g., `userAgentNavigate`, `navigate`, `traverseTo`). The analysis above focuses on the `dispatchNavigateEvent` function itself against the "inner navigate event firing algorithm".
