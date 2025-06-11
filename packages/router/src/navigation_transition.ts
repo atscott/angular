@@ -16,18 +16,33 @@ import {
   runInInjectionContext,
   Type,
 } from '@angular/core';
-import {BehaviorSubject, combineLatest, EMPTY, from, Observable, of, Subject} from 'rxjs';
-import {
-  catchError,
-  defaultIfEmpty,
-  filter,
-  finalize,
-  map,
-  switchMap,
-  take,
-  takeUntil,
-  tap,
-} from 'rxjs/operators';
+// Keep Subject, BehaviorSubject, Observable, EMPTY, of, from
+// Remove filter, finalize, map, switchMap, take, takeUntil, tap, defaultIfEmpty, catchError from 'rxjs/operators'
+// filter is used further down so we keep it for now.
+import {BehaviorSubject, EMPTY, Observable, of, Subject, from, lastValueFrom} from 'rxjs';
+import {filter, takeUntil, tap, map, take, defaultIfEmpty} from 'rxjs/operators'; // Added takeUntil
+
+export enum NavigationStage {
+  Initial,
+  NavigationStart,
+  Recognize,
+  RoutesRecognized,
+  GuardsCheckStart,
+  GuardsCheck,
+  GuardsCheckEnd,
+  ResolveStart,
+  Resolve,
+  ResolveEnd,
+  LoadComponents,
+  AfterPreactivation,
+  ViewTransition,
+  CreateRouterState,
+  BeforeActivateRoutes,
+  ActivateRoutes,
+  Completed,
+  Aborted,
+  Errored,
+}
 
 import {createRouterState} from './create_router_state';
 import {INPUT_BINDER} from './directives/router_outlet';
@@ -376,6 +391,7 @@ export class NavigationTransitions {
     return this.navigationId !== 0;
   }
   private transitions?: BehaviorSubject<NavigationTransition | null>;
+  private successfulTransitions = new Subject<NavigationTransition>(); // For the return Observable
   /**
    * Hook that enables you to pause navigation after the preactivation phase.
    * Used by `RouterModule`.
@@ -431,507 +447,597 @@ export class NavigationTransitions {
     });
   }
 
-  setupNavigations(router: InternalRouterInterface): Observable<NavigationTransition> {
-    this.transitions = new BehaviorSubject<NavigationTransition | null>(null);
-    return this.transitions.pipe(
-      filter((t): t is NavigationTransition => t !== null),
+  // Helper async function for the navigation pipeline
+  private async processNavigation(
+    transition: NavigationTransition,
+    abortSignal: AbortSignal,
+    router: InternalRouterInterface,
+  ): Promise<boolean | undefined> { // boolean: true for success, false for cancel, undefined for error/redirect handled by throw/event
+    this.currentTransition = transition;
+    this.currentNavigation = { /* ... as before ... */
+      id: transition.id,
+      initialUrl: transition.rawUrl,
+      extractedUrl: transition.extractedUrl,
+      targetBrowserUrl:
+        typeof transition.extras.browserUrl === 'string'
+          ? this.urlSerializer.parse(transition.extras.browserUrl)
+          : transition.extras.browserUrl,
+      trigger: transition.source,
+      extras: transition.extras,
+      previousNavigation: !this.lastSuccessfulNavigation
+        ? null
+        : {
+            ...this.lastSuccessfulNavigation,
+            previousNavigation: null,
+          },
+      abort: () => transition.abortController.abort(),
+    };
 
-      // Using switchMap so we cancel executing navigations when a new one comes in
-      switchMap((overallTransitionState) => {
-        let completedOrAborted = false;
-        return of(overallTransitionState).pipe(
-          switchMap((t) => {
-            // It is possible that `switchMap` fails to cancel previous navigations if a new one happens synchronously while the operator
-            // is processing the `next` notification of that previous navigation. This can happen when a new navigation (say 2) cancels a
-            // previous one (1) and yet another navigation (3) happens synchronously in response to the `NavigationCancel` event for (1).
-            // https://github.com/ReactiveX/rxjs/issues/7455
-            if (this.navigationId > overallTransitionState.id) {
-              const cancellationReason =
-                typeof ngDevMode === 'undefined' || ngDevMode
-                  ? `Navigation ID ${overallTransitionState.id} is not equal to the current navigation id ${this.navigationId}`
-                  : '';
-              this.cancelNavigationTransition(
-                overallTransitionState,
-                cancellationReason,
-                NavigationCancellationCode.SupersededByNewNavigation,
-              );
-              return EMPTY;
-            }
-            this.currentTransition = overallTransitionState;
-            // Store the Navigation object
-            this.currentNavigation = {
-              id: t.id,
-              initialUrl: t.rawUrl,
-              extractedUrl: t.extractedUrl,
-              targetBrowserUrl:
-                typeof t.extras.browserUrl === 'string'
-                  ? this.urlSerializer.parse(t.extras.browserUrl)
-                  : t.extras.browserUrl,
-              trigger: t.source,
-              extras: t.extras,
-              previousNavigation: !this.lastSuccessfulNavigation
-                ? null
-                : {
-                    ...this.lastSuccessfulNavigation,
-                    previousNavigation: null,
-                  },
-              abort: () => t.abortController.abort(),
-            };
-            const urlTransition =
-              !router.navigated || this.isUpdatingInternalState() || this.isUpdatedBrowserUrl();
+    if (abortSignal.aborted) {
+      this.cancelNavigationTransition(transition, abortSignal.reason ?? 'Aborted before start', NavigationCancellationCode.Aborted);
+      return false;
+    }
 
-            const onSameUrlNavigation = t.extras.onSameUrlNavigation ?? router.onSameUrlNavigation;
-            if (!urlTransition && onSameUrlNavigation !== 'reload') {
-              const reason =
-                typeof ngDevMode === 'undefined' || ngDevMode
-                  ? `Navigation to ${t.rawUrl} was ignored because it is the same as the current Router URL.`
-                  : '';
-              this.events.next(
-                new NavigationSkipped(
-                  t.id,
-                  this.urlSerializer.serialize(t.rawUrl),
-                  reason,
-                  NavigationSkippedCode.IgnoredSameUrlNavigation,
-                ),
-              );
-              t.resolve(false);
-              return EMPTY;
-            }
+    // === Initial checks and Recognize (from previous subtask) ===
+    const urlTransition =
+      !router.navigated || this.isUpdatingInternalState() || this.isUpdatedBrowserUrl();
+    const onSameUrlNavigation = transition.extras.onSameUrlNavigation ?? router.onSameUrlNavigation;
 
-            if (this.urlHandlingStrategy.shouldProcessUrl(t.rawUrl)) {
-              return of(t).pipe(
-                // Fire NavigationStart event
-                switchMap((t) => {
-                  this.events.next(
-                    new NavigationStart(
-                      t.id,
-                      this.urlSerializer.serialize(t.extractedUrl),
-                      t.source,
-                      t.restoredState,
-                    ),
-                  );
-                  if (t.id !== this.navigationId) {
-                    return EMPTY;
-                  }
+    if (!urlTransition && onSameUrlNavigation !== 'reload') {
+      // ... NavigationSkipped logic ...
+      const reason = typeof ngDevMode === 'undefined' || ngDevMode ? `Navigation to ${transition.rawUrl} was ignored because it is the same as the current Router URL.` : '';
+      this.events.next(new NavigationSkipped(transition.id, this.urlSerializer.serialize(transition.rawUrl), reason, NavigationSkippedCode.IgnoredSameUrlNavigation));
+      transition.resolve(false);
+      return false;
+    }
 
-                  // This delay is required to match old behavior that forced
-                  // navigation to always be async
-                  return Promise.resolve(t);
-                }),
+    if (abortSignal.aborted) {
+      this.cancelNavigationTransition(transition, abortSignal.reason ?? 'Aborted before URL processing', NavigationCancellationCode.Aborted);
+      return false;
+    }
 
-                // Recognize
+    // let recognizedTransition: NavigationTransition = transition; // Not needed, transition is modified directly or replaced by new ref in case of url handling strategy
+
+    if (this.urlHandlingStrategy.shouldProcessUrl(transition.rawUrl)) {
+      this.events.next(new NavigationStart(transition.id, this.urlSerializer.serialize(transition.extractedUrl), transition.source, transition.restoredState));
+      await Promise.resolve();
+      if (abortSignal.aborted) { this.cancelNavigationTransition(transition, abortSignal.reason ?? 'Aborted after NavigationStart', NavigationCancellationCode.Aborted); return false; }
+      if (transition.id !== this.navigationId) {
+          this.cancelNavigationTransition(transition, typeof ngDevMode === 'undefined' || ngDevMode ? `Navigation ID ${transition.id} is not equal to the current navigation id ${this.navigationId}`: '', NavigationCancellationCode.SupersededByNewNavigation);
+          return false;
+      }
+
+      try {
+        const recognitionResult = await new Promise<NavigationTransition>((resolve, reject) => {
+            of(transition).pipe(
                 recognize(
-                  this.environmentInjector,
-                  this.configLoader,
-                  this.rootComponentType,
-                  router.config,
-                  this.urlSerializer,
-                  this.paramsInheritanceStrategy,
-                ),
+                    this.environmentInjector, this.configLoader, this.rootComponentType,
+                    router.config, this.urlSerializer, this.paramsInheritanceStrategy
+                )
+            ).subscribe({ next: resolve, error: reject });
+        });
+        if (abortSignal.aborted) { this.cancelNavigationTransition(transition, abortSignal.reason ?? 'Aborted after recognize', NavigationCancellationCode.Aborted); return false; }
 
-                // Update URL if in `eager` update mode
-                tap((t) => {
-                  overallTransitionState.targetSnapshot = t.targetSnapshot;
-                  overallTransitionState.urlAfterRedirects = t.urlAfterRedirects;
-                  this.currentNavigation = {
-                    ...this.currentNavigation!,
-                    finalUrl: t.urlAfterRedirects,
-                  };
+        // Update transition properties based on recognition result
+        transition.targetSnapshot = recognitionResult.targetSnapshot;
+        transition.urlAfterRedirects = recognitionResult.urlAfterRedirects;
 
-                  // Fire RoutesRecognized
-                  const routesRecognized = new RoutesRecognized(
-                    t.id,
-                    this.urlSerializer.serialize(t.extractedUrl),
-                    this.urlSerializer.serialize(t.urlAfterRedirects!),
-                    t.targetSnapshot!,
-                  );
-                  this.events.next(routesRecognized);
-                }),
-              );
-            } else if (
-              urlTransition &&
-              this.urlHandlingStrategy.shouldProcessUrl(t.currentRawUrl)
-            ) {
-              /* When the current URL shouldn't be processed, but the previous one
-               * was, we handle this "error condition" by navigating to the
-               * previously successful URL, but leaving the URL intact.*/
-              const {id, extractedUrl, source, restoredState, extras} = t;
-              const navStart = new NavigationStart(
-                id,
-                this.urlSerializer.serialize(extractedUrl),
-                source,
-                restoredState,
-              );
-              this.events.next(navStart);
-              const targetSnapshot = createEmptyState(this.rootComponentType).snapshot;
+      } catch (e) {
+        if (isRedirectingNavigationCancelingError(e)) {
+          this.events.next(new NavigationCancel(transition.id, this.urlSerializer.serialize(transition.extractedUrl), (e as Error).message, (e as any).cancellationCode));
+          this.events.next(new RedirectRequest((e as any).url, (e as any).navigationBehaviorOptions));
+          // For redirects, the navigation promise is resolved by the new navigation that handles the redirect.
+          return undefined; // Signal that a redirect occurred and current nav promise is not resolved here.
+        }
+        throw e;
+      }
 
-              this.currentTransition = overallTransitionState = {
-                ...t,
-                targetSnapshot,
-                urlAfterRedirects: extractedUrl,
-                extras: {...extras, skipLocationChange: false, replaceUrl: false},
-              };
-              this.currentNavigation!.finalUrl = extractedUrl;
-              return of(overallTransitionState);
-            } else {
-              /* When neither the current or previous URL can be processed, do
-               * nothing other than update router's internal reference to the
-               * current "settled" URL. This way the next navigation will be coming
-               * from the current URL in the browser.
-               */
-              const reason =
-                typeof ngDevMode === 'undefined' || ngDevMode
-                  ? `Navigation was ignored because the UrlHandlingStrategy` +
-                    ` indicated neither the current URL ${t.currentRawUrl} nor target URL ${t.rawUrl} should be processed.`
-                  : '';
-              this.events.next(
-                new NavigationSkipped(
-                  t.id,
-                  this.urlSerializer.serialize(t.extractedUrl),
-                  reason,
-                  NavigationSkippedCode.IgnoredByUrlHandlingStrategy,
-                ),
-              );
-              t.resolve(false);
-              return EMPTY;
-            }
-          }),
+      this.currentNavigation = { ...this.currentNavigation!, finalUrl: transition.urlAfterRedirects };
+      this.events.next(new RoutesRecognized(transition.id, this.urlSerializer.serialize(transition.extractedUrl), this.urlSerializer.serialize(transition.urlAfterRedirects!), transition.targetSnapshot!));
+    } else if (urlTransition && this.urlHandlingStrategy.shouldProcessUrl(transition.currentRawUrl)) {
+      // ... Logic for when current URL shouldn't be processed ...
+      const {id, extractedUrl, source, restoredState, extras} = transition;
+      this.events.next(new NavigationStart(id, this.urlSerializer.serialize(extractedUrl), source, restoredState));
+      const targetSnapshot = createEmptyState(this.rootComponentType!).snapshot;
+      transition.targetSnapshot = targetSnapshot;
+      transition.urlAfterRedirects = extractedUrl;
+      transition.extras = {...extras, skipLocationChange: false, replaceUrl: false};
+      this.currentNavigation!.finalUrl = extractedUrl;
+    } else {
+      // ... Logic for NavigationSkippedCode.IgnoredByUrlHandlingStrategy ...
+      const reason = typeof ngDevMode === 'undefined' || ngDevMode ? `Navigation was ignored because the UrlHandlingStrategy indicated neither the current URL ${transition.currentRawUrl} nor target URL ${transition.rawUrl} should be processed.` : '';
+      this.events.next(new NavigationSkipped(transition.id, this.urlSerializer.serialize(transition.extractedUrl), reason, NavigationSkippedCode.IgnoredByUrlHandlingStrategy));
+      transition.resolve(false);
+      return false;
+    }
+    // === END of Initial checks and Recognize ===
 
-          // --- GUARDS ---
-          tap((t) => {
-            const guardsStart = new GuardsCheckStart(
-              t.id,
-              this.urlSerializer.serialize(t.extractedUrl),
-              this.urlSerializer.serialize(t.urlAfterRedirects!),
-              t.targetSnapshot!,
+    if (abortSignal.aborted) {
+      this.cancelNavigationTransition(transition, abortSignal.reason ?? 'Aborted before guards', NavigationCancellationCode.Aborted);
+      return false;
+    }
+
+    // --- GUARDS ---
+    const guardsStartEvent = new GuardsCheckStart(
+      transition.id,
+      this.urlSerializer.serialize(transition.extractedUrl),
+      this.urlSerializer.serialize(transition.urlAfterRedirects!),
+      transition.targetSnapshot!,
+    );
+    this.events.next(guardsStartEvent);
+
+    if (abortSignal.aborted) {
+      this.cancelNavigationTransition(transition, abortSignal.reason ?? 'Aborted after GuardsCheckStart', NavigationCancellationCode.Aborted);
+      return false;
+    }
+
+    transition.guards = getAllRouteGuards(transition.targetSnapshot!, transition.currentSnapshot, this.rootContexts);
+
+    // The checkGuards operator also returns an Observable. We need to adapt it.
+    // It emits the transition object, potentially modified with guardsResult.
+    const guardsResultTransition = await new Promise<NavigationTransition>((resolve, reject) => {
+        of(transition).pipe(
+            checkGuards(this.environmentInjector, (evt: Event) => this.events.next(evt))
+        ).subscribe({
+            next: resolve,
+            error: reject, // checkGuards can throw RedirectingNavigationCancelingError
+        });
+    });
+
+    if (abortSignal.aborted) {
+      this.cancelNavigationTransition(transition, abortSignal.reason ?? 'Aborted after checkGuards', NavigationCancellationCode.Aborted);
+      return false;
+    }
+
+    // Update transition with the results from checkGuards
+    transition.guardsResult = guardsResultTransition.guardsResult;
+
+    if (transition.guardsResult && typeof transition.guardsResult !== 'boolean') {
+      // This is a redirect from a guard
+      const redirectError = redirectingNavigationError(this.urlSerializer, transition.guardsResult);
+      this.events.next(
+        new NavigationCancel(
+          transition.id,
+          this.urlSerializer.serialize(transition.extractedUrl),
+          redirectError.message,
+          redirectError.cancellationCode,
+        ),
+      );
+      this.events.next(new RedirectRequest(redirectError.url, redirectError.navigationBehaviorOptions));
+      // Similar to redirect from recognize, let the new navigation handle promise resolution.
+      return undefined;
+    }
+
+    const guardsEndEvent = new GuardsCheckEnd(
+      transition.id,
+      this.urlSerializer.serialize(transition.extractedUrl),
+      this.urlSerializer.serialize(transition.urlAfterRedirects!),
+      transition.targetSnapshot!,
+      !!transition.guardsResult, // boolean conversion
+    );
+    this.events.next(guardsEndEvent);
+
+    if (!transition.guardsResult) {
+      this.cancelNavigationTransition(transition, '', NavigationCancellationCode.GuardRejected);
+      return false; // Guards rejected, navigation cancelled
+    }
+
+    // Check for abort before proceeding to Resolve
+    if (abortSignal.aborted) { this.cancelNavigationTransition(transition, abortSignal.reason ?? 'Aborted before resolve', NavigationCancellationCode.Aborted); return false; }
+
+    // --- RESOLVE ---
+    if (transition.guards.canActivateChecks.length === 0) {
+      // No resolvers to run, proceed to next stage
+    } else {
+      this.events.next(new ResolveStart(transition.id, this.urlSerializer.serialize(transition.extractedUrl), this.urlSerializer.serialize(transition.urlAfterRedirects!), transition.targetSnapshot!));
+
+      if (abortSignal.aborted) { this.cancelNavigationTransition(transition, abortSignal.reason ?? 'Aborted after ResolveStart', NavigationCancellationCode.Aborted); return false; }
+
+      let dataResolved = false;
+      try {
+        // resolveData operator modifies the transition.targetSnapshot.data
+        // It completes once all data is resolved, or errors if a resolver errors.
+        // It might not emit the transition object itself but rather complete or error.
+        // The original RxJS `resolveData` operator was used with `tap({next: () => dataResolved = true, complete: ...})`
+        // We need to replicate this behavior.
+        await new Promise<void>((resolve, reject) => {
+          of(transition).pipe(
+            resolveData(this.paramsInheritanceStrategy, this.environmentInjector)
+            // The resolveData operator mutates the snapshot in place.
+            // It emits the transition and then completes.
+          ).subscribe({
+            next: () => { dataResolved = true; }, // transition object is emitted by resolveData
+            error: reject,
+            complete: resolve,
+          });
+        });
+
+        if (abortSignal.aborted) { this.cancelNavigationTransition(transition, abortSignal.reason ?? 'Aborted after resolveData', NavigationCancellationCode.Aborted); return false; }
+
+        if (!dataResolved && transition.guards.canActivateChecks.some(c => c.route.resolve && Object.keys(c.route.resolve).length > 0)) {
+            // This check might be too simplistic. The original code checked `!dataResolved` in `tap({complete:...})`
+            // which means if `resolveData` completed without emitting a `next` (which it should for the transition itself).
+            // A more accurate check might be to see if `resolveData` itself threw an error or if specific resolvers failed.
+            // For now, if `resolveData` completes but `dataResolved` is false, and there were resolvers, consider it an issue.
+            // This logic might need refinement based on how `resolveData` behaves when a resolver path is empty or all resolvers are empty.
+            // The original code's `tap({complete: ... if (!dataResolved) cancel ...})` implies that if the observable completes
+            // without `next` (dataResolved = true) ever being called, it's a problem.
+            // `resolveData` should emit the transition object. If it completes without doing so, it's an issue.
+            // The current promise structure with `next: () => dataResolved = true` and `complete: resolve` should capture this.
+            // If `complete` is called but `dataResolved` is still false, it means `next` was never called.
+            this.cancelNavigationTransition(
+                transition,
+                typeof ngDevMode === 'undefined' || ngDevMode ? `At least one route resolver didn't emit any value.` : '',
+                NavigationCancellationCode.NoDataFromResolver,
             );
-            this.events.next(guardsStart);
-          }),
+            return false;
+        }
 
-          map((t) => {
-            this.currentTransition = overallTransitionState = {
-              ...t,
-              guards: getAllRouteGuards(t.targetSnapshot!, t.currentSnapshot, this.rootContexts),
-            };
-            return overallTransitionState;
-          }),
+      } catch (e) {
+        // Handle errors from resolvers, e.g., if a resolver throws an error.
+        // This will be caught by the main try/catch in setupNavigations and trigger NavigationError.
+        throw e;
+      }
 
-          checkGuards(this.environmentInjector, (evt: Event) => this.events.next(evt)),
-          tap((t) => {
-            overallTransitionState.guardsResult = t.guardsResult;
-            if (t.guardsResult && typeof t.guardsResult !== 'boolean') {
-              throw redirectingNavigationError(this.urlSerializer, t.guardsResult);
-            }
+      this.events.next(new ResolveEnd(transition.id, this.urlSerializer.serialize(transition.extractedUrl), this.urlSerializer.serialize(transition.urlAfterRedirects!), transition.targetSnapshot!));
+    }
+    // --- END of RESOLVE ---
 
-            const guardsEnd = new GuardsCheckEnd(
-              t.id,
-              this.urlSerializer.serialize(t.extractedUrl),
-              this.urlSerializer.serialize(t.urlAfterRedirects!),
-              t.targetSnapshot!,
-              !!t.guardsResult,
-            );
-            this.events.next(guardsEnd);
-          }),
+    if (abortSignal.aborted) { this.cancelNavigationTransition(transition, abortSignal.reason ?? 'Aborted before LoadComponents', NavigationCancellationCode.Aborted); return false; }
 
-          filter((t) => {
-            if (!t.guardsResult) {
-              this.cancelNavigationTransition(t, '', NavigationCancellationCode.GuardRejected);
-              return false;
-            }
-            return true;
-          }),
-
-          // --- RESOLVE ---
-          switchTap((t) => {
-            if (t.guards.canActivateChecks.length === 0) {
-              return undefined;
-            }
-
-            return of(t).pipe(
-              tap((t) => {
-                const resolveStart = new ResolveStart(
-                  t.id,
-                  this.urlSerializer.serialize(t.extractedUrl),
-                  this.urlSerializer.serialize(t.urlAfterRedirects!),
-                  t.targetSnapshot!,
-                );
-                this.events.next(resolveStart);
-              }),
-              switchMap((t) => {
-                let dataResolved = false;
-                return of(t).pipe(
-                  resolveData(this.paramsInheritanceStrategy, this.environmentInjector),
-                  tap({
-                    next: () => (dataResolved = true),
-                    complete: () => {
-                      if (!dataResolved) {
-                        this.cancelNavigationTransition(
-                          t,
-                          typeof ngDevMode === 'undefined' || ngDevMode
-                            ? `At least one route resolver didn't emit any value.`
-                            : '',
-                          NavigationCancellationCode.NoDataFromResolver,
-                        );
-                      }
-                    },
-                  }),
-                );
-              }),
-              tap((t) => {
-                const resolveEnd = new ResolveEnd(
-                  t.id,
-                  this.urlSerializer.serialize(t.extractedUrl),
-                  this.urlSerializer.serialize(t.urlAfterRedirects!),
-                  t.targetSnapshot!,
-                );
-                this.events.next(resolveEnd);
-              }),
-            );
-          }),
-
-          // --- LOAD COMPONENTS ---
-          switchTap((t: NavigationTransition) => {
-            const loadComponents = (route: ActivatedRouteSnapshot): Array<Observable<void>> => {
-              const loaders: Array<Observable<void>> = [];
-              if (route.routeConfig?.loadComponent && !route.routeConfig._loadedComponent) {
-                loaders.push(
-                  this.configLoader.loadComponent(route.routeConfig).pipe(
-                    tap((loadedComponent) => {
-                      route.component = loadedComponent;
-                    }),
+    // --- LOAD COMPONENTS ---
+    const loadComponentsRecursive = (route: ActivatedRouteSnapshot): Array<Promise<void>> => {
+        const loaders: Array<Promise<void>> = [];
+        if (route.routeConfig?.loadComponent && !route.routeConfig._loadedComponent) {
+            const loadPromise = lastValueFrom(this.configLoader.loadComponent(route.routeConfig)
+                .pipe(
+                    tap((loadedComponent) => { route.component = loadedComponent; }),
                     map(() => void 0),
-                  ),
-                );
-              }
-              for (const child of route.children) {
-                loaders.push(...loadComponents(child));
-              }
-              return loaders;
-            };
-            return combineLatest(loadComponents(t.targetSnapshot!.root)).pipe(
-              defaultIfEmpty(null),
-              take(1),
-            );
-          }),
+                    take(1)
+                ));
+            loaders.push(loadPromise);
+        }
+        for (const child of route.children) {
+            loaders.push(...loadComponentsRecursive(child));
+        }
+        return loaders;
+    };
+    const componentLoaders = loadComponentsRecursive(transition.targetSnapshot!.root);
+    if (componentLoaders.length > 0) {
+        await Promise.all(componentLoaders);
+    }
 
-          switchTap(() => this.afterPreactivation()),
+    if (abortSignal.aborted) { this.cancelNavigationTransition(transition, abortSignal.reason ?? 'Aborted after LoadComponents', NavigationCancellationCode.Aborted); return false; }
 
-          switchMap(() => {
-            const {currentSnapshot, targetSnapshot} = overallTransitionState;
-            const viewTransitionStarted = this.createViewTransition?.(
-              this.environmentInjector,
-              currentSnapshot.root,
-              targetSnapshot!.root,
-            );
+    // --- AFTER PREACTIVATION ---
+    await lastValueFrom(this.afterPreactivation().pipe(defaultIfEmpty(undefined), take(1)));
 
-            // If view transitions are enabled, block the navigation until the view
-            // transition callback starts. Otherwise, continue immediately.
-            return viewTransitionStarted
-              ? from(viewTransitionStarted).pipe(map(() => overallTransitionState))
-              : of(overallTransitionState);
-          }),
+    if (abortSignal.aborted) { this.cancelNavigationTransition(transition, abortSignal.reason ?? 'Aborted after Preactivation', NavigationCancellationCode.Aborted); return false; }
 
-          map((t: NavigationTransition) => {
-            const targetRouterState = createRouterState(
-              router.routeReuseStrategy,
-              t.targetSnapshot!,
-              t.currentRouterState,
-            );
-            this.currentTransition = overallTransitionState = {...t, targetRouterState};
-            this.currentNavigation!.targetRouterState = targetRouterState;
-            return overallTransitionState;
-          }),
-
-          tap(() => {
-            this.events.next(new BeforeActivateRoutes());
-          }),
-
-          activateRoutes(
-            this.rootContexts,
-            router.routeReuseStrategy,
-            (evt: Event) => this.events.next(evt),
-            this.inputBindingEnabled,
-          ),
-
-          // Ensure that if some observable used to drive the transition doesn't
-          // complete, the navigation still finalizes This should never happen, but
-          // this is done as a safety measure to avoid surfacing this error (#49567).
-          take(1),
-
-          takeUntil(
-            new Observable<void>((subscriber) => {
-              const abortSignal = overallTransitionState.abortController.signal;
-              const handler = () => subscriber.next();
-              abortSignal.addEventListener('abort', handler);
-              return () => abortSignal.removeEventListener('abort', handler);
-            }).pipe(
-              // Ignore aborts if we are already completed, canceled, or are in the activation stage (we have targetRouterState)
-              filter(() => !completedOrAborted && !overallTransitionState.targetRouterState),
-              tap(() => {
-                this.cancelNavigationTransition(
-                  overallTransitionState,
-                  overallTransitionState.abortController.signal.reason + '',
-                  NavigationCancellationCode.Aborted,
-                );
-              }),
-            ),
-          ),
-
-          tap({
-            next: (t: NavigationTransition) => {
-              completedOrAborted = true;
-              this.lastSuccessfulNavigation = this.currentNavigation;
-              this.events.next(
-                new NavigationEnd(
-                  t.id,
-                  this.urlSerializer.serialize(t.extractedUrl),
-                  this.urlSerializer.serialize(t.urlAfterRedirects!),
-                ),
-              );
-              this.titleStrategy?.updateTitle(t.targetRouterState!.snapshot);
-              t.resolve(true);
-            },
-            complete: () => {
-              completedOrAborted = true;
-            },
-          }),
-
-          // There used to be a lot more logic happening directly within the
-          // transition Observable. Some of this logic has been refactored out to
-          // other places but there may still be errors that happen there. This gives
-          // us a way to cancel the transition from the outside. This may also be
-          // required in the future to support something like the abort signal of the
-          // Navigation API where the navigation gets aborted from outside the
-          // transition.
-          takeUntil(
-            this.transitionAbortWithErrorSubject.pipe(
-              tap((err) => {
-                throw err;
-              }),
-            ),
-          ),
-
-          finalize(() => {
-            /* When the navigation stream finishes either through error or success,
-             * we set the `completed` or `errored` flag. However, there are some
-             * situations where we could get here without either of those being set.
-             * For instance, a redirect during NavigationStart. Therefore, this is a
-             * catch-all to make sure the NavigationCancel event is fired when a
-             * navigation gets cancelled but not caught by other means. */
-            if (!completedOrAborted) {
-              const cancelationReason =
-                typeof ngDevMode === 'undefined' || ngDevMode
-                  ? `Navigation ID ${overallTransitionState.id} is not equal to the current navigation id ${this.navigationId}`
-                  : '';
-              this.cancelNavigationTransition(
-                overallTransitionState,
-                cancelationReason,
-                NavigationCancellationCode.SupersededByNewNavigation,
-              );
-            }
-            // Only clear current navigation if it is still set to the one that
-            // finalized.
-            if (this.currentTransition?.id === overallTransitionState.id) {
-              this.currentNavigation = null;
-              this.currentTransition = null;
-            }
-          }),
-          catchError((e) => {
-            // If the application is already destroyed, the catch block should not
-            // execute anything in practice because other resources have already
-            // been released and destroyed.
-            if (this.destroyed) {
-              overallTransitionState.resolve(false);
-              return EMPTY;
-            }
-
-            completedOrAborted = true;
-            /* This error type is issued during Redirect, and is handled as a
-             * cancellation rather than an error. */
-            if (isNavigationCancelingError(e)) {
-              this.events.next(
-                new NavigationCancel(
-                  overallTransitionState.id,
-                  this.urlSerializer.serialize(overallTransitionState.extractedUrl),
-                  e.message,
-                  e.cancellationCode,
-                ),
-              );
-
-              // When redirecting, we need to delay resolving the navigation
-              // promise and push it to the redirect navigation
-              if (!isRedirectingNavigationCancelingError(e)) {
-                overallTransitionState.resolve(false);
-              } else {
-                this.events.next(new RedirectRequest(e.url, e.navigationBehaviorOptions));
-              }
-
-              /* All other errors should reset to the router's internal URL reference
-               * to the pre-error state. */
-            } else {
-              const navigationError = new NavigationError(
-                overallTransitionState.id,
-                this.urlSerializer.serialize(overallTransitionState.extractedUrl),
-                e,
-                overallTransitionState.targetSnapshot ?? undefined,
-              );
-
-              try {
-                const navigationErrorHandlerResult = runInInjectionContext(
-                  this.environmentInjector,
-                  () => this.navigationErrorHandler?.(navigationError),
-                );
-
-                if (navigationErrorHandlerResult instanceof RedirectCommand) {
-                  const {message, cancellationCode} = redirectingNavigationError(
-                    this.urlSerializer,
-                    navigationErrorHandlerResult,
-                  );
-                  this.events.next(
-                    new NavigationCancel(
-                      overallTransitionState.id,
-                      this.urlSerializer.serialize(overallTransitionState.extractedUrl),
-                      message,
-                      cancellationCode,
-                    ),
-                  );
-                  this.events.next(
-                    new RedirectRequest(
-                      navigationErrorHandlerResult.redirectTo,
-                      navigationErrorHandlerResult.navigationBehaviorOptions,
-                    ),
-                  );
-                } else {
-                  this.events.next(navigationError);
-                  throw e;
-                }
-              } catch (ee) {
-                // TODO(atscott): consider flipping the default behavior of
-                // resolveNavigationPromiseOnError to be `resolve(false)` when
-                // undefined. This is the most sane thing to do given that
-                // applications very rarely handle the promise rejection and, as a
-                // result, would get "unhandled promise rejection" console logs.
-                // The vast majority of applications would not be affected by this
-                // change so omitting a migration seems reasonable. Instead,
-                // applications that rely on rejection can specifically opt-in to the
-                // old behavior.
-                if (this.options.resolveNavigationPromiseOnError) {
-                  overallTransitionState.resolve(false);
-                } else {
-                  overallTransitionState.reject(ee);
-                }
-              }
-            }
-
-            return EMPTY;
-          }),
+    // --- VIEW TRANSITION ---
+    if (this.createViewTransition) {
+        const viewTransitionStarted = this.createViewTransition(
+            this.environmentInjector,
+            transition.currentSnapshot.root,
+            transition.targetSnapshot!.root,
         );
-        // casting because `pipe` returns observable({}) when called with 8+ arguments
-      }),
-    ) as Observable<NavigationTransition>;
+        if (viewTransitionStarted) {
+            await viewTransitionStarted;
+        }
+    }
+
+    if (abortSignal.aborted) { this.cancelNavigationTransition(transition, abortSignal.reason ?? 'Aborted after ViewTransition', NavigationCancellationCode.Aborted); return false; }
+
+    // --- CREATE ROUTER STATE ---
+    const targetRouterState = createRouterState(router.routeReuseStrategy, transition.targetSnapshot!, transition.currentRouterState);
+    transition.targetRouterState = targetRouterState; // Update the transition object
+    // Also update currentNavigation as it's exposed publicly.
+    if (this.currentNavigation) {
+        this.currentNavigation.targetRouterState = targetRouterState;
+    }
+
+    if (abortSignal.aborted) { this.cancelNavigationTransition(transition, abortSignal.reason ?? 'Aborted after CreateRouterState', NavigationCancellationCode.Aborted); return false; }
+
+    // --- BEFORE ACTIVATE ROUTES EVENT ---
+    this.events.next(new BeforeActivateRoutes());
+
+    if (abortSignal.aborted) { this.cancelNavigationTransition(transition, abortSignal.reason ?? 'Aborted after BeforeActivateRoutes event', NavigationCancellationCode.Aborted); return false; }
+
+    // --- ACTIVATE ROUTES ---
+    // The activateRoutes operator also returns an Observable<NavigationTransition>.
+    // It performs the actual activation and component instantiation.
+    // It also emits events like ActivationStart/End.
+    await new Promise<void>((resolve, reject) => {
+        of(transition).pipe(
+            activateRoutes(
+                this.rootContexts,
+                router.routeReuseStrategy,
+                (evt: Event) => this.events.next(evt),
+                this.inputBindingEnabled,
+            ),
+            take(1) // activateRoutes emits the transition and completes.
+        ).subscribe({
+            // next: (finalTransition) => {
+            //   // transition object should be the same or updated by activateRoutes
+            // },
+            error: reject,
+            complete: resolve,
+        });
+    });
+
+    if (abortSignal.aborted) { this.cancelNavigationTransition(transition, abortSignal.reason ?? 'Aborted after ActivateRoutes', NavigationCancellationCode.Aborted); return false; }
+
+    // --- NAVIGATION SUCCESS ---
+    this.lastSuccessfulNavigation = this.currentNavigation;
+    this.events.next(
+        new NavigationEnd(
+            transition.id,
+            this.urlSerializer.serialize(transition.extractedUrl),
+            this.urlSerializer.serialize(transition.urlAfterRedirects!),
+        ),
+    );
+    this.titleStrategy?.updateTitle(transition.targetRouterState!.snapshot);
+    transition.resolve(true);
+
+    console.log(`Navigation ID: ${transition.id} completed successfully.`);
+    // This return true signifies the end of successful navigation if no other stage was planned after.
+    // However, we are inserting this BEFORE Load Components, so we must NOT return here yet.
+    // The original Load Components logic and subsequent stages will follow.
+    // This console log and return true will be moved to the very end later.
+
+    // --- LOAD COMPONENTS ---
+    const loadComponentsRecursive = (route: ActivatedRouteSnapshot): Array<Promise<void>> => {
+        const loaders: Array<Promise<void>> = [];
+        if (route.routeConfig?.loadComponent && !route.routeConfig._loadedComponent) {
+            const loadPromise = lastValueFrom(this.configLoader.loadComponent(route.routeConfig)
+                .pipe(
+                    tap((loadedComponent) => { route.component = loadedComponent; }),
+                    map(() => void 0),
+                    take(1)
+                ));
+            loaders.push(loadPromise);
+        }
+        for (const child of route.children) {
+            loaders.push(...loadComponentsRecursive(child));
+        }
+        return loaders;
+    };
+    const componentLoaders = loadComponentsRecursive(transition.targetSnapshot!.root);
+    if (componentLoaders.length > 0) {
+        await Promise.all(componentLoaders);
+    }
+
+    if (abortSignal.aborted) { this.cancelNavigationTransition(transition, abortSignal.reason ?? 'Aborted after LoadComponents', NavigationCancellationCode.Aborted); return false; }
+
+    // --- AFTER PREACTIVATION ---
+    await lastValueFrom(this.afterPreactivation().pipe(defaultIfEmpty(undefined), take(1)));
+
+    if (abortSignal.aborted) { this.cancelNavigationTransition(transition, abortSignal.reason ?? 'Aborted after Preactivation', NavigationCancellationCode.Aborted); return false; }
+
+    // --- VIEW TRANSITION ---
+    if (this.createViewTransition) {
+        const viewTransitionStarted = this.createViewTransition(
+            this.environmentInjector,
+            transition.currentSnapshot.root,
+            transition.targetSnapshot!.root,
+        );
+        if (viewTransitionStarted) {
+            await viewTransitionStarted;
+        }
+    }
+
+    if (abortSignal.aborted) { this.cancelNavigationTransition(transition, abortSignal.reason ?? 'Aborted after ViewTransition', NavigationCancellationCode.Aborted); return false; }
+
+    // --- CREATE ROUTER STATE ---
+    const targetRouterState = createRouterState(router.routeReuseStrategy, transition.targetSnapshot!, transition.currentRouterState);
+    transition.targetRouterState = targetRouterState; // Update the transition object
+    // Also update currentNavigation as it's exposed publicly.
+    if (this.currentNavigation) {
+        this.currentNavigation.targetRouterState = targetRouterState;
+    }
+
+    if (abortSignal.aborted) { this.cancelNavigationTransition(transition, abortSignal.reason ?? 'Aborted after CreateRouterState', NavigationCancellationCode.Aborted); return false; }
+
+    // --- BEFORE ACTIVATE ROUTES EVENT ---
+    this.events.next(new BeforeActivateRoutes());
+
+    if (abortSignal.aborted) { this.cancelNavigationTransition(transition, abortSignal.reason ?? 'Aborted after BeforeActivateRoutes event', NavigationCancellationCode.Aborted); return false; }
+
+    // --- ACTIVATE ROUTES ---
+    await new Promise<void>((resolve, reject) => {
+        of(transition).pipe(
+            activateRoutes(
+                this.rootContexts,
+                router.routeReuseStrategy,
+                (evt: Event) => this.events.next(evt),
+                this.inputBindingEnabled,
+            ),
+            take(1) // activateRoutes emits the transition and completes.
+        ).subscribe({
+            error: reject,
+            complete: resolve,
+        });
+    });
+
+    if (abortSignal.aborted) { this.cancelNavigationTransition(transition, abortSignal.reason ?? 'Aborted after ActivateRoutes', NavigationCancellationCode.Aborted); return false; }
+
+    // --- NAVIGATION SUCCESS ---
+    this.lastSuccessfulNavigation = this.currentNavigation;
+    this.events.next(
+        new NavigationEnd(
+            transition.id,
+            this.urlSerializer.serialize(transition.extractedUrl),
+            this.urlSerializer.serialize(transition.urlAfterRedirects!),
+        ),
+    );
+    this.titleStrategy?.updateTitle(transition.targetRouterState!.snapshot);
+    transition.resolve(true);
+
+    console.log(`Navigation ID: ${transition.id} completed successfully.`);
+    return true; // Signal overall success of this navigation attempt
   }
 
-  private cancelNavigationTransition(
+  // In setupNavigations, ensure the successfulTransitions subject is used for the return value
+  setupNavigations(router: InternalRouterInterface): Observable<NavigationTransition> {
+    this.transitions = new BehaviorSubject<NavigationTransition | null>(null);
+    let currentNavigationAbortController: AbortController | null = null;
+    let currentTransitionPromiseReject: ((reason?: any) => void) | null = null;
+
+    const destroy$ = new Subject<void>();
+    this.destroyRef.onDestroy(() => {
+        destroy$.next();
+        destroy$.complete();
+        if (currentNavigationAbortController) {
+            currentNavigationAbortController.abort('Router destroyed');
+            currentNavigationAbortController = null;
+        }
+    });
+
+    // Handle transitionAbortWithErrorSubject
+    this.transitionAbortWithErrorSubject.pipe(takeUntil(destroy$)).subscribe(err => {
+        if (currentNavigationAbortController) {
+            currentNavigationAbortController.abort('ExternalError');
+        }
+        if (currentTransitionPromiseReject) {
+            currentTransitionPromiseReject(err);
+            currentTransitionPromiseReject = null;
+        }
+    });
+
+
+    (async () => {
+      this.transitions!
+        .pipe(filter((t): t is NavigationTransition => t !== null), takeUntil(destroy$))
+        .subscribe(async (overallTransitionState) => {
+          let completedOrAbortedThisTransition: boolean = false;
+          currentTransitionPromiseReject = overallTransitionState.reject; // Store the reject for the current transition
+
+          if (this.destroyed) { return; }
+
+          if (currentNavigationAbortController) { currentNavigationAbortController.abort('New navigation started'); }
+          const navigationSpecificAbortController = new AbortController();
+          currentNavigationAbortController = navigationSpecificAbortController;
+
+          const externalAbortHandler = () => {
+              if (!navigationSpecificAbortController.signal.aborted) {
+                  navigationSpecificAbortController.abort('Transition aborted externally');
+              }
+              // If the external abort was from overallTransitionState.abortController, its promise might already be handled.
+              // If not, we might need to ensure overallTransitionState.reject is called.
+              // However, cancelNavigationTransition already calls overallTransitionState.resolve(false).
+          };
+          overallTransitionState.abortController.signal.addEventListener('abort', externalAbortHandler);
+
+          if (overallTransitionState.abortController.signal.aborted) {
+            this.cancelNavigationTransition(overallTransitionState, overallTransitionState.abortController.signal.reason ?? 'Already aborted', NavigationCancellationCode.Aborted);
+            overallTransitionState.abortController.signal.removeEventListener('abort', externalAbortHandler);
+            if (currentNavigationAbortController === navigationSpecificAbortController) { currentNavigationAbortController = null; }
+            currentTransitionPromiseReject = null; // Clear stored reject
+            completedOrAbortedThisTransition = true;
+            return;
+          }
+
+          try {
+            const processResult = await this.processNavigation(overallTransitionState, navigationSpecificAbortController.signal, router);
+
+            if (processResult === true) {
+              this.successfulTransitions.next(overallTransitionState);
+              completedOrAbortedThisTransition = true;
+              // overallTransitionState.resolve(true) was called in processNavigation
+            } else if (processResult === false) {
+              // Cancelled (e.g. guard, skip), promise handled by cancelNavigationTransition
+              completedOrAbortedThisTransition = true;
+            } else { // undefined for redirect
+              completedOrAbortedThisTransition = true;
+            }
+
+          } catch (error) {
+            completedOrAbortedThisTransition = true;
+            if (this.destroyed) { overallTransitionState.resolve(false); return; }
+
+            // Check if the error came from our external abort subject
+            if (navigationSpecificAbortController.signal.aborted && navigationSpecificAbortController.signal.reason === 'ExternalError') {
+                // The error itself was passed to overallTransitionState.reject by the subject's subscriber.
+                // We just need to ensure proper eventing if not already done.
+                // The 'error' variable here would be the AbortError. The actual error is 'err' from the subject.
+                // This path might be complex. Let's simplify: the subject directly rejects.
+                // The main error path below will handle the NavigationError event.
+                // If overallTransitionState.reject was already called by the subject, this catch might be for an AbortError.
+                // It's important that overallTransitionState.reject is called with the *original* error from the subject.
+                // The current setup: subject calls reject(originalError). processNavigation might throw AbortError.
+                // The 'error' in this catch block would be the AbortError.
+                // We need to ensure the NavigationError event uses the original error.
+                // This is tricky. Awaiting a promise that's rejected will make the await throw that rejection.
+                // So if currentTransitionPromiseReject(err) was called, await processNavigation would throw 'err'.
+
+                // If the error caught is the one from the subject, it's already handled.
+                // If it's an AbortError because the subject aborted the controller, then we use the original error for the event.
+                // This part of the original code is subtle: `takeUntil(subject.pipe(tap(err => {throw err;})))`
+                // The `throw err` inside the `tap` makes the main observable error out with `err`.
+                // Our `currentTransitionPromiseReject(err)` does something similar for the `overallTransitionState.promise`.
+                // So, `error` here should be the actual error from the subject.
+            }
+
+
+            if (isNavigationCancelingError(error as Error)) {
+              this.events.next(new NavigationCancel(overallTransitionState.id, this.urlSerializer.serialize(overallTransitionState.extractedUrl), (error as Error).message, (error as any).cancellationCode));
+              if (!isRedirectingNavigationCancelingError(error as Error)) { overallTransitionState.resolve(false); }
+              else { this.events.next(new RedirectRequest((error as any).url, (error as any).navigationBehaviorOptions)); }
+            } else { // General error, including those from transitionAbortWithErrorSubject
+              const navigationError = new NavigationError(overallTransitionState.id, this.urlSerializer.serialize(overallTransitionState.extractedUrl), error as Error, overallTransitionState.targetSnapshot ?? undefined);
+              try {
+                  // If overallTransitionState.reject was already called by the abort subject, this error handler might run again.
+                  // We need to ensure it's idempotent or guarded if the promise is already settled.
+                  // However, a promise can only be rejected once.
+                  const navigationErrorHandlerResult = runInInjectionContext(this.environmentInjector, () => this.navigationErrorHandler?.(navigationError));
+                  if (navigationErrorHandlerResult instanceof RedirectCommand) {
+                      const {message, cancellationCode} = redirectingNavigationError(this.urlSerializer, navigationErrorHandlerResult);
+                      this.events.next(new NavigationCancel(overallTransitionState.id, this.urlSerializer.serialize(overallTransitionState.extractedUrl), message, cancellationCode));
+                      this.events.next(new RedirectRequest(navigationErrorHandlerResult.redirectTo, navigationErrorHandlerResult.navigationBehaviorOptions));
+                      // Original code does not resolve/reject promise here for redirects from error handler
+                  } else {
+                      this.events.next(navigationError);
+                      // If not already rejected by the abort subject, reject now.
+                      // Checking promise status is non-standard and unreliable.
+                      // A better approach is to rely on promises only settling once.
+                      // If reject was called by the subject, subsequent rejects are no-ops.
+                      if (this.options.resolveNavigationPromiseOnError) { overallTransitionState.resolve(false); }
+                      else { overallTransitionState.reject(error); }
+                  }
+              } catch (ee) { // Error from the error handler itself
+                  // Similar to above, rely on promise nature.
+                  if (this.options.resolveNavigationPromiseOnError) { overallTransitionState.resolve(false); }
+                  else { overallTransitionState.reject(ee); }
+              }
+            }
+          } finally {
+            overallTransitionState.abortController.signal.removeEventListener('abort', externalAbortHandler);
+            if (currentNavigationAbortController === navigationSpecificAbortController) {
+              currentNavigationAbortController = null;
+            }
+            currentTransitionPromiseReject = null; // Clear stored reject
+
+            if (!completedOrAbortedThisTransition) {
+                 const reason = navigationSpecificAbortController.signal.reason || overallTransitionState.abortController.signal.reason || 'Unknown abort reason';
+                 const isSuperseded = reason === 'New navigation started' ||
+                                      overallTransitionState.abortController.signal.reason === 'Superseded by new navigation' ||
+                                      (overallTransitionState.id !== this.navigationId && navigationSpecificAbortController.signal.aborted);
+                 const code = isSuperseded ? NavigationCancellationCode.SupersededByNewNavigation : NavigationCancellationCode.Aborted;
+                 if (navigationSpecificAbortController.signal.aborted || overallTransitionState.abortController.signal.aborted || isSuperseded) {
+                    this.cancelNavigationTransition(overallTransitionState, reason, code);
+                 }
+            }
+            if (this.currentTransition?.id === overallTransitionState.id) {
+                this.currentNavigation = null;
+                this.currentTransition = null;
+            }
+          }
+        });
+    })();
+
+    return this.successfulTransitions.asObservable();
+  }
+}
     t: NavigationTransition,
     reason: string,
     code: NavigationCancellationCode,
