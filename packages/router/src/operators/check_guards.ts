@@ -17,7 +17,7 @@ import {
   OperatorFunction,
   pipe,
 } from 'rxjs';
-import {concatMap, first, map, mergeMap, tap} from 'rxjs/operators';
+import {concatMap, first, map, mergeMap, tap, takeUntil} from 'rxjs/operators';
 
 import {ActivationStart, ChildActivationStart, Event} from '../events';
 import {
@@ -51,6 +51,7 @@ import {
 } from '../utils/type_guards';
 
 import {prioritizedGuardValue} from './prioritized_guard_value';
+import {abortSignalToObservable} from '../utils/abort_signal_to_observable';
 
 export function checkGuards(
   injector: EnvironmentInjector,
@@ -244,6 +245,7 @@ export function runCanLoadGuards(
   route: Route,
   segments: UrlSegment[],
   urlSerializer: UrlSerializer,
+  abortSignal?: AbortSignal,
 ): Observable<boolean> {
   const canLoad = route.canLoad;
   if (canLoad === undefined || canLoad.length === 0) {
@@ -255,7 +257,11 @@ export function runCanLoadGuards(
     const guardVal = isCanLoad(guard)
       ? guard.canLoad(route, segments)
       : runInInjectionContext(injector, () => (guard as CanLoadFn)(route, segments));
-    return wrapIntoObservable(guardVal);
+    let guardObservable = wrapIntoObservable(guardVal);
+    if (abortSignal) {
+      guardObservable = guardObservable.pipe(takeUntil(abortSignalToObservable(abortSignal)));
+    }
+    return guardObservable;
   });
 
   return of(canLoadObservables).pipe(prioritizedGuardValue(), redirectIfUrlTree(urlSerializer));
@@ -277,6 +283,7 @@ export function runCanMatchGuards(
   route: Route,
   segments: UrlSegment[],
   urlSerializer: UrlSerializer,
+  abortSignal?: AbortSignal,
 ): Observable<GuardResult> {
   const canMatch = route.canMatch;
   if (!canMatch || canMatch.length === 0) return of(true);
@@ -286,7 +293,11 @@ export function runCanMatchGuards(
     const guardVal = isCanMatch(guard)
       ? guard.canMatch(route, segments)
       : runInInjectionContext(injector, () => (guard as CanMatchFn)(route, segments));
-    return wrapIntoObservable(guardVal);
+    let guardObservable = wrapIntoObservable(guardVal);
+    if (abortSignal) {
+      guardObservable = guardObservable.pipe(takeUntil(abortSignalToObservable(abortSignal)));
+    }
+    return guardObservable;
   });
 
   return of(canMatchObservables).pipe(prioritizedGuardValue(), redirectIfUrlTree(urlSerializer));
