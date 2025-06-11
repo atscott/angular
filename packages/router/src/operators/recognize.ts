@@ -7,7 +7,7 @@
  */
 
 import {EnvironmentInjector, Type} from '@angular/core';
-import {MonoTypeOperatorFunction} from 'rxjs';
+import {from, MonoTypeOperatorFunction} from 'rxjs'; // Added 'from'
 import {map, mergeMap} from 'rxjs/operators';
 
 import type {Route} from '../models';
@@ -25,7 +25,7 @@ export function recognize(
   paramsInheritanceStrategy: 'emptyOnly' | 'always',
 ): MonoTypeOperatorFunction<NavigationTransition> {
   return mergeMap((t) =>
-    recognizeFn(
+    from(recognizeFn( // Wrapped recognizeFn call with from()
       injector,
       configLoader,
       rootComponentType,
@@ -33,7 +33,7 @@ export function recognize(
       t.extractedUrl,
       serializer,
       paramsInheritanceStrategy,
-    ).pipe(
+    )).pipe(
       map(({state: targetSnapshot, tree: urlAfterRedirects}) => {
         return {...t, targetSnapshot, urlAfterRedirects};
       }),

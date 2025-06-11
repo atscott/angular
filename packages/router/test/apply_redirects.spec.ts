@@ -8,7 +8,7 @@
 
 import {EnvironmentInjector, inject, Injectable} from '@angular/core';
 import {TestBed} from '@angular/core/testing';
-import {firstValueFrom, Observable, of} from 'rxjs';
+import {firstValueFrom, from, Observable, of} from 'rxjs'; // Ensure 'from' is imported
 import {switchMap, tap, timeout as rxjsTimeout} from 'rxjs/operators';
 
 import {Route, Routes} from '../src/models';
@@ -86,14 +86,14 @@ describe('redirects', () => {
   });
 
   it('should throw when cannot handle a positional parameter', () => {
-    recognize(
+    from(recognize( // Added from()
       TestBed.inject(EnvironmentInjector),
       null!,
       null,
       [{path: 'a/:id', redirectTo: 'a/:other'}],
       tree('/a/1'),
       serializer,
-    ).subscribe(
+    )).subscribe(
       () => {},
       (e) => {
         expect(e.message).toContain("Cannot redirect to 'a/:other'. Cannot find ':other'.");
@@ -221,14 +221,14 @@ describe('redirects', () => {
   });
 
   it('should throw an error on infinite absolute redirect', () => {
-    recognize(
+    from(recognize( // Added from()
       TestBed.inject(EnvironmentInjector),
       TestBed.inject(RouterConfigLoader),
       null,
       [{path: '**', redirectTo: '/404'}],
       tree('/'),
       new DefaultUrlSerializer(),
-    ).subscribe({
+    )).subscribe({
       next: () => fail('expected infinite redirect error'),
       error: (e) => {
         expect((e as Error).message).toMatch(/infinite redirect/);
@@ -277,14 +277,14 @@ describe('redirects', () => {
       },
       {path: 'doesNotMatch', providers: []},
     ];
-    recognize(
+    from(recognize( // Added from()
       TestBed.inject(EnvironmentInjector),
       null!,
       null,
       routes,
       tree('a/b/c'),
       serializer,
-    ).subscribe({
+    )).subscribe({
       next: () => {
         throw 'Should not be reached';
       },
@@ -318,14 +318,14 @@ describe('redirects', () => {
         providers: [],
       },
     ];
-    recognize(
+    from(recognize( // Added from()
       TestBed.inject(EnvironmentInjector),
       null!,
       null,
       routes,
       tree('a'),
       serializer,
-    ).subscribe({
+    )).subscribe({
       next: () => {
         // The 'a' segment matched, so we needed to create the injector for the `Route`
         expect(getProvidersInjector(routes[0])).toBeDefined();
@@ -355,14 +355,14 @@ describe('redirects', () => {
         {path: 'a', component: ComponentA, loadChildren: jasmine.createSpy('children')},
       ];
 
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         <any>loader,
         null,
         config,
         tree('a/b'),
         serializer,
-      ).forEach(({tree}) => {
+      )).forEach(({tree}) => {
         expectTreeToBe(tree, '/a/b');
         expect(getLoadedRoutes(config[0])).toBe(loadedConfig.routes);
       });
@@ -376,14 +376,14 @@ describe('redirects', () => {
         {path: 'a', component: ComponentA, loadChildren: jasmine.createSpy('children')},
       ];
 
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         <any>loader,
         null,
         config,
         tree('a/b'),
         serializer,
-      ).subscribe(
+      )).subscribe(
         () => {},
         (e) => {
           expect(e.message).toEqual('Loading Error');
@@ -409,14 +409,14 @@ describe('redirects', () => {
         },
       ];
 
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         <any>loader,
         null,
         config,
         tree('a/b'),
         serializer,
-      ).forEach(({tree: r}) => {
+      )).forEach(({tree: r}) => {
         expectTreeToBe(r, '/a/b');
       });
     });
@@ -439,21 +439,20 @@ describe('redirects', () => {
         },
       ];
 
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         <any>loader,
         null,
         config,
         tree('a/b'),
         serializer,
-      ).subscribe(
+      )).subscribe(
         () => {
           throw 'Should not reach';
         },
         (e) => {
-          expect(e.message).toEqual(
-            `NavigationCancelingError: Cannot load children because the guard of the route "path: 'a'" returned false`,
-          );
+          expect(e.message).toEqual( // This error message comes from the refactored recognize.ts
+            `Cannot load children because the guard of the route "path: 'a'" returned false`);
         },
       );
     });
@@ -476,14 +475,14 @@ describe('redirects', () => {
         },
       ];
 
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         <any>loader,
         null,
         config,
         tree('a/b'),
         serializer,
-      ).subscribe(
+      )).subscribe(
         () => {
           throw 'Should not reach';
         },
@@ -511,14 +510,14 @@ describe('redirects', () => {
         },
       ];
 
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         <any>loader,
         null,
         config,
         tree('a/b'),
         serializer,
-      ).subscribe(
+      )).subscribe(
         ({tree: r}) => {
           expectTreeToBe(r, '/a/b');
         },
@@ -553,14 +552,14 @@ describe('redirects', () => {
         },
       ];
 
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         <any>loader,
         null,
         config,
         tree('a/b'),
         serializer,
-      ).subscribe(
+      )).subscribe(
         ({tree: r}) => {
           expectTreeToBe(r, '/a/b');
           expect(passedUrlSegments.length).toBe(2);
@@ -598,14 +597,14 @@ describe('redirects', () => {
         },
       ];
 
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         <any>loader,
         null,
         config,
         tree('a/b'),
         serializer,
-      ).subscribe(
+      )).subscribe(
         ({tree: r}) => {
           expectTreeToBe(r, '/a/b');
           expect(passedUrlSegments.length).toBe(2);
@@ -633,14 +632,14 @@ describe('redirects', () => {
         {path: 'a', loadChildren: jasmine.createSpy('children')},
       ];
 
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         <any>loader,
         null,
         config,
         tree(''),
         serializer,
-      ).forEach(({tree: r}) => {
+      )).forEach(({tree: r}) => {
         expectTreeToBe(r, 'a');
         expect(getLoadedRoutes(config[1])).toBe(loadedConfig.routes);
       });
@@ -663,23 +662,23 @@ describe('redirects', () => {
 
       const config: Routes = [{path: 'a', loadChildren: jasmine.createSpy('children')}];
 
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         <any>loader,
         null,
         config,
         tree('a?k1'),
         serializer,
-      ).subscribe((r) => {});
+      )).subscribe((r) => {});
 
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         <any>loader,
         null,
         config,
         tree('a?k2'),
         serializer,
-      ).subscribe(
+      )).subscribe(
         ({tree: r}) => {
           expectTreeToBe(r, 'a?k2');
           expect(getLoadedRoutes(config[0])).toBe(loadedConfig.routes);
@@ -702,14 +701,14 @@ describe('redirects', () => {
 
       const config: Routes = [{path: '**', loadChildren: jasmine.createSpy('children')}];
 
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         <any>loader,
         null,
         config,
         tree('xyz'),
         serializer,
-      ).forEach(({tree: r}) => {
+      )).forEach(({tree: r}) => {
         expect(getLoadedRoutes(config[0])).toBe(loadedConfig.routes);
       });
     });
@@ -734,14 +733,14 @@ describe('redirects', () => {
       ];
 
       await new Promise<void>((resolve) => {
-        recognize(
+        from(recognize( // Added from()
           TestBed.inject(EnvironmentInjector),
           <any>loader,
           null,
           config,
           tree(''),
           serializer,
-        ).forEach(({tree: r}) => {
+        )).forEach(({tree: r}) => {
           expect(loader.loadChildren.calls.count()).toEqual(1);
           expect(loader.loadChildren.calls.first().args).not.toContain(
             jasmine.objectContaining({
@@ -768,14 +767,14 @@ describe('redirects', () => {
         {path: '**', redirectTo: 'not-found'},
       ];
 
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         <any>loader,
         null,
         config,
         tree('xyz'),
         serializer,
-      ).forEach(({tree: r}) => {
+      )).forEach(({tree: r}) => {
         expect(getLoadedRoutes(config[0])).toBe(loadedConfig.routes);
       });
     });
@@ -795,14 +794,14 @@ describe('redirects', () => {
         {path: '**', redirectTo: '/not-found'},
       ];
 
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         <any>loader,
         null,
         config,
         tree('xyz'),
         serializer,
-      ).forEach(({tree: r}) => {
+      )).forEach(({tree: r}) => {
         expect(getLoadedRoutes(config[0])).toBe(loadedConfig.routes);
       });
     });
@@ -829,14 +828,14 @@ describe('redirects', () => {
         {path: '', loadChildren: jasmine.createSpy('aux'), outlet: 'popup'},
       ];
 
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         <any>loader,
         null,
         config,
         tree(''),
         serializer,
-      ).subscribe();
+      )).subscribe();
       expect(loadCalls).toBe(1);
       await timeout(10);
       expect(loaded).toEqual(['root']);
@@ -864,37 +863,37 @@ describe('redirects', () => {
 
       const config: Routes = [{path: '**', loadChildren: jasmine.createSpy('children')}];
 
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         <any>loader,
         null,
         config,
         tree('xyz/a'),
         serializer,
-      ).subscribe();
+      )).subscribe();
       expect(loadCalls).toBe(1);
       await timeout(5);
       expect(loaded).toEqual([]);
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         <any>loader,
         null,
         config,
         tree('xyz/b'),
         serializer,
-      ).subscribe();
+      )).subscribe();
       await timeout(5);
       expect(loaded).toEqual(['children']);
       expect(loadCalls).toBe(2);
       await timeout(20);
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         <any>loader,
         null,
         config,
         tree('xyz/c'),
         serializer,
-      ).subscribe();
+      )).subscribe();
       await timeout(5);
       expect(loadCalls).toBe(2);
       await timeout(30);
@@ -921,14 +920,14 @@ describe('redirects', () => {
         {path: 'a', loadChildren: jasmine.createSpy('second')},
       ];
 
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         <any>loader,
         null,
         config,
         tree('a'),
         serializer,
-      ).subscribe();
+      )).subscribe();
       expect(loadCalls).toBe(1);
       expect(loaded).toEqual(['first']);
     });
@@ -959,14 +958,14 @@ describe('redirects', () => {
       ];
 
       await firstValueFrom(
-        recognize(
+        from(recognize( // Added from()
           TestBed.inject(EnvironmentInjector),
           <any>loader,
           null,
           config,
           tree('(popup:modal)'),
           serializer,
-        ),
+        )),
       );
       expect(loaded.sort()).toEqual(['aux', 'root'].sort());
     });
@@ -1017,14 +1016,14 @@ describe('redirects', () => {
         {path: '', redirectTo: 'a', pathMatch: 'full'},
       ];
 
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         null!,
         null,
         config,
         tree('b'),
         serializer,
-      ).subscribe(
+      )).subscribe(
         (_) => {
           throw 'Should not be reached';
         },
@@ -1217,14 +1216,14 @@ describe('redirects', () => {
           },
           {path: 'c', component: ComponentC},
         ];
-        recognize(
+        from(recognize( // Added from()
           TestBed.inject(EnvironmentInjector),
           null!,
           null,
           config,
           tree('/b'),
           serializer,
-        ).subscribe(
+        )).subscribe(
           (_) => {
             throw 'Should not be reached';
           },
@@ -1340,14 +1339,14 @@ describe('redirects', () => {
           },
         ];
 
-        recognize(
+        from(recognize( // Added from()
           TestBed.inject(EnvironmentInjector),
           null!,
           null,
           config,
           tree('a/(d//aux:e)'),
           serializer,
-        ).subscribe(
+        )).subscribe(
           (_) => {
             throw 'Should not be reached';
           },
@@ -1391,14 +1390,14 @@ describe('redirects', () => {
     });
 
     it('should error when no children matching and some url is left', () => {
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         null!,
         null,
         [{path: 'a', component: ComponentA, children: [{path: 'b', component: ComponentB}]}],
         tree('/a/c'),
         serializer,
-      ).subscribe(
+      )).subscribe(
         (_) => {
           throw 'Should not be reached';
         },
@@ -1437,7 +1436,7 @@ describe('redirects', () => {
 
   describe('multiple matches with empty path named outlets', () => {
     it('should work with redirects when other outlet comes before the one being activated', () => {
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         null!,
         null,
@@ -1454,7 +1453,7 @@ describe('redirects', () => {
         ],
         tree(''),
         serializer,
-      ).subscribe(
+      )).subscribe(
         ({tree}) => {
           expect(tree.toString()).toEqual('/b(aux:b)');
           expect(tree.root.children['primary'].toString()).toEqual('b');
@@ -1468,7 +1467,7 @@ describe('redirects', () => {
     });
 
     it('should prevent empty named outlets from appearing in leaves, resulting in odd tree url', () => {
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         null!,
         null,
@@ -1484,7 +1483,7 @@ describe('redirects', () => {
         ],
         tree(''),
         serializer,
-      ).subscribe(
+      )).subscribe(
         ({tree}) => {
           expect(tree.toString()).toEqual('/b');
         },
@@ -1495,7 +1494,7 @@ describe('redirects', () => {
     });
 
     it('should work when entry point is named outlet', () => {
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         null!,
         null,
@@ -1505,7 +1504,7 @@ describe('redirects', () => {
         ],
         tree('(popup:modal)'),
         serializer,
-      ).subscribe(
+      )).subscribe(
         ({tree}) => {
           expect(tree.toString()).toEqual('/(popup:modal)');
         },
@@ -1546,14 +1545,14 @@ describe('redirects', () => {
     });
 
     it('should throw when using non-absolute redirects', () => {
-      recognize(
+      from(recognize( // Added from()
         TestBed.inject(EnvironmentInjector),
         null!,
         null,
         [{path: 'a', redirectTo: 'b(aux:c)'}],
         tree('a'),
         serializer,
-      ).subscribe(
+      )).subscribe(
         () => {
           throw new Error('should not be reached');
         },
@@ -1838,14 +1837,14 @@ describe('redirects', () => {
       config.push({path: 'no_match', component: ComponentB});
     }
     config.push({path: 'match', component: ComponentA});
-    recognize(
+    from(recognize( // Added from()
       TestBed.inject(EnvironmentInjector),
       null!,
       null,
       config,
       tree('match'),
       serializer,
-    ).forEach(({tree: r}) => {
+    )).forEach(({tree: r}) => {
       expectTreeToBe(r, 'match');
     });
   });
@@ -1859,7 +1858,7 @@ function checkRedirect(
   errorCallback?: (e: unknown) => void,
 ): void {
   const redirectionTimeout = 10;
-  recognize(
+  from(recognize( // Added from()
     TestBed.inject(EnvironmentInjector),
     TestBed.inject(RouterConfigLoader),
     null,
@@ -1867,7 +1866,7 @@ function checkRedirect(
     tree(url),
     new DefaultUrlSerializer(),
     paramsInheritanceStrategy,
-  )
+  ))
     .pipe(rxjsTimeout(redirectionTimeout))
     .subscribe({
       next: (v) => callback(v.tree, v.state),

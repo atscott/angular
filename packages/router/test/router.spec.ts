@@ -10,12 +10,12 @@ import {Location} from '@angular/common';
 import {EnvironmentInjector, inject} from '@angular/core';
 import {TestBed} from '@angular/core/testing';
 import {RouterModule} from '../index';
-import {of} from 'rxjs';
+import {from, of} from 'rxjs'; // Added from
 
-import {ChildActivationStart} from '../src/events';
+import {ChildActivationStart, ActivationStart} from '../src/events'; // Added ActivationStart
 import {GuardResult, Routes} from '../src/models';
 import {NavigationTransition} from '../src/navigation_transition';
-import {checkGuards as checkGuardsOperator} from '../src/operators/check_guards';
+import {checkGuards as checkGuardsFn} from '../src/operators/check_guards';
 import {resolveData as resolveDataOperator} from '../src/operators/resolve_data';
 import {Router} from '../src/router';
 import {ChildrenOutletContexts} from '../src/router_outlet_context';
@@ -162,11 +162,6 @@ describe('Router', () => {
 
     describe('ChildActivation', () => {
       it('should run', () => {
-        /**
-         * R  -->  R (ChildActivationStart)
-         *          \
-         *           child
-         */
         let result = false;
         const childSnapshot = createActivatedRouteSnapshot({
           component: 'child',
@@ -176,58 +171,38 @@ describe('Router', () => {
           'url',
           new TreeNode(empty.root, [new TreeNode(childSnapshot, [])]),
         );
-        // Since we only test the guards, we don't need to provide a full navigation
-        // transition object with all properties set.
         const testTransition = {
           guards: getAllRouteGuards(
             futureState,
             empty,
             new ChildrenOutletContexts(TestBed.inject(EnvironmentInjector)),
           ),
+          id: 0,
+          extractedUrl: new DefaultUrlSerializer().parse('/extracted'),
+          urlAfterRedirects: new DefaultUrlSerializer().parse('/after-redirects'),
+          targetSnapshot: futureState,
+          abortController: new AbortController()
         } as NavigationTransition;
 
-        of(testTransition)
-          .pipe(
-            checkGuardsOperator(TestBed.inject(EnvironmentInjector), (evt) => {
-              events.push(evt);
-            }),
-          )
+        from(checkGuardsFn(TestBed.inject(EnvironmentInjector), (evt) => { events.push(evt); })(testTransition))
           .subscribe(
             (x) => (result = !!x.guardsResult),
-            (e) => {
-              throw e;
-            },
+            (e) => { throw e; },
           );
 
         expect(result).toBe(true);
-        expect(events.length).toEqual(2);
+        expect(events.length).toEqual(2); // ActivationStart for root, ChildActivationStart for child
+        expect(events[0] instanceof ActivationStart).toBe(true);
         expect(events[0].snapshot).toBe(events[0].snapshot.root);
+        expect(events[1] instanceof ChildActivationStart).toBe(true);
         expect(events[1].snapshot.routeConfig.path).toBe('child');
       });
 
       it('should run from top to bottom', () => {
-        /**
-         * R  -->  R (ChildActivationStart)
-         *          \
-         *           child (ChildActivationStart)
-         *            \
-         *             grandchild (ChildActivationStart)
-         *              \
-         *               great grandchild
-         */
         let result = false;
-        const childSnapshot = createActivatedRouteSnapshot({
-          component: 'child',
-          routeConfig: {path: 'child'},
-        });
-        const grandchildSnapshot = createActivatedRouteSnapshot({
-          component: 'grandchild',
-          routeConfig: {path: 'grandchild'},
-        });
-        const greatGrandchildSnapshot = createActivatedRouteSnapshot({
-          component: 'great-grandchild',
-          routeConfig: {path: 'great-grandchild'},
-        });
+        const childSnapshot = createActivatedRouteSnapshot({ component: 'child', routeConfig: {path: 'child'} });
+        const grandchildSnapshot = createActivatedRouteSnapshot({ component: 'grandchild', routeConfig: {path: 'grandchild'} });
+        const greatGrandchildSnapshot = createActivatedRouteSnapshot({ component: 'great-grandchild', routeConfig: {path: 'great-grandchild'} });
         const futureState = new (RouterStateSnapshot as any)(
           'url',
           new TreeNode(empty.root, [
@@ -236,54 +211,35 @@ describe('Router', () => {
             ]),
           ]),
         );
-        // Since we only test the guards, we don't need to provide a full navigation
-        // transition object with all properties set.
         const testTransition = {
           guards: getAllRouteGuards(
             futureState,
             empty,
             new ChildrenOutletContexts(TestBed.inject(EnvironmentInjector)),
           ),
+          id: 0, extractedUrl: new DefaultUrlSerializer().parse('/extracted'), urlAfterRedirects: new DefaultUrlSerializer().parse('/after-redirects'), targetSnapshot: futureState, abortController: new AbortController()
         } as NavigationTransition;
 
-        of(testTransition)
-          .pipe(
-            checkGuardsOperator(TestBed.inject(EnvironmentInjector), (evt) => {
-              events.push(evt);
-            }),
-          )
+        from(checkGuardsFn(TestBed.inject(EnvironmentInjector), (evt) => { events.push(evt); })(testTransition))
           .subscribe(
             (x) => (result = !!x.guardsResult),
-            (e) => {
-              throw e;
-            },
+            (e) => { throw e; },
           );
 
         expect(result).toBe(true);
         expect(events.length).toEqual(6);
-        expect(events[0].snapshot).toBe(events[0].snapshot.root);
-        expect(events[2].snapshot.routeConfig.path).toBe('child');
-        expect(events[4].snapshot.routeConfig.path).toBe('grandchild');
-        expect(events[5].snapshot.routeConfig.path).toBe('great-grandchild');
+        expect(events[0] instanceof ActivationStart && events[0].snapshot === futureState.root).toBe(true);
+        expect(events[1] instanceof ChildActivationStart && events[1].snapshot === futureState.root).toBe(true);
+        expect(events[2] instanceof ActivationStart && events[2].snapshot === childSnapshot).toBe(true);
+        expect(events[3] instanceof ChildActivationStart && events[3].snapshot === childSnapshot).toBe(true);
+        expect(events[4] instanceof ActivationStart && events[4].snapshot === grandchildSnapshot).toBe(true);
+        expect(events[5] instanceof ChildActivationStart && events[5].snapshot === grandchildSnapshot).toBe(true);
       });
 
       it('should not run for unchanged routes', () => {
-        /**
-         *         R  -->  R
-         *        / \
-         *   child   child (ChildActivationStart)
-         *            \
-         *             grandchild
-         */
         let result = false;
-        const childSnapshot = createActivatedRouteSnapshot({
-          component: 'child',
-          routeConfig: {path: 'child'},
-        });
-        const grandchildSnapshot = createActivatedRouteSnapshot({
-          component: 'grandchild',
-          routeConfig: {path: 'grandchild'},
-        });
+        const childSnapshot = createActivatedRouteSnapshot({ component: 'child', routeConfig: {path: 'child'} });
+        const grandchildSnapshot = createActivatedRouteSnapshot({ component: 'grandchild', routeConfig: {path: 'grandchild'} });
         const currentState = new (RouterStateSnapshot as any)(
           'url',
           new TreeNode(empty.root, [new TreeNode(childSnapshot, [])]),
@@ -294,64 +250,33 @@ describe('Router', () => {
             new TreeNode(childSnapshot, [new TreeNode(grandchildSnapshot, [])]),
           ]),
         );
-        // Since we only test the guards, we don't need to provide a full navigation
-        // transition object with all properties set.
         const testTransition = {
           guards: getAllRouteGuards(
             futureState,
             currentState,
             new ChildrenOutletContexts(TestBed.inject(EnvironmentInjector)),
           ),
+          id: 0, extractedUrl: new DefaultUrlSerializer().parse('/extracted'), urlAfterRedirects: new DefaultUrlSerializer().parse('/after-redirects'), targetSnapshot: futureState, abortController: new AbortController()
         } as NavigationTransition;
 
-        of(testTransition)
-          .pipe(
-            checkGuardsOperator(TestBed.inject(EnvironmentInjector), (evt) => {
-              events.push(evt);
-            }),
-          )
+        from(checkGuardsFn(TestBed.inject(EnvironmentInjector), (evt) => { events.push(evt); })(testTransition))
           .subscribe(
             (x) => (result = !!x.guardsResult),
-            (e) => {
-              throw e;
-            },
+            (e) => { throw e; },
           );
 
         expect(result).toBe(true);
         expect(events.length).toEqual(2);
-        expect(events[0].snapshot).not.toBe(events[0].snapshot.root);
-        expect(events[0].snapshot.routeConfig.path).toBe('child');
+        expect(events[0] instanceof ActivationStart && events[0].snapshot === grandchildSnapshot).toBe(true);
+        expect(events[1] instanceof ChildActivationStart && events[1].snapshot === grandchildSnapshot).toBe(true);
       });
 
       it('should skip multiple unchanged routes but fire for all changed routes', () => {
-        /**
-         *         R  -->  R
-         *            / \
-         *       child   child
-         *          /     \
-         * grandchild      grandchild (ChildActivationStart)
-         *                  \
-         *                   greatgrandchild (ChildActivationStart)
-         *                    \
-         *                     great-greatgrandchild
-         */
         let result = false;
-        const childSnapshot = createActivatedRouteSnapshot({
-          component: 'child',
-          routeConfig: {path: 'child'},
-        });
-        const grandchildSnapshot = createActivatedRouteSnapshot({
-          component: 'grandchild',
-          routeConfig: {path: 'grandchild'},
-        });
-        const greatGrandchildSnapshot = createActivatedRouteSnapshot({
-          component: 'greatgrandchild',
-          routeConfig: {path: 'greatgrandchild'},
-        });
-        const greatGreatGrandchildSnapshot = createActivatedRouteSnapshot({
-          component: 'great-greatgrandchild',
-          routeConfig: {path: 'great-greatgrandchild'},
-        });
+        const childSnapshot = createActivatedRouteSnapshot({ component: 'child', routeConfig: {path: 'child'} });
+        const grandchildSnapshot = createActivatedRouteSnapshot({ component: 'grandchild', routeConfig: {path: 'grandchild'} });
+        const greatGrandchildSnapshot = createActivatedRouteSnapshot({ component: 'greatgrandchild', routeConfig: {path: 'greatgrandchild'} });
+        const greatGreatGrandchildSnapshot = createActivatedRouteSnapshot({ component: 'great-greatgrandchild', routeConfig: {path: 'great-greatgrandchild'} });
         const currentState = new (RouterStateSnapshot as any)(
           'url',
           new TreeNode(empty.root, [
@@ -370,35 +295,27 @@ describe('Router', () => {
             ]),
           ]),
         );
-        // Since we only test the guards, we don't need to provide a full navigation
-        // transition object with all properties set.
         const testTransition = {
           guards: getAllRouteGuards(
             futureState,
             currentState,
             new ChildrenOutletContexts(TestBed.inject(EnvironmentInjector)),
           ),
+          id: 0, extractedUrl: new DefaultUrlSerializer().parse('/extracted'), urlAfterRedirects: new DefaultUrlSerializer().parse('/after-redirects'), targetSnapshot: futureState, abortController: new AbortController()
         } as NavigationTransition;
 
-        of(testTransition)
-          .pipe(
-            checkGuardsOperator(TestBed.inject(EnvironmentInjector), (evt) => {
-              events.push(evt);
-            }),
-          )
+        from(checkGuardsFn(TestBed.inject(EnvironmentInjector), (evt) => { events.push(evt); })(testTransition))
           .subscribe(
             (x) => (result = !!x.guardsResult),
-            (e) => {
-              throw e;
-            },
+            (e) => { throw e; },
           );
 
         expect(result).toBe(true);
         expect(events.length).toEqual(4);
-        expect(events[0] instanceof ChildActivationStart).toBe(true);
-        expect(events[0].snapshot).not.toBe(events[0].snapshot.root);
-        expect(events[0].snapshot.routeConfig.path).toBe('grandchild');
-        expect(events[2].snapshot.routeConfig.path).toBe('greatgrandchild');
+        expect(events[0] instanceof ActivationStart && events[0].snapshot === greatGrandchildSnapshot).toBe(true);
+        expect(events[1] instanceof ChildActivationStart && events[1].snapshot === greatGrandchildSnapshot).toBe(true);
+        expect(events[2] instanceof ActivationStart && events[2].snapshot === greatGreatGrandchildSnapshot).toBe(true);
+        expect(events[3] instanceof ChildActivationStart && events[3].snapshot === greatGreatGrandchildSnapshot).toBe(true);
       });
     });
 
@@ -871,6 +788,12 @@ function checkResolveData(
   // a full navigation transition object with all properties set.
   of({
     guards: getAllRouteGuards(future, curr, new ChildrenOutletContexts(injector)),
+    // Minimal mock for NavigationTransition properties potentially used by resolveDataOperator
+    id: 0,
+    extractedUrl: new DefaultUrlSerializer().parse('/extracted'),
+    urlAfterRedirects: new DefaultUrlSerializer().parse('/after-redirects'),
+    targetSnapshot: future,
+    abortController: new AbortController()
   } as NavigationTransition)
     .pipe(resolveDataOperator('emptyOnly', injector))
     .subscribe(check, (e) => {
@@ -886,10 +809,30 @@ function checkGuards(
 ): void {
   // Since we only test the guards, we don't need to provide a full navigation
   // transition object with all properties set.
-  of({
+  // A more complete mock is needed for the new checkGuardsFn
+  const mockTransition = {
+    id: 0,
     guards: getAllRouteGuards(future, curr, new ChildrenOutletContexts(injector)),
-  } as NavigationTransition)
-    .pipe(checkGuardsOperator(injector))
+    targetSnapshot: future,
+    currentSnapshot: curr,
+    currentUrlTree: new DefaultUrlSerializer().parse('/current'),
+    extractedUrl: new DefaultUrlSerializer().parse('/extracted'),
+    urlAfterRedirects: new DefaultUrlSerializer().parse('/after-redirects'),
+    rawUrl: new DefaultUrlSerializer().parse('/raw'),
+    currentRawUrl: new DefaultUrlSerializer().parse('/current-raw'),
+    extras: {},
+    source: 'imperative',
+    restoredState: null,
+    currentRouterState: {snapshot: curr, root: {} as any, toString: () => ''},
+    targetRouterState: null,
+    guardsResult: null,
+    resolve: () => {},
+    reject: () => {},
+    promise: Promise.resolve(true),
+    abortController: new AbortController(),
+  } as NavigationTransition;
+
+  from(checkGuardsFn(injector, undefined)(mockTransition))
     .subscribe({
       next(t) {
         if (t.guardsResult === null) throw new Error('Guard result expected');

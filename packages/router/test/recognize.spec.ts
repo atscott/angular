@@ -572,8 +572,7 @@ describe('recognize', () => {
           'emptyOnly',
           new DefaultUrlSerializer(),
         )
-          .recognize()
-          .toPromise();
+          .recognize(); // Removed .toPromise()
         await expectAsync(recognizePromise).toBeRejected();
       });
     });
@@ -820,9 +819,8 @@ async function recognize(
     paramsInheritanceStrategy,
     serializer,
   )
-    .recognize()
-    .toPromise();
-  return result!.state;
+    .recognize(); // Removed .toPromise()
+  return result.state; // Removed ! from result!.state
 }
 
 function checkActivatedRoute(

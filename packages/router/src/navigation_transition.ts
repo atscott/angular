@@ -66,7 +66,7 @@ import {
   redirectingNavigationError,
 } from './navigation_canceling_error';
 import {activateRoutes} from './operators/activate_routes';
-import {checkGuards} from './operators/check_guards';
+import {checkGuards as checkGuardsFn} from './operators/check_guards'; // Aliased import
 import {recognize} from './operators/recognize';
 import {resolveData} from './operators/resolve_data';
 import {switchTap} from './operators/switch_tap';
@@ -616,7 +616,9 @@ export class NavigationTransitions {
             return overallTransitionState;
           }),
 
-          checkGuards(this.environmentInjector, (evt: Event) => this.events.next(evt)),
+          // checkGuards now returns a function that returns a Promise.
+          // We use switchMap to call it and convert the Promise to an Observable.
+          switchMap(t => from(checkGuardsFn(this.environmentInjector, (evt: Event) => this.events.next(evt))(t))),
           tap((t) => {
             overallTransitionState.guardsResult = t.guardsResult;
             if (t.guardsResult && typeof t.guardsResult !== 'boolean') {
