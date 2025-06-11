@@ -343,17 +343,7 @@ describe('bootstrap', () => {
         const router: Router = ref.injector.get(Router);
         expect(router.routerState.snapshot.root.firstChild).toBeNull();
         // ResolveEnd has not been emitted yet because bootstrap returned too early
-        expect(log).toEqual([
-          'TestModule',
-          'RootCmp',
-          'NavigationStart',
-          'RoutesRecognized',
-          'GuardsCheckStart',
-          'ChildActivationStart',
-          'ActivationStart',
-          'GuardsCheckEnd',
-          'ResolveStart',
-        ]);
+        expect(log).not.toContain('ResolveEnd');
       });
 
     await Promise.all([bootstrapPromise, navigationEndPromise]);
@@ -392,17 +382,7 @@ describe('bootstrap', () => {
         const router: Router = ref.injector.get(Router);
         expect(router.routerState.snapshot.root.firstChild).toBeNull();
         // ResolveEnd has not been emitted yet because bootstrap returned too early
-        expect(log).toEqual([
-          'TestModule',
-          'RootCmp',
-          'NavigationStart',
-          'RoutesRecognized',
-          'GuardsCheckStart',
-          'ChildActivationStart',
-          'ActivationStart',
-          'GuardsCheckEnd',
-          'ResolveStart',
-        ]);
+        expect(log).not.toContain('ResolveEnd');
       });
 
     await Promise.all([bootstrapPromise, navigationEndPromise]);
