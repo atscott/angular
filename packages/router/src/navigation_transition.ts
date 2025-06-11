@@ -87,6 +87,7 @@ import {UrlHandlingStrategy} from './url_handling_strategy';
 import {isUrlTree, UrlSerializer, UrlTree} from './url_tree';
 import {Checks, getAllRouteGuards} from './utils/preactivation';
 import {CREATE_VIEW_TRANSITION} from './utils/view_transition';
+import {abortSignalToObservable} from './utils/abort_signal_to_observable';
 
 /**
  * @description
@@ -527,6 +528,7 @@ export class NavigationTransitions {
                   router.config,
                   this.urlSerializer,
                   this.paramsInheritanceStrategy,
+                  overallTransitionState.abortController.signal,
                 ),
 
                 // Update URL if in `eager` update mode
@@ -759,12 +761,7 @@ export class NavigationTransitions {
           take(1),
 
           takeUntil(
-            new Observable<void>((subscriber) => {
-              const abortSignal = overallTransitionState.abortController.signal;
-              const handler = () => subscriber.next();
-              abortSignal.addEventListener('abort', handler);
-              return () => abortSignal.removeEventListener('abort', handler);
-            }).pipe(
+            abortSignalToObservable(overallTransitionState.abortController.signal).pipe(
               // Ignore aborts if we are already completed, canceled, or are in the activation stage (we have targetRouterState)
               filter(() => !completedOrAborted && !overallTransitionState.targetRouterState),
               tap(() => {
@@ -812,6 +809,7 @@ export class NavigationTransitions {
           ),
 
           finalize(() => {
+            overallTransitionState.abortController.abort();
             /* When the navigation stream finishes either through error or success,
              * we set the `completed` or `errored` flag. However, there are some
              * situations where we could get here without either of those being set.
