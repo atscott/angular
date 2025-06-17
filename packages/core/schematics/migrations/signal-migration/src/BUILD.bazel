@@ -37,6 +37,7 @@ ts_project(
         "//packages/core/schematics/migrations/output-migration:__pkg__",
         "//packages/core/schematics/migrations/signal-migration/test:__pkg__",
         "//packages/core/schematics/migrations/signal-queries-migration:__pkg__",
+        "//packages/core/schematics/migrations/signal-members-migration:__pkg__",
         "//packages/core/schematics/ng-generate/signal-input-migration:__pkg__",
         "//packages/language-service:__subpackages__",
     ],
