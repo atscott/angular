@@ -388,14 +388,14 @@ export class Recognizer {
     outlet: string,
     parentRoute: ActivatedRouteSnapshot,
   ): Promise<TreeNode<ActivatedRouteSnapshot>> {
-    const result = await (matchWithChecks(
+    const result = await matchWithChecks(
       rawSegment,
       route,
       segments,
       injector,
       this.urlSerializer,
       this.abortSignal,
-    ).toPromise() as Promise<MatchResult>);
+    ).toPromise();
     if (route.path === '**') {
       // Prior versions of the route matching algorithm would stop matching at the wildcard route.
       // We should investigate a better strategy for any existing children. Otherwise, these
@@ -404,7 +404,7 @@ export class Recognizer {
       rawSegment.children = {};
     }
 
-    if (!result.matched) {
+    if (!result?.matched) {
       throw new NoMatch(rawSegment);
     }
     // If the route has an injector created from providers, we should start using that.
@@ -485,17 +485,18 @@ export class Recognizer {
         return {routes: route._loadedRoutes, injector: route._loadedInjector!};
       }
 
-      const shouldLoadResult = await (runCanLoadGuards(
+      const shouldLoadResult = await runCanLoadGuards(
         injector,
         route,
         segments,
         this.urlSerializer,
         this.abortSignal,
-      ).toPromise() as Promise<boolean>);
+      ).toPromise();
       if (shouldLoadResult) {
-        const cfg = await (this.configLoader
-          .loadChildren(injector, route)
-          .toPromise() as Promise<LoadedRouterConfig>);
+        const cfg = await this.configLoader.loadChildren(injector, route).toPromise();
+        if (!cfg) {
+          throw canLoadFails(route);
+        }
         route._loadedRoutes = cfg.routes;
         route._loadedInjector = cfg.injector;
         return cfg;
