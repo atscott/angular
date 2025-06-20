@@ -52,6 +52,7 @@ describe('redirects', () => {
         createTestUrlTree(url),
         new DefaultUrlSerializer(),
         'emptyOnly', // paramsInheritanceStrategy
+        new AbortController().signal, // abortSignal
       );
       expectTreeToBe(result.tree, '/a/b');
     } catch (e) {

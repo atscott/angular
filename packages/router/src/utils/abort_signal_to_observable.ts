@@ -1,5 +1,5 @@
 import {Observable, of} from 'rxjs';
-import {take} from 'rxjs/operators';
+import {take, takeUntil} from 'rxjs/operators';
 
 /**
  * Converts an AbortSignal to an Observable<void>.
@@ -18,4 +18,8 @@ export function abortSignalToObservable(signal: AbortSignal): Observable<void> {
     signal.addEventListener('abort', handler);
     return () => signal.removeEventListener('abort', handler);
   });
+}
+
+export function takeUntilAbort<T>(signal: AbortSignal) {
+  return takeUntil<T>(abortSignalToObservable(signal));
 }

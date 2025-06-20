@@ -188,6 +188,8 @@ async function createState(config: Routes, url: string): Promise<RouterStateSnap
     config,
     tree(url),
     new DefaultUrlSerializer(),
+    undefined,
+    new AbortController().signal,
   );
   return result.state;
 }
