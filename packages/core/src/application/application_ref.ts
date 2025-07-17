@@ -117,7 +117,7 @@ export interface BootstrapOptions {
    * - Provide your own `NgZone` instance.
    * - `zone.js` - Use default `NgZone` which requires `Zone.js`.
    * - `noop` - Use `NoopNgZone` which does nothing.
-   * 
+   *
    * @deprecated BootstrapOptions is deprecated. Provide `NgZone` in the `providers` array of the module instead.
    */
   ngZone?: NgZone | 'zone.js' | 'noop';
