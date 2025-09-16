@@ -15,6 +15,7 @@ import {
 } from '../mock_platform_location';
 
 import {FakeNavigation} from './fake_navigation';
+import {PRECOMMIT_HANDLER_SUPPORTED} from '../../../src/navigation/platform_navigation';
 
 const FAKE_NAVIGATION = new InjectionToken<FakeNavigation>('fakeNavigation', {
   providedIn: 'root',
@@ -38,5 +39,6 @@ export function provideFakePlatformNavigation(): Provider[] {
       useFactory: () => inject(FAKE_NAVIGATION),
     },
     {provide: PlatformLocation, useClass: FakeNavigationPlatformLocation},
+    {provide: PRECOMMIT_HANDLER_SUPPORTED, useValue: true},
   ];
 }

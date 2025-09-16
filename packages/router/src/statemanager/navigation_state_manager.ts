@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 
-import {PlatformLocation, PlatformNavigation} from '@angular/common';
+import {PlatformLocation, PlatformNavigation, ɵPRECOMMIT_HANDLER_SUPPORTED as PRECOMMIT_HANDLER_SUPPORTED} from '@angular/common';
 import {afterNextRender, EnvironmentInjector, inject, Injectable} from '@angular/core';
 import {Subject, SubscriptionLike} from 'rxjs';
 
@@ -107,6 +107,7 @@ export class NavigationStateManager extends StateManager {
   private readonly inMemoryScrollingEnabled = inject(ROUTER_SCROLLER, {optional: true}) !== null;
   override readonly canceledNavigationResolution =
     this.options.canceledNavigationResolution || /*'computed'*/ 'replace';
+  private readonly precommitHandlerSupported = inject(PRECOMMIT_HANDLER_SUPPORTED);
 
   /**
    * The `NavigationHistoryEntry` from the Navigation API that corresponds to the last successfully
@@ -225,23 +226,15 @@ export class NavigationStateManager extends StateManager {
     if (e instanceof NavigationStart) {
       // Preserve the current router state before starting a new navigation.
       this.updateStateMemento();
-      const path = this.createBrowserPath(transition);
       // If a `NavigateEvent` from the Navigation API isn't already associated with this router
       // transition (i.e., this router navigation was initiated imperatively via `router.navigate`
       // and not by an already intercepted browser navigation event), then we need to trigger one
       // using `this.navigation.navigate()`.
-      if (!this.currentNavigation.navigateEvent) {
-        // Ensure the NavigationStart event is marked as handled once the corresponding
-        // browser `navigate` event is processed by our listener.
-        onNextNavigateEventWithRouterInfo(this.navigation, () =>
-          transition.navigationStartHandled.next(),
-        );
-        // Programmatically trigger a navigation via the Navigation API.
-        this.navigate(path, transition);
-      } else {
-        // A `NavigateEvent` already exists (e.g., user click intercepted), so just mark as handled.
-        transition.navigationStartHandled.next();
+      if (!this.currentNavigation.navigateEvent && this.precommitHandlerSupported) {
+        await this.createNavigationForTransition(transition);
       }
+      // A `NavigateEvent` already exists (e.g., user click intercepted), so just mark as handled.
+      transition.navigationStartHandled.next();
     } else if (e instanceof NavigationSkipped) {
       // Navigation was skipped (e.g., `UrlHandlingStrategy` decided not to process).
       // Finalize any pending Navigation API operations and commit the router state.
@@ -251,6 +244,9 @@ export class NavigationStateManager extends StateManager {
       // If URL update strategy is 'eager', commit the URL now.
       if (this.urlUpdateStrategy === 'eager') {
         try {
+          if (!this.currentNavigation.navigateEvent) {
+            await this.createNavigationForTransition(transition);
+          }
           // `commitUrl` will call `event.commit()` or `controller.redirect()` on the
           // intercepted `NavigateEvent`.
           await this.currentNavigation.commitUrl?.();
@@ -263,7 +259,12 @@ export class NavigationStateManager extends StateManager {
     } else if (e instanceof BeforeActivateRoutes) {
       // If URL update strategy is 'deferred', commit the URL now (before activation).
       if (this.urlUpdateStrategy === 'deferred') {
+        // `commitUrl` will call `event.commit()` or `controller.redirect()` on the
+        // intercepted `NavigateEvent`.
         try {
+          if (!this.currentNavigation.navigateEvent) {
+            await this.createNavigationForTransition(transition);
+          }
           await this.currentNavigation.commitUrl?.();
         } catch {
           return;
@@ -296,6 +297,14 @@ export class NavigationStateManager extends StateManager {
       // potentially after the next render to allow UI updates (e.g., scrolling) to settle.
       afterNextRender({read: () => resolvePostCommitHandler?.()}, {injector: this.injector});
     }
+  }
+
+  private async createNavigationForTransition(transition: Navigation) {
+    const path = this.createBrowserPath(transition);
+    await new Promise<void>((r) => {
+      onNextNavigateEventWithRouterInfo(this.navigation, () => r());
+      this.navigate(path, transition);
+    });
   }
 
   /**
@@ -478,6 +487,7 @@ export class NavigationStateManager extends StateManager {
     ((url: string, options: {state: unknown; history?: 'push' | 'replace'}) => void) | null = null;
 
     const deferCommitWithPrecommitHandler =
+      this.precommitHandlerSupported &&
       // Cannot defer commit if not cancelable by the Navigation API's rules.
       event.cancelable &&
       // Deferring a traversal commit is currently problematic or not fully supported.
@@ -522,11 +532,20 @@ export class NavigationStateManager extends StateManager {
       if (!deferCommitWithPrecommitHandler || redirect === null) {
         await commit();
         // If after commit, the expected path/URL differs from the event's destination,
-        // it we didn't go to the right place. Attempt to correct this.
+        // it we didn't go to the right place. This can happen if another handler redirects.
+        // Also, if the destination state might lack `navigationId` if the precommit handler
+        // is not supported in this browser and the user manually changed the URL.
+        // Attempt to correct this with a replaceState.
         const eventDestination = new URL(event.destination.url);
+        const resultAndDestinationDiffer =
+          new URL(pathOrUrl, eventDestination.origin).href !== eventDestination.href;
+        const resultContainsNavigationId = !!(event.destination.getState() as RestoredState)
+          ?.navigationId;
+        // If we're committing without a finalUrl, then we're just committing because we're actually skipping the navigation
+        const shouldProcessUrl = this.currentNavigation.routerTransition?.finalUrl;
         if (
           !transition.extras.skipLocationChange &&
-          new URL(pathOrUrl, eventDestination.origin).href !== eventDestination.href
+          (resultAndDestinationDiffer || (!resultContainsNavigationId && shouldProcessUrl))
         ) {
           await this.redirectNavigationWithAlreadyCommittedUrl(internalPath, transition);
         }

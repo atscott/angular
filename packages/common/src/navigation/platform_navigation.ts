@@ -8,6 +8,7 @@
 
 import {
   Injectable,
+  InjectionToken,
   ɵNavigateEvent as NavigateEvent,
   ɵNavigation as Navigation,
   ɵNavigationCurrentEntryChangeEvent as NavigationCurrentEntryChangeEvent,
@@ -19,6 +20,16 @@ import {
   ɵNavigationTransition as NavigationTransition,
   ɵNavigationUpdateCurrentEntryOptions as NavigationUpdateCurrentEntryOptions,
 } from '@angular/core';
+
+export const PRECOMMIT_HANDLER_SUPPORTED = new InjectionToken<boolean>('', {
+  providedIn: 'root',
+  factory: () => {
+    return (
+      typeof window !== 'undefined' &&
+      typeof (window as any).NavigationPrecommitController !== 'undefined'
+    );
+  },
+});
 
 /**
  * This class wraps the platform Navigation API which allows server-specific and test
