@@ -12,8 +12,12 @@ copy_to_bin(
 ng_packagr_bin.ng_packagr(
     name = "dist",
     srcs = [
-        ":node_modules",
         ":project_srcs",
+        "//:node_modules/rxjs",
+        "//packages/common",
+        "//packages/compiler",
+        "//packages/compiler-cli",
+        "//packages/core",
     ],
     args = [
         "-p",
