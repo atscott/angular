@@ -6,7 +6,11 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 
-import {PlatformLocation, PlatformNavigation, ɵPRECOMMIT_HANDLER_SUPPORTED as PRECOMMIT_HANDLER_SUPPORTED} from '@angular/common';
+import {
+  PlatformLocation,
+  PlatformNavigation,
+  ɵPRECOMMIT_HANDLER_SUPPORTED as PRECOMMIT_HANDLER_SUPPORTED,
+} from '@angular/common';
 import {afterNextRender, EnvironmentInjector, inject, Injectable} from '@angular/core';
 import {Subject, SubscriptionLike} from 'rxjs';
 
@@ -44,18 +48,6 @@ type NavigationInfo = RouterTransitionNavigationInfo | RollbackNavigationInfo;
 interface RouterTransitionNavigationInfo {
   /** Indicates that the router should intercept this navigation. */
   intercept: true;
-  /**
-   * Determines how focus should be managed after the transition.
-   * 'after-transition': Router default behavior (likely scroll to top or element).
-   * 'manual': Router will not manage focus.
-   */
-  focusReset: 'after-transition' | 'manual';
-  /**
-   * Determines how scrolling should be managed after the transition.
-   * 'after-transition': Router default behavior (likely scroll to top or element based on URL
-   * fragment). 'manual': Router will not manage scrolling.
-   */
-  scroll: 'after-transition' | 'manual';
 }
 
 /**
@@ -340,8 +332,6 @@ export class NavigationStateManager extends StateManager {
     // listener that this is a Router-initiated transition that should be intercepted.
     const ɵrouterInfo: RouterTransitionNavigationInfo = {
       intercept: true,
-      focusReset: 'manual', // Router handles focus via its own mechanisms or user config.
-      scroll: this.inMemoryScrollingEnabled ? 'manual' : 'after-transition',
     };
     const info = {ɵrouterInfo};
 
@@ -482,7 +472,10 @@ export class NavigationStateManager extends StateManager {
     this.currentNavigation.removeAbortListener = () =>
       event.signal.removeEventListener('abort', abortHandler);
 
-    const interceptOptions: NavigationInterceptOptions = {};
+    const interceptOptions: NavigationInterceptOptions = {
+      // focusReset: 'manual',
+      scroll: this.inMemoryScrollingEnabled ? 'manual' : 'after-transition',
+    };
     let redirect: // Function provided by `precommitHandler`'s controller to perform a redirect.
     ((url: string, options: {state: unknown; history?: 'push' | 'replace'}) => void) | null = null;
 
