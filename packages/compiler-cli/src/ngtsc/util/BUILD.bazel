@@ -9,6 +9,8 @@ ts_project(
     ]),
     deps = [
         "//:node_modules/@types/node",
+        "//:node_modules/@types/semver",
+        "//:node_modules/semver",
         "//:node_modules/typescript",
         "//packages:types",
         "//packages/compiler-cli/src/ngtsc/file_system",

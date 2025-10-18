@@ -6,8 +6,9 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 
+import ts from 'typescript';
 import {ErrorCode, ngErrorCode} from '../../diagnostics';
-import {absoluteFrom, absoluteFromSourceFile, getSourceFileOrError} from '../../file_system';
+import {absoluteFrom, getSourceFileOrError} from '../../file_system';
 import {runInEachFileSystem} from '../../file_system/testing';
 import {OptimizeFor} from '../api';
 
@@ -181,6 +182,7 @@ runInEachFileSystem(() => {
         const diags = templateTypeChecker.getDiagnosticsForFile(sf, OptimizeFor.WholeProgram);
         expect(diags.length).toBe(1);
         expect(diags[0].code).toBe(ngErrorCode(ErrorCode.INLINE_TCB_REQUIRED));
+        expect(diags[0].category).toBe(ts.DiagnosticCategory.Warning);
       });
     });
 

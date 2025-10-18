@@ -9,6 +9,7 @@
 import {ConstantPool} from '@angular/compiler';
 import ts from 'typescript';
 
+import {coreVersionSupportsFeature} from '../../util/src/semver';
 import {SourceFileTypeIdentifier} from '../../core/api';
 import {ErrorCode, FatalDiagnosticError} from '../../diagnostics';
 import {IncrementalBuild} from '../../incremental/api';
@@ -108,6 +109,8 @@ export class TraitCompiler implements ProgramTypeCheckAdapter {
     DecoratorHandler<unknown, unknown, SemanticSymbol | null, unknown>
   >();
 
+  private readonly implicitStandaloneValue: boolean;
+
   constructor(
     private handlers: DecoratorHandler<unknown, unknown, SemanticSymbol | null, unknown>[],
     private reflector: ReflectionHost,
@@ -119,10 +122,14 @@ export class TraitCompiler implements ProgramTypeCheckAdapter {
     private semanticDepGraphUpdater: SemanticDepGraphUpdater | null,
     private sourceFileTypeIdentifier: SourceFileTypeIdentifier,
     private emitDeclarationOnly: boolean,
+    angularCoreVersion: string | null,
   ) {
     for (const handler of handlers) {
       this.handlersByName.set(handler.name, handler);
     }
+
+    this.implicitStandaloneValue =
+      angularCoreVersion === null || coreVersionSupportsFeature(angularCoreVersion, '>= 19.0.0');
   }
 
   analyzeSync(sf: ts.SourceFile): void {
@@ -266,13 +273,59 @@ export class TraitCompiler implements ProgramTypeCheckAdapter {
   private scanClassForTraits(
     clazz: ClassDeclaration,
   ): PendingTrait<unknown, unknown, SemanticSymbol | null, unknown>[] | null {
-    if (!this.compileNonExportedClasses && !this.reflector.isStaticallyExported(clazz)) {
-      return null;
-    }
-
     const decorators = this.reflector.getDecoratorsOfDeclaration(clazz);
 
+    if (!this.compileNonExportedClasses && !this.reflector.isStaticallyExported(clazz)) {
+      // If we're not compiling non-exported classes, then we need to be careful about what we
+      // compile. We don't want to compile NgModules, or non-standalone components/directives as
+      // they might be used in tests and declare components that are also declared in production
+      // modules. This can lead to a diagnostic.
+      if (!this.hasStandaloneComponentOrDirectiveDecorator(decorators)) {
+        return null;
+      }
+    }
+
     return this.detectTraits(clazz, decorators);
+  }
+
+  private hasStandaloneComponentOrDirectiveDecorator(decorators: Decorator[] | null): boolean {
+    if (decorators === null) {
+      return false;
+    }
+    for (const decorator of decorators) {
+      if (decorator.import === null || decorator.import.from !== '@angular/core') {
+        continue;
+      }
+      if (
+        decorator.name !== 'NgModule' &&
+        decorator.name !== 'Component' &&
+        decorator.name !== 'Directive'
+      ) {
+        return false;
+      }
+      let isStandalone = this.implicitStandaloneValue;
+      if (decorator.args === null || decorator.args.length === 0) {
+        return isStandalone;
+      }
+
+      const metadata = decorator.args[0];
+
+      if (!ts.isObjectLiteralExpression(metadata)) {
+        return isStandalone;
+      }
+      const standaloneProperty = metadata.properties.find(
+        (prop): prop is ts.PropertyAssignment =>
+          ts.isPropertyAssignment(prop) &&
+          (ts.isIdentifier(prop.name) || ts.isStringLiteral(prop.name)) &&
+          prop.name.text === 'standalone',
+      );
+      if (standaloneProperty) {
+        isStandalone = standaloneProperty.initializer.kind === ts.SyntaxKind.TrueKeyword;
+      }
+
+      return isStandalone;
+    }
+    return false;
   }
 
   protected detectTraits(

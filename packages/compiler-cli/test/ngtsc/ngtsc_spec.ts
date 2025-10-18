@@ -9571,7 +9571,8 @@ runInEachFileSystem((os: string) => {
           import {Directive} from '@angular/core';
 
           @Directive({
-            selector: '[test]'
+            selector: '[test]',
+            standalone: false,
           })
           class TestDirective {}
         `,
@@ -9591,7 +9592,8 @@ runInEachFileSystem((os: string) => {
 
           @Component({
             selector: 'test',
-            template: 'hello'
+            template: 'hello',
+            standalone: false,
           })
           class TestComponent {}
         `,
@@ -9631,6 +9633,7 @@ runInEachFileSystem((os: string) => {
           @Component({
             selector: 'test-cmp',
             template: 'Test Cmp',
+            standalone: false,
           })
           class TestCmp {}
 
@@ -9641,6 +9644,43 @@ runInEachFileSystem((os: string) => {
         const jsContents = env.getContents('test.js');
 
         expect(jsContents).toContain('defineComponent');
+      });
+
+      it('should compile a non-exported standalone component', () => {
+        env.write(
+          'test.ts',
+          `
+             import {Component} from '@angular/core';
+   
+             @Component({
+               selector: 'test-cmp',
+               template: 'Test Cmp',
+             })
+             class TestCmp {}
+           `,
+        );
+        env.driveMain();
+        const jsContents = env.getContents('test.js');
+
+        expect(jsContents).toContain('defineComponent');
+      });
+
+      it('should compile a non-exported standalone directive', () => {
+        env.write(
+          'test.ts',
+          `
+             import {Directive} from '@angular/core';
+   
+             @Directive({
+               selector: '[test-dir]',
+             })
+             class TestDir {}
+           `,
+        );
+        env.driveMain();
+        const jsContents = env.getContents('test.js');
+
+        expect(jsContents).toContain('defineDirective');
       });
     });
 

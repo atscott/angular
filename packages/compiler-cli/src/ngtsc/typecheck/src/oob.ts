@@ -440,6 +440,7 @@ export class OutOfBandDiagnosticRecorderImpl implements OutOfBandDiagnosticRecor
         ErrorCode.INLINE_TCB_REQUIRED,
         node.name,
         `This component requires inline template type-checking, which is not supported by the current environment.`,
+        undefined,
       ),
     );
   }
@@ -905,7 +906,7 @@ function makeInlineDiagnostic(
   relatedInformation?: ts.DiagnosticRelatedInformation[],
 ): TemplateDiagnostic {
   return {
-    ...makeDiagnostic(code, node, messageText, relatedInformation),
+    ...makeDiagnostic(code, node, messageText, relatedInformation, ts.DiagnosticCategory.Warning),
     sourceFile: node.getSourceFile(),
     typeCheckId: id,
   };

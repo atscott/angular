@@ -124,7 +124,7 @@ import {SourceFileValidator} from '../../validation';
 import {Xi18nContext} from '../../xi18n';
 import {DiagnosticCategoryLabel, NgCompilerAdapter, NgCompilerOptions} from '../api';
 
-import {coreVersionSupportsFeature} from './feature_detection';
+import {coreVersionSupportsFeature} from '../../util/src/semver';
 import {angularJitApplicationTransform} from '../../transform/jit';
 import {untagAllTsFiles} from '../../shims';
 
@@ -1631,6 +1631,7 @@ export class NgCompiler {
       semanticDepGraphUpdater,
       this.adapter,
       this.emitDeclarationOnly,
+      this.angularCoreVersion,
     );
 
     // Template type-checking may use the `ProgramDriver` to produce new `ts.Program`(s). If this
