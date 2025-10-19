@@ -10,7 +10,7 @@ import {EnvironmentInjector, ProviderToken, runInInjectionContext} from '@angula
 import {defer, EMPTY, from, MonoTypeOperatorFunction, Observable, of, throwError} from 'rxjs';
 import {catchError, concatMap, first, map, mergeMap, takeLast, tap} from 'rxjs/operators';
 
-import {RedirectCommand, ResolveData} from '../models';
+import {RedirectCommand, ResolveData, Route} from '../models';
 import type {NavigationTransition} from '../navigation_transition';
 import {
   ActivatedRouteSnapshot,
@@ -19,6 +19,7 @@ import {
   RouterStateSnapshot,
 } from '../router_state';
 import {RouteTitleKey} from '../shared';
+import {isTypedRoute} from '../typed_router_utils';
 import {getDataKeys, wrapIntoObservable} from '../utils/collection';
 import {getClosestRouteInjector} from '../utils/config';
 import {getTokenOrFunctionIdentity} from '../utils/preactivation';
@@ -107,14 +108,18 @@ function resolveNode(
   futureRSS: RouterStateSnapshot,
   injector: EnvironmentInjector,
 ): Observable<any> {
+  if (isTypedRoute(futureARS.routeConfig as Route) && typeof resolve === 'function') {
+    return getResolver(resolve, futureARS, futureRSS, injector);
+  }
+
   const keys = getDataKeys(resolve);
   if (keys.length === 0) {
     return of({});
   }
   const data: {[k: string | symbol]: any} = {};
   return from(keys).pipe(
-    mergeMap((key) =>
-      getResolver(resolve[key], futureARS, futureRSS, injector).pipe(
+    mergeMap((key) => {
+      return getResolver(resolve[key], futureARS, futureRSS, injector).pipe(
         first(),
         tap((value: any) => {
           if (value instanceof RedirectCommand) {
@@ -122,8 +127,8 @@ function resolveNode(
           }
           data[key] = value;
         }),
-      ),
-    ),
+      );
+    }),
     takeLast(1),
     map(() => data),
     catchError((e: unknown) => (isEmptyError(e as Error) ? EMPTY : throwError(e))),

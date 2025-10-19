@@ -143,6 +143,14 @@ export {
   mapToResolve,
 } from './utils/functional_guards';
 export {VERSION} from './version';
+export {
+  TypedActivatedRoute,
+  injectTypedRoute,
+  createRoute,
+  provideTypedRouter,
+  SnapshotFromTypedRoute,
+  TypedRouter,
+} from './typed_router';
 
 export * from './private_export';
 import './router_devtools';

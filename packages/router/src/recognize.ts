@@ -393,6 +393,11 @@ export class Recognizer {
     outlet: string,
     parentRoute: ActivatedRouteSnapshot,
   ): Promise<TreeNode<ActivatedRouteSnapshot>> {
+    if ((route as any).load) {
+      const loaded = await (route as any).load();
+      Object.assign(route, loaded);
+    }
+
     if (this.abortSignal.aborted) {
       throw new Error(this.abortSignal.reason);
     }

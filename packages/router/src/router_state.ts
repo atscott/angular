@@ -12,9 +12,11 @@ import {map} from 'rxjs/operators';
 
 import {Data, ResolveData, Route} from './models';
 import {convertToParamMap, ParamMap, Params, PRIMARY_OUTLET, RouteTitleKey} from './shared';
+import {isTypedRoute} from './typed_router_utils';
 import {equalSegments, UrlSegment} from './url_tree';
 import {shallowEqual, shallowEqualArrays} from './utils/collection';
 import {Tree, TreeNode} from './utils/tree';
+import {TypedActivatedRoute} from './typed_router';
 
 /**
  * Represents the state of the router as a tree of activated routes.
@@ -122,6 +124,8 @@ export function createEmptyStateSnapshot(rootComponent: Type<any> | null): Route
  * @publicApi
  */
 export class ActivatedRoute {
+  /** @internal */
+  _typedRoute?: TypedActivatedRoute<any>;
   /** The current snapshot of this route */
   snapshot!: ActivatedRouteSnapshot;
   /** @internal */

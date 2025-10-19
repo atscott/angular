@@ -95,7 +95,7 @@ describe('config', () => {
         validateConfig([{path: 'a', component: ComponentA, redirectTo: 'b'}]);
       }).toThrowError(
         new RegExp(
-          `Invalid configuration of route 'a': redirectTo and component/loadComponent cannot be used together`,
+          `Invalid configuration of route 'a': redirectTo and component/loadComponent/load cannot be used together`,
         ),
       );
     });

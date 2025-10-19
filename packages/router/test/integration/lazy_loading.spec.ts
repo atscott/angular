@@ -691,7 +691,7 @@ export function lazyLoadingIntegrationSuite() {
       await advance(fixture);
 
       expect(recordedError.message).toContain(
-        `Invalid configuration of route 'lazy/loaded'. One of the following must be provided: component, loadComponent, redirectTo, children or loadChildren`,
+        `Invalid configuration of route 'lazy/loaded'. One of the following must be provided: component, loadComponent, redirectTo, children, loadChildren, or load`,
       );
     });
 

@@ -148,11 +148,36 @@ function validateNode(route: Route, fullPath: string, requireStandaloneComponent
       );
     }
 
+    if (route.component && (route as any).load) {
+      throw new RuntimeError(
+        RuntimeErrorCode.INVALID_ROUTE_CONFIG,
+        `Invalid configuration of route '${fullPath}': component and load cannot be used together`,
+      );
+    }
+    if (route.loadComponent && (route as any).load) {
+      throw new RuntimeError(
+        RuntimeErrorCode.INVALID_ROUTE_CONFIG,
+        `Invalid configuration of route '${fullPath}': loadComponent and load cannot be used together`,
+      );
+    }
+    if (route.children && (route as any).load) {
+      throw new RuntimeError(
+        RuntimeErrorCode.INVALID_ROUTE_CONFIG,
+        `Invalid configuration of route '${fullPath}': children and load cannot be used together`,
+      );
+    }
+    if (route.loadChildren && (route as any).load) {
+      throw new RuntimeError(
+        RuntimeErrorCode.INVALID_ROUTE_CONFIG,
+        `Invalid configuration of route '${fullPath}': loadChildren and load cannot be used together`,
+      );
+    }
+
     if (route.redirectTo) {
-      if (route.component || route.loadComponent) {
+      if (route.component || route.loadComponent || (route as any).load) {
         throw new RuntimeError(
           RuntimeErrorCode.INVALID_ROUTE_CONFIG,
-          `Invalid configuration of route '${fullPath}': redirectTo and component/loadComponent cannot be used together`,
+          `Invalid configuration of route '${fullPath}': redirectTo and component/loadComponent/load cannot be used together`,
         );
       }
       if (route.canMatch || route.canActivate) {
@@ -175,11 +200,12 @@ function validateNode(route: Route, fullPath: string, requireStandaloneComponent
       !route.component &&
       !route.loadComponent &&
       !route.children &&
-      !route.loadChildren
+      !route.loadChildren &&
+      !(route as any).load
     ) {
       throw new RuntimeError(
         RuntimeErrorCode.INVALID_ROUTE_CONFIG,
-        `Invalid configuration of route '${fullPath}'. One of the following must be provided: component, loadComponent, redirectTo, children or loadChildren`,
+        `Invalid configuration of route '${fullPath}'. One of the following must be provided: component, loadComponent, redirectTo, children, loadChildren, or load`,
       );
     }
     if (route.path === void 0 && route.matcher === void 0) {
