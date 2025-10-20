@@ -19,7 +19,6 @@ import {
   RouterStateSnapshot,
 } from '../router_state';
 import {RouteTitleKey} from '../shared';
-import {isTypedRoute} from '../typed_router_utils';
 import {getDataKeys, wrapIntoObservable} from '../utils/collection';
 import {getClosestRouteInjector} from '../utils/config';
 import {getTokenOrFunctionIdentity} from '../utils/preactivation';
@@ -108,10 +107,6 @@ function resolveNode(
   futureRSS: RouterStateSnapshot,
   injector: EnvironmentInjector,
 ): Observable<any> {
-  if (isTypedRoute(futureARS.routeConfig as Route) && typeof resolve === 'function') {
-    return getResolver(resolve, futureARS, futureRSS, injector);
-  }
-
   const keys = getDataKeys(resolve);
   if (keys.length === 0) {
     return of({});

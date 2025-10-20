@@ -21,11 +21,13 @@ The final architecture uses a class-based, fluent API inspired by TanStack Route
 
 2.  **`createRoute`**: The main factory function for creating a typed child route. It takes the route's "shape"—its `path`, `getParentRoute`, and `data`—and returns a `TypedRouteBuilder` instance.
 
-3.  **`.addResolvers()` method**: The returned class instance has an `.addResolvers()` method that accepts an object of individual, type-safe resolver functions. Because the parent's type information is already part of the class instance, each resolver's `route` parameter is correctly typed.
+3.  **`.setResolvers()` method**: The returned class instance has a `.setResolvers()` method that accepts an object of individual, type-safe resolver functions. This method *replaces* any existing resolvers on the route. Because the parent's type information is already part of the class instance, each resolver's `route` parameter is correctly typed.
 
-4.  **`.lazy()` method**: The class instance also has a `.lazy()` method for defining lazy-loaded properties. This method takes a function that returns a `Promise` for an object containing the `component` and an optional `resolve` object.
+4.  **`.addCanActivate()` and `.addCanDeactivate()` methods**: To solve type inference limitations with inline guards, the builder provides fluent methods for adding `canActivate` and `canDeactivate` guards. This approach ensures that the `route` snapshot and `component` instance passed to the guards are strongly typed.
 
-5.  **`.addChildren()` method**: The class instance has an `.addChildren()` method that takes an array of child route builders or an object map of child route builders. It returns a new `TypedRouteBuilder` instance where the `children` property is strongly typed to match the children that were passed in. This allows for a fully fluent and composable way to define the route hierarchy.
+5.  **`.lazy()` method**: The class instance also has a `.lazy()` method for defining lazy-loaded properties. This method takes a function that returns a `Promise` for an object containing the `component` and an optional `resolve` object.
+
+6.  **`.addChildren()` method**: The class instance has an `.addChildren()` method that takes an array of child route builders or an object map of child route builders. It returns a new `TypedRouteBuilder` instance where the `children` property is strongly typed to match the children that were passed in. This allows for a fully fluent and composable way to define the route hierarchy.
 
 This API provides a clean, composable, and highly type-safe way to define routes.
 
@@ -77,9 +79,13 @@ const rootRoute = createRootRoute();
 const userRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'user/:userId',
-}).addResolvers({
+}).setResolvers({
   user: (route) => ({ id: route.params.userId, name: 'Resolved User' }),
-});
+}).addCanActivate([(route) => {
+  // route.params.userId is a string
+  console.log('Checking access to user:', route.params.userId);
+  return true;
+}]);
 
 const postsRoute = createRoute({
   path: 'posts/:postId',

@@ -126,6 +126,35 @@ class UserComponent {
 }
 ```
 
+## 13. Refining the Fluent API: Type-Safe Guards and Resolver Semantics
+
+The final stage of the API design involved refining the fluent `TypedRouteBuilder` to handle guards (`canActivate`, `canDeactivate`) and to clarify the behavior of resolvers.
+
+### The Challenge of Inline Guards
+
+An attempt was made to allow `canActivate` and `canDeactivate` guards to be defined directly within the `createRoute` configuration object, similar to other route properties. This approach failed due to a fundamental limitation in TypeScript's type inference. The compiler was unable to infer the types for the guard function's parameters (e.g., `route.params`) based on other properties (`path`) within the same object literal. This resulted in the parameters being typed as `unknown` or `{}`, defeating the goal of type safety.
+
+Several workarounds were attempted, including more complex generic signatures for `createRoute` and using a type-hinting utility function, but these either failed to solve the problem or introduced cascading type errors elsewhere in the API.
+
+### Solution: Fluent Methods for Guards
+
+The successful solution was to extend the fluent API to include methods for adding guards:
+
+-   **`.addCanActivate()` and `.addCanDeactivate()`**: By adding these methods to the `TypedRouteBuilder`, the type inference problem was solved. The builder instance already has the necessary type information (like path parameters and parent data) captured in its generic signature *before* the guard methods are called. This allows TypeScript to correctly and reliably infer the types for the guard function parameters.
+
+This approach not only works but also creates a more consistent and predictable API, where all "behaviors" (resolvers, guards, lazy loading) are added via fluent methods.
+
+### Clarifying Resolver Behavior: `addResolvers` vs. `setResolvers`
+
+It was noted that the name `.addResolvers()` was misleading. Its implementation merged the new resolvers with any existing ones, but the type signature was designed as if it were a replacement. This could lead to confusion and unexpected runtime behavior.
+
+To make the API clearer and more robust, the method was renamed and its behavior was simplified:
+
+-   **`.setResolvers()`**: The method is now named `setResolvers` to accurately reflect its behavior: it **replaces** the entire `resolve` map for the route.
+-   **Simplified Types**: This change also allowed for a simpler type signature, as the method no longer needs to perform a complex merge operation on the `TResolved` generic type.
+
+This final refinement ensures that the API is not only type-safe but also semantically clear and predictable for developers.
+
 ## 12. Enforcing a Single Root Route and Fixing Type Preservation
 
 Further refinement of the API addressed two related issues: enforcing a single root for the route hierarchy and fixing a pre-existing flaw in the fluent API's type preservation.

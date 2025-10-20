@@ -6,9 +6,9 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 
-import {Component, inject} from '@angular/core';
+import {Component} from '@angular/core';
 import {TestBed} from '@angular/core/testing';
-import {ActivatedRoute, RouterOutlet} from '@angular/router';
+import {RouterOutlet} from '@angular/router';
 import {RouterTestingHarness} from '@angular/router/testing';
 import {
   createRoute,
@@ -16,9 +16,9 @@ import {
   injectTypedRoute,
   provideTypedRouter,
   SnapshotFromTypedRoute,
+  TypedActivatedRoute,
   TypedRouter,
 } from '../src/typed_router';
-import {isTypedRoute} from '../src/typed_router_utils';
 
 describe('TypedRouter', () => {
   @Component({standalone: true, template: 'child'})
@@ -30,15 +30,6 @@ describe('TypedRouter', () => {
     imports: [RouterOutlet],
   })
   class ParentComponentWithOutlet {}
-
-  it('should create a typed route', () => {
-    const route = createRoute({
-      path: 'user/:userId',
-      component: ChildComponent,
-    });
-    expect(route.path).toBe('user/:userId');
-    expect(isTypedRoute(route)).toBe(true);
-  });
 
   it('should add children to a route', () => {
     const parent = createRoute({path: 'parent', component: ParentComponentWithOutlet});
@@ -55,18 +46,20 @@ describe('TypedRouter', () => {
     it('should infer params from path', async () => {
       @Component({standalone: true, template: `userId: {{ route.params().userId }}`})
       class UserComponent {
-        route = injectTypedRoute(userRoute);
+        route = injectTypedRoute(rootRoute, '/user/:userId');
         constructor() {
           this.route.params().userId;
           // @ts-expect-error
           this.route.params().nonExistent;
         }
       }
+
       const userRoute = createRoute({
         path: 'user/:userId',
         component: UserComponent,
       });
       const rootRoute = createRootRoute().addChildren([userRoute]);
+
       TestBed.configureTestingModule({
         providers: [provideTypedRouter(rootRoute)],
       });
@@ -76,30 +69,31 @@ describe('TypedRouter', () => {
     });
 
     it('should infer parent params for children', async () => {
-      const userRoute = createRoute({
-        path: 'user/:userId',
-        component: ParentComponentWithOutlet,
-      });
       @Component({
         standalone: true,
         template: `userId: {{ route.params().userId }}, postId: {{ route.params().postId }}`,
       })
       class PostsComponent {
-        route = injectTypedRoute(postsRoute);
+        route: TypedActivatedRoute<typeof postsRoute>;
         constructor() {
+          this.route = injectTypedRoute(rootRoute, '/user/:userId/posts/:postId');
           this.route.params().userId;
           this.route.params().postId;
           // @ts-expect-error
           this.route.params().nonExistent;
         }
       }
+      const userRoute = createRoute({
+        path: 'user/:userId',
+        component: ParentComponentWithOutlet,
+      });
       const postsRoute = createRoute({
         path: 'posts/:postId',
         getParentRoute: () => userRoute,
         component: PostsComponent,
       });
-      userRoute.addChildren([postsRoute]);
-      const rootRoute = createRootRoute().addChildren([userRoute]);
+      const rootRoute = createRootRoute().addChildren([userRoute.addChildren([postsRoute])]);
+
       TestBed.configureTestingModule({
         providers: [provideTypedRouter(rootRoute)],
       });
@@ -109,37 +103,38 @@ describe('TypedRouter', () => {
     });
 
     it('should infer parent data in child resolver', async () => {
-      const userRoute = createRoute({
-        path: 'user/:userId',
-        component: ParentComponentWithOutlet,
-      }).addResolvers({
-        user: (route) => ({id: route.params['userId'], name: 'Angular'}),
-      });
       @Component({
         standalone: true,
         template: `user: {{ route.data().user.name }}, post: {{ route.data().post.title }}`,
       })
       class PostsComponent {
-        route = injectTypedRoute(postsRoute);
+        route: TypedActivatedRoute<typeof postsRoute>;
         constructor() {
+          this.route = injectTypedRoute(rootRoute, '/user/:userId/posts/:postId');
           this.route.params().userId;
           this.route.params().postId;
           // @ts-expect-error
           this.route.params().nonExistent;
         }
       }
+      const userRoute = createRoute({
+        path: 'user/:userId',
+        component: ParentComponentWithOutlet,
+      }).setResolvers({
+        user: (route) => ({id: route.params['userId'], name: 'Angular'}),
+      });
       const postsRoute = createRoute({
         path: 'posts/:postId',
         getParentRoute: () => userRoute,
         component: PostsComponent,
-      }).addResolvers({
+      }).setResolvers({
         post: (route) => {
           const user: {id: string; name: string} = route.data.user;
           return {id: route.params.postId, title: `Post by ${user.name}`};
         },
       });
-      userRoute.addChildren([postsRoute]);
-      const rootRoute = createRootRoute().addChildren([userRoute]);
+      const rootRoute = createRootRoute().addChildren([userRoute.addChildren([postsRoute])]);
+
       TestBed.configureTestingModule({
         providers: [provideTypedRouter(rootRoute)],
       });
@@ -154,8 +149,9 @@ describe('TypedRouter', () => {
     it('should navigate to a simple route', async () => {
       @Component({standalone: true, template: `userId: {{ route.params().userId }}`})
       class UserComponent {
-        route = injectTypedRoute(userRoute);
+        route: TypedActivatedRoute<typeof userRoute>;
         constructor() {
+          this.route = injectTypedRoute(rootRoute, '/user/:userId');
           this.route.params().userId;
           // @ts-expect-error
           this.route.params().nonExistent;
@@ -166,67 +162,62 @@ describe('TypedRouter', () => {
         component: UserComponent,
       });
       const rootRoute = createRootRoute().addChildren([userRoute]);
+
       TestBed.configureTestingModule({
         providers: [provideTypedRouter(rootRoute)],
       });
       const harness = await RouterTestingHarness.create('/');
-      const typedRouter = TestBed.inject(TypedRouter);
+      const typedRouter = TestBed.inject(TypedRouter<typeof rootRoute>);
 
-      await typedRouter.navigateByRoute(userRoute, {userId: '123'});
+      await typedRouter.navigate('/user/:userId', {userId: '123'});
       await harness.fixture.whenStable();
 
       expect(harness.fixture.nativeElement.innerHTML).toContain('userId: 123');
     });
 
     it('should navigate to a child route', async () => {
-      const userRoute = createRoute({
-        path: 'user/:userId',
-        component: ParentComponentWithOutlet,
-      });
       @Component({
         standalone: true,
         template: `userId: {{ route.params().userId }}, postId: {{ route.params().postId }}`,
       })
       class PostsComponent {
-        route = injectTypedRoute(postsRoute);
+        route: TypedActivatedRoute<typeof postsRoute>;
         constructor() {
+          this.route = injectTypedRoute(rootRoute, '/user/:userId/posts/:postId');
           this.route.params().userId;
           this.route.params().postId;
           // @ts-expect-error
           this.route.params().nonExistent;
         }
       }
+
+      const userRoute = createRoute({
+        path: 'user/:userId',
+        component: ParentComponentWithOutlet,
+      });
       const postsRoute = createRoute({
         path: 'posts/:postId',
         getParentRoute: () => userRoute,
         component: PostsComponent,
       });
-      userRoute.addChildren([postsRoute]);
-      const rootRoute = createRootRoute().addChildren([userRoute]);
+      const rootRoute = createRootRoute().addChildren([userRoute.addChildren([postsRoute])]);
+
       TestBed.configureTestingModule({
         providers: [provideTypedRouter(rootRoute)],
       });
       const harness = await RouterTestingHarness.create('/');
-      const typedRouter = TestBed.inject(TypedRouter);
+      const typedRouter = TestBed.inject(TypedRouter<typeof rootRoute>);
 
-      await typedRouter.navigateByRoute(postsRoute, {userId: '123', postId: '456'});
+      await typedRouter.navigate('/user/:userId/posts/:postId', {
+        userId: '123',
+        postId: '456',
+      });
       await harness.fixture.whenStable();
 
       expect(harness.fixture.nativeElement.innerHTML).toContain('userId: 123, postId: 456');
     });
 
     it('should support lazy loading a route', async () => {
-      @Component({
-        standalone: true,
-        template: `
-    _snapshot: {{route.params().userId}}
-    _snapshot data: {{route.data().loaded}}
-            `,
-      })
-      class LazyLoadedComponent {
-        route = injectTypedRoute(lazyRoute);
-      }
-
       const lazyRouteShape = createRoute({
         path: 'user/:userId',
       });
@@ -240,6 +231,21 @@ describe('TypedRouter', () => {
         }),
       );
       const rootRoute = createRootRoute().addChildren([lazyRoute]);
+
+      @Component({
+        standalone: true,
+        template: `
+    _snapshot: {{route.params().userId}}
+    _snapshot data: {{route.data().loaded}}
+            `,
+      })
+      class LazyLoadedComponent {
+        route: TypedActivatedRoute<typeof lazyRoute>;
+        constructor() {
+          this.route = injectTypedRoute(rootRoute, '/user/:userId');
+        }
+      }
+
       TestBed.configureTestingModule({
         providers: [provideTypedRouter(rootRoute)],
       });
@@ -259,16 +265,21 @@ describe('TypedRouter', () => {
             `,
       })
       class UserComponent {
-        route = injectTypedRoute(userRoute);
+        route: TypedActivatedRoute<typeof userRoute>;
+        constructor() {
+          this.route = injectTypedRoute(rootRoute, '/user/:userId');
+        }
       }
+
       const userRoute = createRoute({
         path: 'user/:userId',
         component: UserComponent,
-      }).addResolvers({
+      }).setResolvers({
         user: (route) => ({id: route.params.userId, name: 'Angular'}),
       });
 
       const rootRoute = createRootRoute().addChildren([userRoute]);
+
       TestBed.configureTestingModule({
         providers: [provideTypedRouter(rootRoute)],
       });
@@ -276,6 +287,45 @@ describe('TypedRouter', () => {
       await harness.fixture.whenStable();
       expect(harness.fixture.nativeElement.innerHTML).toContain('userId: snapshot-test');
       expect(harness.fixture.nativeElement.innerHTML).toContain('user name: Angular');
+    });
+  });
+
+  describe('typed router guards', () => {
+    @Component({template: ''})
+    class MyComponent {
+      value?: string;
+    }
+
+    it('should provide typed ActivatedRouteSnapshot to canActivate', () => {
+      createRootRoute().addChildren([
+        createRoute({
+          path: 'test/:id',
+          component: MyComponent,
+        }).addCanActivate([
+          (route) => {
+            const id: string = route.params.id;
+            // @ts-expect-error
+            const name: string = route.params.name;
+            return true;
+          },
+        ]),
+      ]);
+      expect().nothing();
+    });
+
+    it('should provide typed component to canDeactivate', () => {
+      createRoute({
+        path: 'test',
+        component: MyComponent,
+      }).addCanDeactivate<MyComponent>([
+        (component) => {
+          component.value;
+          // @ts-expect-error
+          component.nonExistent;
+          return true;
+        },
+      ]);
+      expect().nothing();
     });
   });
 });
