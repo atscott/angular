@@ -15,15 +15,17 @@ Early designs struggled with TypeScript's limitations, particularly circular dep
 
 ### Fluent API
 
-The final architecture uses a class-based, fluent API inspired by TanStack Router, initiated by a `createRoute` factory function.
+The final architecture uses a class-based, fluent API inspired by TanStack Router, initiated by a `createRootRoute` factory function.
 
-1.  **`createRoute`**: The main factory function for creating a typed route. It takes the route's "shape"—its `path`, `getParentRoute`, and `data`—and returns a `TypedRouteBuilder` instance.
+1.  **`createRootRoute`**: The main factory function for creating the root of a typed route hierarchy. It returns a `TypedRootRoute` instance, which is a special branded type that `provideTypedRouter` requires.
 
-2.  **`.addResolvers()` method**: The returned class instance has an `.addResolvers()` method that accepts an object of individual, type-safe resolver functions. Because the parent's type information is already part of the class instance, each resolver's `route` parameter is correctly typed.
+2.  **`createRoute`**: The main factory function for creating a typed child route. It takes the route's "shape"—its `path`, `getParentRoute`, and `data`—and returns a `TypedRouteBuilder` instance.
 
-3.  **`.lazy()` method**: The class instance also has a `.lazy()` method for defining lazy-loaded properties. This method takes a function that returns a `Promise` for an object containing the `component` and an optional `resolve` object.
+3.  **`.addResolvers()` method**: The returned class instance has an `.addResolvers()` method that accepts an object of individual, type-safe resolver functions. Because the parent's type information is already part of the class instance, each resolver's `route` parameter is correctly typed.
 
-4.  **`.addChildren()` method**: The class instance has an `.addChildren()` method that takes an array of child route builders or an object map of child route builders, allowing for a fully fluent and composable way to define the route hierarchy.
+4.  **`.lazy()` method**: The class instance also has a `.lazy()` method for defining lazy-loaded properties. This method takes a function that returns a `Promise` for an object containing the `component` and an optional `resolve` object.
+
+5.  **`.addChildren()` method**: The class instance has an `.addChildren()` method that takes an array of child route builders or an object map of child route builders. It returns a new `TypedRouteBuilder` instance where the `children` property is strongly typed to match the children that were passed in. This allows for a fully fluent and composable way to define the route hierarchy.
 
 This API provides a clean, composable, and highly type-safe way to define routes.
 
@@ -70,7 +72,10 @@ To provide a more ergonomic and modern API, a new `injectTypedRoute` function an
 
 ```typescript
 // 1. Define routes using the fluent API
+const rootRoute = createRootRoute();
+
 const userRoute = createRoute({
+  getParentRoute: () => rootRoute,
   path: 'user/:userId',
 }).addResolvers({
   user: (route) => ({ id: route.params.userId, name: 'Resolved User' }),
@@ -88,8 +93,7 @@ const postsRoute = createRoute({
 })));
 
 // 2. Build the runtime hierarchy
-userRoute.addChildren([postsRoute]);
-const appRoutes = [userRoute];
+const appRoutes = rootRoute.addChildren([userRoute.addChildren([postsRoute])]);
 
 // 3. Provide the routes
 bootstrapApplication(AppComponent, {

@@ -147,6 +147,7 @@ export {
   TypedActivatedRoute,
   injectTypedRoute,
   createRoute,
+  createRootRoute,
   provideTypedRouter,
   SnapshotFromTypedRoute,
   TypedRouter,

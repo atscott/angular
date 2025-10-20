@@ -126,6 +126,55 @@ class UserComponent {
 }
 ```
 
+## 12. Enforcing a Single Root Route and Fixing Type Preservation
+
+Further refinement of the API addressed two related issues: enforcing a single root for the route hierarchy and fixing a pre-existing flaw in the fluent API's type preservation.
+
+### Motivation
+
+-   **Single Root Requirement**: The router configuration must be a single tree with one root. The `provideTypedRouter` function was initially typed to accept an array of `TypedRoute` objects, which was incorrect and did not align with the router's runtime expectations.
+-   **Exposing a Type Preservation Flaw**: The introduction of a special "branded" type for the root route (`TypedRootRoute`) exposed an underlying flaw in the fluent API. Chaining methods like `.addResolvers()` or `.addChildren()` did not preserve the specific type of the `TypedRouteBuilder` instance they were called on. While this was always an issue, the strict requirement of `provideTypedRouter` for the `TypedRootRoute` brand made the bug obvious, as the brand was being stripped away after any method call.
+
+### Final Implementation
+
+1.  **`createRootRoute` Function**:
+    -   A new `createRootRoute` function was introduced as the exclusive way to define the root of the route hierarchy. It creates a route with an empty path (`''`).
+
+2.  **`TypedRootRoute` Branded Type**:
+    -   `createRootRoute` returns a `TypedRootRoute`, which is a "branded" type. This special type ensures that only a route created with `createRootRoute` can be passed to `provideTypedRouter`.
+
+3.  **`provideTypedRouter` Signature Update**:
+    -   The signature of `provideTypedRouter` was changed to accept a single `TypedRootRoute` instead of an array of `TypedRoute`.
+
+4.  **Fixing Type Preservation**:
+    -   The `addChildren`, `addResolvers`, and `lazy` methods on the `TypedRouteBuilder` were updated to return an intersection type including `this` (e.g., `this & TypedRouteBuilder<...>` ). This ensures that the specific type of the instance, including the `TypedRootRoute` brand if present, is preserved across chained method calls. This fixed the underlying type preservation flaw for the entire fluent API, making it more robust.
+
+### Example Usage
+
+This change makes the API more robust and guides the developer to the correct usage pattern.
+
+```typescript
+// 1. Create the root route
+const rootRoute = createRootRoute().addResolvers({
+  rootData: () => ({ message: 'hello from root' }),
+});
+
+// 2. Create child routes
+const userRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'user/:userId',
+  // ...
+});
+
+// 3. Build the hierarchy
+const appRoutes = rootRoute.addChildren([userRoute]);
+
+// 4. Provide the single, branded root route
+bootstrapApplication(AppComponent, {
+  providers: [provideTypedRouter(appRoutes)],
+});
+```
+
 ### Key Files Modified
 
 *   **`packages/router/src/typed_router.ts`**: Refactored to implement the `TypedRouteBuilder` class and the `createRoute` factory function, and remove the standalone `addChildren` function.

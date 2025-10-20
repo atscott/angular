@@ -17,6 +17,12 @@ import {ParamMap, Params} from './shared';
 import {typedRouteKey} from './typed_router_utils';
 import {toSignal} from '@angular/core/rxjs-interop';
 
+export type TypedRootRoute<
+  TData extends Record<string, unknown> = {},
+  TResolve extends Record<string, unknown> = {},
+  TChildren extends TypedRoute[] | Record<string, TypedRoute> = never,
+> = TypedRouteBuilder<'', {}, {}, {}, TData, TResolve, TChildren>;
+
 export interface TypedRoute<
   TPath extends string = string,
   TParentParams extends Record<string, unknown> = {},
@@ -52,8 +58,8 @@ export type RouteParams<T extends TypedRoute> =
     : {};
 
 export type ResolvedData<T extends TypedRoute | undefined> =
-  T extends TypedRoute<string, any, any, any, infer TData, infer TResolved>
-    ? TData & TResolved
+  T extends TypedRoute<string, any, infer TParentData, any, infer TData, infer TResolved>
+    ? TParentData & TData & TResolved
     : {};
 
 export type TypedActivatedRouteSnapshot<
@@ -79,6 +85,7 @@ class TypedRouteBuilder<
   TParams extends Record<string, unknown>,
   TData extends Record<string, unknown>,
   TResolve extends Record<string, unknown>,
+  TChildren extends TypedRoute[] | Record<string, TypedRoute> = never,
 > implements TypedRoute<TPath, TParentParams, TParentData, TParams, TData, TResolve>
 {
   public path: TPath;
@@ -118,22 +125,19 @@ class TypedRouteBuilder<
     TParentData,
     TParams,
     TData,
-    TResolve & {[K in keyof TNewResolvers]: ReturnType<TNewResolvers[K]>}
+    TResolve & {[K in keyof TNewResolvers]: ReturnType<TNewResolvers[K]>},
+    TChildren
   > {
     this.resolve = {...this.resolve, ...resolvers};
     return this as any;
   }
 
-  addChildren(
-    children: TypedRoute[] | Record<string, TypedRoute>,
-  ): TypedRouteBuilder<TPath, TParentParams, TParentData, TParams, TData, TResolve> {
-    if (Array.isArray(children)) {
-      this.children = children;
-    } else {
-      this.children = Object.values(children);
-    }
+  addChildren<const TNewChildren extends TypedRoute[]>(
+    children: TNewChildren,
+  ): TypedRouteBuilder<TPath, TParentParams, TParentData, TParams, TData, TResolve, TNewChildren> {
+    this.children = children as any;
 
-    return this;
+    return this as any;
   }
 
   lazy<
@@ -152,7 +156,8 @@ class TypedRouteBuilder<
     TParentData,
     TParams,
     TData,
-    TResolve & {[K in keyof TLoadResolve]: ReturnType<TLoadResolve[K]>}
+    TResolve & {[K in keyof TLoadResolve]: ReturnType<TLoadResolve[K]>},
+    TChildren
   > {
     this.load = loader;
     return this as any;
@@ -175,17 +180,37 @@ export function createRoute<
   TParentRoute extends TypedRoute ? ResolvedData<TParentRoute> : {},
   PathParams<TPath>,
   TData,
-  {}
+  {},
+  never
 > {
-  return new TypedRouteBuilder(route) as any;
+  return new TypedRouteBuilder(route);
+}
+
+export function createRootRoute<TData extends Record<string, unknown> = {}>(
+  route: Omit<
+    Route,
+    | 'path'
+    | 'component'
+    | 'data'
+    | 'resolve'
+    | 'children'
+    | 'loadChildren'
+    | 'load'
+    | 'getParentRoute'
+  > & {
+    data?: TData;
+  } = {},
+): TypedRootRoute<TData, {}, never> {
+  // The root route has an empty path.
+  return new TypedRouteBuilder({path: '', ...route}) as any;
 }
 
 export function provideTypedRouter(
-  routes: TypedRoute[],
+  route: TypedRootRoute<any, any>,
   ...features: RouterFeatures[]
 ): EnvironmentProviders {
   return provideRouter(
-    routes as Route[],
+    [route as Route],
     withRouterConfig({
       paramsInheritanceStrategy: 'always',
     }),
@@ -270,17 +295,17 @@ export class TypedActivatedRoute<TRoute extends TypedRoute> {
 
   constructor(public readonly route: ActivatedRoute) {
     this.data$ = this.route.data as any;
-    this.data = toSignal(this.data$, {initialValue: {} as ResolvedData<TRoute>});
+    this.data = toSignal(this.data$, {requireSync: true});
     this.params$ = this.route.params as any;
-    this.params = toSignal(this.params$, {initialValue: {} as RouteParams<TRoute>});
+    this.params = toSignal(this.params$, {requireSync: true});
     this.queryParams$ = this.route.queryParams;
-    this.queryParams = toSignal(this.queryParams$, {initialValue: {}});
+    this.queryParams = toSignal(this.queryParams$, {requireSync: true});
     this.fragment$ = this.route.fragment;
-    this.fragment = toSignal(this.fragment$, {initialValue: null});
+    this.fragment = toSignal(this.fragment$, {requireSync: true});
     this.paramMap$ = this.route.paramMap as any;
-    this.paramMap = toSignal(this.paramMap$, {initialValue: {get: () => null} as any});
+    this.paramMap = toSignal(this.paramMap$, {requireSync: true});
     this.queryParamMap$ = this.route.queryParamMap;
-    this.queryParamMap = toSignal(this.queryParamMap$, {initialValue: {get: () => null} as any});
+    this.queryParamMap = toSignal(this.queryParamMap$, {requireSync: true});
   }
 
   // Expose snapshot for convenience, already typed.
