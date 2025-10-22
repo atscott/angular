@@ -123,8 +123,6 @@ export function createEmptyStateSnapshot(rootComponent: Type<any> | null): Route
  * @publicApi
  */
 export class ActivatedRoute {
-  /** @internal */
-  _typedRoute?: TypedActivatedRoute<any>;
   /** The current snapshot of this route */
   snapshot!: ActivatedRouteSnapshot;
   /** @internal */

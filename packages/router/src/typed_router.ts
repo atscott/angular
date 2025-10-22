@@ -10,13 +10,11 @@ import {
   EnvironmentProviders,
   inject,
   Injectable,
-  InjectionToken,
   makeEnvironmentProviders,
   Signal,
   Type,
   ɵWritable as Writable,
 } from '@angular/core';
-import {Observable} from 'rxjs';
 
 import {Route, MaybeAsync, GuardResult} from './models';
 import {provideRouter, RouterFeatures, withRouterConfig} from './provide_router';
@@ -24,6 +22,13 @@ import {Router} from './router';
 import {ActivatedRoute, ActivatedRouteSnapshot, RouterStateSnapshot} from './router_state';
 import {ParamMap, Params} from './shared';
 import {toSignal} from '@angular/core/rxjs-interop';
+
+export interface Register {}
+export type RegisteredRouter<TRegister = Register> = TRegister extends {
+  router: infer TRouter;
+}
+  ? TRouter
+  : AnyRouter;
 
 type JoinPaths<A extends string, B extends string> = B extends ''
   ? A extends ''
@@ -62,7 +67,7 @@ type AllRouteInfos<
           fullPath: infer TFullPath extends string;
           params: infer TParams extends Record<string, unknown>;
         }
-          ? TChildren extends TypedRoute[]
+          ? TChildren extends ReadonlyArray<TypedRoute>
             ? AllRouteInfos<TChildren[number], TFullPath, TParams>
             : TChildren extends Record<string, TypedRoute>
               ? AllRouteInfos<TChildren[keyof TChildren], TFullPath, TParams>
@@ -82,11 +87,15 @@ type RouteForPath<TRouteTree extends TypedRoute, TPath extends string> = Extract
   {fullPath: TPath}
 >['route'];
 
-export type TypedRootRoute<
-  TData extends Record<string, unknown> = {},
-  TResolve extends Record<string, unknown> = {},
-  TChildren extends TypedRoute[] | Record<string, TypedRoute> = never,
-> = TypedRouteBuilder<'', {}, {}, {}, TData, TResolve, TChildren>;
+export type TypedRootRoute<TChildren = unknown> = TypedRouteBuilder<
+  '',
+  {},
+  {},
+  {},
+  {},
+  {},
+  TChildren
+>;
 
 export interface TypedRoute<
   TPath extends string = string,
@@ -105,6 +114,7 @@ export interface TypedRoute<
     resolved: TResolved;
   };
 }
+export type AnyRoute = TypedRoute<any, any, any, any, any, any>;
 
 export type PathParams<TPath extends string> =
   // Split the path by slashes
@@ -143,6 +153,14 @@ type CanActivateFn<
   state: RouterStateSnapshot,
 ) => MaybeAsync<GuardResult>;
 
+type CanActivateChildFn<
+  TParams extends Record<string, unknown>,
+  TData extends Record<string, unknown>,
+> = (
+  route: TypedActivatedRouteSnapshot<TParams, TData>,
+  state: RouterStateSnapshot,
+) => MaybeAsync<GuardResult>;
+
 type CanDeactivateFn<
   T,
   TParams extends Record<string, unknown>,
@@ -162,6 +180,21 @@ type ResolverMap<
   (route: TypedActivatedRouteSnapshot<TParams, TData>, state: RouterStateSnapshot) => any
 >;
 
+export type Constrain<T, TConstraint, TDefault = TConstraint> =
+  | (T extends TConstraint ? T : never)
+  | TDefault;
+
+export type RouteAddChildrenFn<
+  TPath extends string,
+  TParentParams extends Record<string, unknown>,
+  TParentData extends Record<string, unknown>,
+  TParams extends Record<string, unknown>,
+  TData extends Record<string, unknown>,
+  TResolve extends Record<string, unknown>,
+> = <const TNewChildren>(
+  children: Constrain<TNewChildren, ReadonlyArray<AnyRoute>>,
+) => TypedRouteBuilder<TPath, TParentParams, TParentData, TParams, TData, TResolve, TNewChildren>;
+
 class TypedRouteBuilder<
   TPath extends string,
   TParentParams extends Record<string, unknown>,
@@ -169,7 +202,7 @@ class TypedRouteBuilder<
   TParams extends Record<string, unknown>,
   TData extends Record<string, unknown>,
   TResolve extends Record<string, unknown>,
-  TChildren extends TypedRoute[] | Record<string, TypedRoute> = never,
+  TChildren = unknown,
 > implements TypedRoute<TPath, TParentParams, TParentData, TParams, TData, TResolve>
 {
   public parent?: TypedRoute;
@@ -180,6 +213,7 @@ class TypedRouteBuilder<
   public children?: Route[];
   public load?: () => Promise<any>;
   public canActivate?: CanActivateFn<TParentParams & TParams, TParentData & TData>[];
+  public canActivateChild?: CanActivateChildFn<TParentParams & TParams, TParentData & TData>[];
   public canDeactivate?: CanDeactivateFn<any, TParentParams & TParams, TParentData & TData>[];
   type?: {
     path: TPath;
@@ -203,44 +237,12 @@ class TypedRouteBuilder<
     this.data = route.data;
   }
 
-  addCanActivate(
-    guards: CanActivateFn<TParentParams & TParams, TParentData & TData>[],
-  ): TypedRouteBuilder<TPath, TParentParams, TParentData, TParams, TData, TResolve, TChildren> {
-    (this as Writable<this>).canActivate = [...(this.canActivate ?? []), ...guards];
-    return this;
-  }
-
-  addCanDeactivate<TComponent>(
-    guards: CanDeactivateFn<TComponent, TParentParams & TParams, TParentData & TData>[],
-  ): TypedRouteBuilder<TPath, TParentParams, TParentData, TParams, TData, TResolve, TChildren> {
-    (this as Writable<this>).canDeactivate = [...(this.canDeactivate ?? []), ...guards];
-    return this;
-  }
-
-  setResolvers<TNewResolvers extends ResolverMap<TParentParams & TParams, TParentData & TData>>(
-    resolvers: TNewResolvers,
-  ): TypedRouteBuilder<
-    TPath,
-    TParentParams,
-    TParentData,
-    TParams,
-    TData,
-    {[K in keyof TNewResolvers]: ReturnType<TNewResolvers[K]>},
-    TChildren
-  > {
-    (this as Writable<this>).resolve = resolvers;
-    return this as any;
-  }
-
-  addChildren<const TNewChildren extends TypedRoute[]>(
-    children: TNewChildren,
-  ): TypedRouteBuilder<TPath, TParentParams, TParentData, TParams, TData, TResolve, TNewChildren> {
+  addChildren: RouteAddChildrenFn<TPath, TParentParams, TParentData, TParams, TData, TResolve> = (
+    children,
+  ) => {
     (this as Writable<this>).children = children as any;
-    for (const child of this.children!) {
-      (child as any).parent = this;
-    }
     return this as any;
-  }
+  };
 
   lazy<
     TLoadResolve extends Record<
@@ -270,13 +272,34 @@ export function createRoute<
   TPath extends string,
   TParentRoute extends TypedRoute | undefined,
   TData extends Record<string, unknown>,
+  TResolvers extends ResolverMap<
+    (TParentRoute extends TypedRoute ? RouteParams<TParentRoute> : {}) & PathParams<TPath>,
+    (TParentRoute extends TypedRoute ? ResolvedData<TParentRoute> : {}) & TData
+  >,
   TComponent,
 >(
   route: {
     path: TPath;
     getParentRoute?: () => TParentRoute;
     data?: TData;
+    resolve?: TResolvers;
     component?: Type<TComponent>;
+    canActivate?: CanActivateFn<
+      (TParentRoute extends TypedRoute ? RouteParams<TParentRoute> : {}) & PathParams<TPath>,
+      (TParentRoute extends TypedRoute ? ResolvedData<TParentRoute> : {}) &
+        TData & {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}
+    >[];
+    canActivateChild?: CanActivateChildFn<
+      (TParentRoute extends TypedRoute ? RouteParams<TParentRoute> : {}) & PathParams<TPath>,
+      (TParentRoute extends TypedRoute ? ResolvedData<TParentRoute> : {}) &
+        TData & {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}
+    >[];
+    canDeactivate?: CanDeactivateFn<
+      TComponent,
+      TParentRoute extends TypedRoute ? RouteParams<TParentRoute> : {},
+      (TParentRoute extends TypedRoute ? ResolvedData<TParentRoute> : {}) &
+        TData & {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}
+    >[];
   } & Omit<
     Route,
     | 'path'
@@ -287,6 +310,7 @@ export function createRoute<
     | 'load'
     | 'component'
     | 'canActivate'
+    | 'canActivateChild'
     | 'canDeactivate'
   >,
 ): TypedRouteBuilder<
@@ -295,10 +319,10 @@ export function createRoute<
   TParentRoute extends TypedRoute ? ResolvedData<TParentRoute> : {},
   PathParams<TPath>,
   TData,
-  {},
+  {[K in keyof TResolvers]: ReturnType<TResolvers[K]>},
   never
 > {
-  return new TypedRouteBuilder(route);
+  return new TypedRouteBuilder(route as any);
 }
 
 export function createRootRoute<TData extends Record<string, unknown> = {}>(
@@ -315,13 +339,13 @@ export function createRootRoute<TData extends Record<string, unknown> = {}>(
   > & {
     data?: TData;
   } = {},
-): TypedRootRoute<TData, {}, never> {
+): TypedRootRoute {
   // The root route has an empty path.
   return new TypedRouteBuilder({path: '', ...route}) as any;
 }
 
-export function provideTypedRouter(
-  route: TypedRootRoute<any, any>,
+export function provideTypedRouter<TRootRoute extends AnyRoute = RegisteredRouter['routeTree']>(
+  route: TRootRoute,
   ...features: RouterFeatures[]
 ): EnvironmentProviders {
   return makeEnvironmentProviders([
@@ -336,8 +360,9 @@ export function provideTypedRouter(
 }
 
 @Injectable({providedIn: 'root'})
-export class TypedRouter<TRouteTree extends TypedRoute> {
+export class TypedRouter<TRouteTree extends AnyRoute> {
   private router = inject(Router);
+  routeTree = this.router.config[0] as TRouteTree;
 
   navigate<TPath extends AllPaths<TRouteTree>>(
     path: TPath,
@@ -361,6 +386,7 @@ export class TypedRouter<TRouteTree extends TypedRoute> {
     });
   }
 }
+export type AnyRouter = TypedRouter<AnyRoute>;
 
 export type SnapshotFromTypedRoute<TRoute extends TypedRoute> = Omit<
   ActivatedRouteSnapshot,
@@ -373,53 +399,29 @@ export type SnapshotFromTypedRoute<TRoute extends TypedRoute> = Omit<
 };
 
 export class TypedActivatedRoute<TRoute extends TypedRoute> {
-  /** An observable of the static and resolved data of this route. */
-  readonly data$: Observable<ResolvedData<TRoute>>;
   /** A signal of the static and resolved data of this route. */
   readonly data: Signal<ResolvedData<TRoute>>;
-
-  /** An observable of the matrix parameters scoped to this route. */
-  readonly params$: Observable<RouteParams<TRoute>>;
   /** A signal of the matrix parameters scoped to this route. */
   readonly params: Signal<RouteParams<TRoute>>;
-
-  /** An observable of the query parameters available to this route. */
-  readonly queryParams$: Observable<Params>;
   /** A signal of the query parameters available to this route. */
   readonly queryParams: Signal<Params>;
-
-  /** An observable of the URL fragment available to this route. */
-  readonly fragment$: Observable<string | null>;
   /** A signal of the URL fragment available to this route. */
   readonly fragment: Signal<string | null>;
-
-  /** An observable of a map of the matrix parameters scoped to this route. */
-  readonly paramMap$: Observable<
-    ParamMap & {get<K extends keyof RouteParams<TRoute>>(name: K): RouteParams<TRoute>[K] | null}
-  >;
   /** A signal of a map of the matrix parameters scoped to this route. */
   readonly paramMap: Signal<
     ParamMap & {get<K extends keyof RouteParams<TRoute>>(name: K): RouteParams<TRoute>[K] | null}
   >;
 
-  /** An observable of a map of the query parameters available to this route. */
-  readonly queryParamMap$: Observable<ParamMap>;
   /** A signal of a map of the query parameters available to this route. */
   readonly queryParamMap: Signal<ParamMap>;
 
   constructor(public readonly route: ActivatedRoute) {
-    this.data$ = this.route.data as any;
-    this.data = toSignal(this.data$, {requireSync: true});
-    this.params$ = this.route.params as any;
-    this.params = toSignal(this.params$, {requireSync: true});
-    this.queryParams$ = this.route.queryParams;
-    this.queryParams = toSignal(this.queryParams$, {requireSync: true});
-    this.fragment$ = this.route.fragment;
-    this.fragment = toSignal(this.fragment$, {requireSync: true});
-    this.paramMap$ = this.route.paramMap as any;
-    this.paramMap = toSignal(this.paramMap$, {requireSync: true});
-    this.queryParamMap$ = this.route.queryParamMap;
-    this.queryParamMap = toSignal(this.queryParamMap$, {requireSync: true});
+    this.data = toSignal(this.route.data as any, {requireSync: true});
+    this.params = toSignal(this.route.params as any, {requireSync: true});
+    this.queryParams = toSignal(this.route.queryParams, {requireSync: true});
+    this.fragment = toSignal(this.route.fragment, {requireSync: true});
+    this.paramMap = toSignal(this.route.paramMap as any, {requireSync: true});
+    this.queryParamMap = toSignal(this.route.queryParamMap, {requireSync: true});
   }
 
   // Expose snapshot for convenience, already typed.
@@ -428,10 +430,14 @@ export class TypedActivatedRoute<TRoute extends TypedRoute> {
   }
 }
 
-export function injectTypedRoute<TRouteTree extends TypedRoute, TPath extends AllPaths<TRouteTree>>(
-  _routeTree: TRouteTree, // for type inference
-  _path: TPath,
-): TypedActivatedRoute<RouteForPath<TRouteTree, TPath>> {
+export function injectTypedRouter(): TypedRouter<RegisteredRouter['routeTree']> {
+  return inject(TypedRouter<RegisteredRouter['routeTree']>);
+}
+
+export function injectTypedRoute<
+  TRouteTree extends TypedRoute = RegisteredRouter['routeTree'],
+  TPath extends AllPaths<TRouteTree> = AllPaths<TRouteTree>,
+>(_path: TPath): TypedActivatedRoute<RouteForPath<TRouteTree, TPath>> {
   const route = inject(ActivatedRoute);
   return new TypedActivatedRoute(route);
 }

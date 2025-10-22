@@ -49,7 +49,7 @@ const userRoute = createRoute({ path: 'user/:userId', component: UserComponent }
 
 @Component({ template: `...` })
 class UserComponent {
-  route = injectTypedRoute(userRoute);
+  route = injectTypedRoute('/user/:userId');
 
   constructor() {
     // This line should compile without error
@@ -64,32 +64,34 @@ class UserComponent {
 
 This is a powerful tool for ensuring that the type-safe API is working as expected and that we don't introduce regressions in the type definitions.
 
-## 4. Final API: A Class-based Fluent Approach
+## 4. Final API: A Hybrid Declarative and Fluent Approach
 
-The final architectural pivot was to a class-based, fluent API. This design, initiated by a `createRoute` factory function, provides the most ergonomic and type-safe experience, elegantly solving the type inference challenges of previous designs.
+The final architectural pivot was to an API that combines a declarative configuration object with a class-based, fluent builder. This design, initiated by a `createRoute` factory function, provides an ergonomic and type-safe experience that elegantly solves the type inference challenges of previous designs.
 
-### `createRoute`, `addResolvers`, `.lazy`, and `addChildren`
+### `createRoute`, `.lazy`, and `.addChildren`
 
 The new API is centered around a `TypedRouteBuilder` class, which is instantiated by the `createRoute` function.
 
-1.  **`createRoute` function:** This is the public entry point. It takes the route's "shape" (`path`, `getParentRoute`, `data`) and returns an instance of the internal `TypedRouteBuilder` class.
+1.  **`createRoute` function:** This is the public entry point. It takes the route's configuration as a single object literal, including its `path`, `getParentRoute`, `data`, `resolve`, `canActivate`, `canActivateChild`, and `component`. It returns an instance of the internal `TypedRouteBuilder` class.
 
-2.  **`TypedRouteBuilder` Class:** This class holds the route's configuration and provides the fluent methods. Because it's a class instance, TypeScript can easily carry the generic type information from one method call to the next.
+2.  **`TypedRouteBuilder` Class:** This class holds the route's configuration and provides fluent methods for adding properties that could not be reliably type-inferred inside the initial object literal, such as lazy-loaded modules and children.
 
-3.  **`.addResolvers()` method:** This method on the `TypedRouteBuilder` instance accepts an object of individual resolver functions. Because the parent's type information is already part of the class's generic signature, the `route` parameter for each resolver function can be correctly and strongly typed. This solves the "look inside the object" problem that plagued the single-object-literal approach.
+3.  **`.lazy()` method:** This method allows for defining the lazy-loaded parts of the route. It takes a loader function that returns a `Promise` for an object containing the `component` and an optional `resolve` object.
 
-4.  **`.lazy()` method:** This method allows for defining the lazy-loaded parts of the route. It takes a loader function that returns a `Promise` for an object containing the `component` and an optional `resolve` object (which can also contain multiple individual resolvers).
+4.  **`.addChildren()` method:** This method takes an array of child `TypedRouteBuilder` instances, allowing for a fully fluent and composable definition of the route hierarchy. A key learning here was the use of a `<const TNewChildren>` generic. This signals to TypeScript to treat the input as a read-only tuple, preventing the compiler from hitting a "type instantiation is excessively deep" error on large, complex route trees.
 
-5.  **`.addChildren()` method:** This method takes an array of child `TypedRouteBuilder` instances or an object map of child route builders, allowing for a fully fluent and composable definition of the route hierarchy.
-
-This API provides the best of all worlds: a clean entry point, a composable and extensible structure, and a solution to the complex type inference problem that allows for the use of the traditional `resolve` object.
+This hybrid API provides the best of all worlds: a clean, declarative entry point for most properties, and a composable, fluent structure for hierarchical and lazy-loaded routes.
 
 ```typescript
-// Eager route with individual, type-safe resolvers
-const userRoute = createRoute({ path: 'user/:userId' })
-  .addResolvers({
+// Eager route with inline, type-safe resolvers and guards
+const userRoute = createRoute({
+  getParentRoute: () => userRoute, // Must be defined before resolve/canActivate
+  path: 'user/:userId',
+  resolve: {
     user: (route) => { /* route is typed with parent info */ }
-  });
+  },
+  canActivate: [(route) => { /* route is also typed */ }]
+});
 
 // Lazy-loaded route with children
 const postsRoute = createRoute({ path: 'posts/:postId', getParentRoute: () => userRoute })
@@ -108,8 +110,8 @@ const postsRoute = createRoute({ path: 'posts/:postId', getParentRoute: () => us
 
 To complete the modern, ergonomic feel of the API, the primary way to access route data in a component is now through the `injectTypedRoute` function.
 
--   **`injectTypedRoute(route: TRoute)`:** This injection function takes the route definition object and returns a `TypedActivatedRoute` instance.
--   **`TypedActivatedRoute`:** This is a signal-based wrapper around the standard `ActivatedRoute`. It exposes `params`, `data`, `queryParams`, etc., as signals, which are fully typed based on the route definition you pass to the injection function.
+-   **`injectTypedRoute(path: string)`:** This injection function takes the route's full path string (e.g., `/user/:userId`) and returns a `TypedActivatedRoute` instance.
+-   **`TypedActivatedRoute`:** This is a signal-based wrapper around the standard `ActivatedRoute`. It exposes `params`, `data`, `queryParams`, etc., as signals, which are fully typed based on the route definition matching the path you pass to the injection function.
 
 This eliminates the need for manual casting of `ActivatedRoute.snapshot` and encourages a more reactive, signal-based approach to component design.
 
@@ -122,38 +124,33 @@ This eliminates the need for manual casting of `ActivatedRoute.snapshot` and enc
 })
 class UserComponent {
   // The route is fully typed and signal-based, with no casting needed.
-  route = injectTypedRoute(userRoute);
+  route = injectTypedRoute('/user/:userId');
 }
 ```
 
-## 13. Refining the Fluent API: Type-Safe Guards and Resolver Semantics
+## 13. Refining the API: The Challenge and Triumph of Type-Safe Guards
 
-The final stage of the API design involved refining the fluent `TypedRouteBuilder` to handle guards (`canActivate`, `canDeactivate`) and to clarify the behavior of resolvers.
+The final stage of the API design involved a significant challenge: providing type-safety for guards (`canActivate`, `canDeactivate`) and resolvers.
 
 ### The Challenge of Inline Guards
 
-An attempt was made to allow `canActivate` and `canDeactivate` guards to be defined directly within the `createRoute` configuration object, similar to other route properties. This approach failed due to a fundamental limitation in TypeScript's type inference. The compiler was unable to infer the types for the guard function's parameters (e.g., `route.params`) based on other properties (`path`) within the same object literal. This resulted in the parameters being typed as `unknown` or `{}`, defeating the goal of type safety.
+An attempt was made to allow `canActivate`, `canDeactivate`, and `resolve` to be defined directly within the `createRoute` configuration object. This approach initially failed due to a fundamental limitation in TypeScript's type inference. The compiler was unable to infer the types for the guard and resolver function parameters (e.g., `route.params`) based on other properties (`path`) within the same object literal. This resulted in the parameters being typed as `unknown` or `{}`, defeating the goal of type safety.
 
-Several workarounds were attempted, including more complex generic signatures for `createRoute` and using a type-hinting utility function, but these either failed to solve the problem or introduced cascading type errors elsewhere in the API.
+### Exploring a Fluent API
 
-### Solution: Fluent Methods for Guards
+To work around this limitation, a fluent API was developed with methods like `.addCanActivate()` and `.setResolvers()`. By adding these methods to the `TypedRouteBuilder`, the type inference problem was solved. The builder instance already had the necessary type information (like path parameters and parent data) captured in its generic signature *before* the guard methods were called. This allowed TypeScript to correctly and reliably infer the types for the function parameters.
 
-The successful solution was to extend the fluent API to include methods for adding guards:
+### Final Solution: A Return to the Declarative API
 
--   **`.addCanActivate()` and `.addCanDeactivate()`**: By adding these methods to the `TypedRouteBuilder`, the type inference problem was solved. The builder instance already has the necessary type information (like path parameters and parent data) captured in its generic signature *before* the guard methods are called. This allows TypeScript to correctly and reliably infer the types for the guard function parameters.
+While the fluent API for guards and resolvers worked, it was less declarative than desired. The ideal API would allow all of a route's properties to be defined together in a single object.
 
-This approach not only works but also creates a more consistent and predictable API, where all "behaviors" (resolvers, guards, lazy loading) are added via fluent methods.
+After further experimentation, a breakthrough was made in the TypeScript typings for `createRoute`. By carefully structuring the generic constraints and inference, it became possible to achieve what was initially thought to be impossible: **strongly-typed inline guards and resolvers**. A key discovery was that the **order of properties** in the configuration object mattered. By requiring `getParentRoute` to be defined first, followed by `data`, then `resolve`, and finally `canActivate`, `canActivateChild`, or `canDeactivate`, TypeScript could gather enough contextual information to correctly type the function signatures. The parent provides inherited data, the route's own `data` adds to that, and the `resolve` functions can access both, all of which contributes to the final data shape available in the guards.
 
-### Clarifying Resolver Behavior: `addResolvers` vs. `setResolvers`
+This provides the most ergonomic and readable API, fulfilling the original design goals without the need for extra fluent methods for these properties.
 
-It was noted that the name `.addResolvers()` was misleading. Its implementation merged the new resolvers with any existing ones, but the type signature was designed as if it were a replacement. This could lead to confusion and unexpected runtime behavior.
+### Ergonomic Improvement: Global Types with Declaration Merging
 
-To make the API clearer and more robust, the method was renamed and its behavior was simplified:
-
--   **`.setResolvers()`**: The method is now named `setResolvers` to accurately reflect its behavior: it **replaces** the entire `resolve` map for the route.
--   **Simplified Types**: This change also allowed for a simpler type signature, as the method no longer needs to perform a complex merge operation on the `TResolved` generic type.
-
-This final refinement ensures that the API is not only type-safe but also semantically clear and predictable for developers.
+A final refinement was the introduction of a `Register` interface to leverage TypeScript's declaration merging. This allows an application to define its `TypedRouter` and route tree types once, making them globally available to injection functions like `injectTypedRouter` and `injectTypedRoute`. This removes the need to constantly pass generic parameters and provides a seamless, "it just works" experience for developers consuming the typed router in their components.
 
 ## 12. Enforcing a Single Root Route and Fixing Type Preservation
 
@@ -162,7 +159,7 @@ Further refinement of the API addressed two related issues: enforcing a single r
 ### Motivation
 
 -   **Single Root Requirement**: The router configuration must be a single tree with one root. The `provideTypedRouter` function was initially typed to accept an array of `TypedRoute` objects, which was incorrect and did not align with the router's runtime expectations.
--   **Exposing a Type Preservation Flaw**: The introduction of a special "branded" type for the root route (`TypedRootRoute`) exposed an underlying flaw in the fluent API. Chaining methods like `.addResolvers()` or `.addChildren()` did not preserve the specific type of the `TypedRouteBuilder` instance they were called on. While this was always an issue, the strict requirement of `provideTypedRouter` for the `TypedRootRoute` brand made the bug obvious, as the brand was being stripped away after any method call.
+-   **Exposing a Type Preservation Flaw**: The introduction of a special "branded" type for the root route (`TypedRootRoute`) exposed an underlying flaw in the fluent API. Chaining methods like `.addChildren()` did not preserve the specific type of the `TypedRouteBuilder` instance they were called on. While this was always an issue, the strict requirement of `provideTypedRouter` for the `TypedRootRoute` brand made the bug obvious, as the brand was being stripped away after any method call.
 
 ### Final Implementation
 
@@ -176,7 +173,7 @@ Further refinement of the API addressed two related issues: enforcing a single r
     -   The signature of `provideTypedRouter` was changed to accept a single `TypedRootRoute` instead of an array of `TypedRoute`.
 
 4.  **Fixing Type Preservation**:
-    -   The `addChildren`, `addResolvers`, and `lazy` methods on the `TypedRouteBuilder` were updated to return an intersection type including `this` (e.g., `this & TypedRouteBuilder<...>` ). This ensures that the specific type of the instance, including the `TypedRootRoute` brand if present, is preserved across chained method calls. This fixed the underlying type preservation flaw for the entire fluent API, making it more robust.
+    -   The `addChildren` and `lazy` methods on the `TypedRouteBuilder` were updated to return an intersection type including `this` (e.g., `this & TypedRouteBuilder<...>` ). This ensures that the specific type of the instance, including the `TypedRootRoute` brand if present, is preserved across chained method calls. This fixed the underlying type preservation flaw for the entire fluent API, making it more robust.
 
 ### Example Usage
 
@@ -184,9 +181,7 @@ This change makes the API more robust and guides the developer to the correct us
 
 ```typescript
 // 1. Create the root route
-const rootRoute = createRootRoute().addResolvers({
-  rootData: () => ({ message: 'hello from root' }),
-});
+const rootRoute = createRootRoute();
 
 // 2. Create child routes
 const userRoute = createRoute({
@@ -206,12 +201,12 @@ bootstrapApplication(AppComponent, {
 
 ### Key Files Modified
 
-*   **`packages/router/src/typed_router.ts`**: Refactored to implement the `TypedRouteBuilder` class and the `createRoute` factory function, and remove the standalone `addChildren` function.
-*   **`packages/router/src/index.ts`**: Updated to export all the new public symbols and remove the `addChildren` export.
+*   **`packages/router/src/typed_router.ts`**: Refactored to implement the `TypedRouteBuilder` class and the `createRoute` factory function.
+*   **`packages/router/src/index.ts`**: Updated to export all the new public symbols.
 *   **`packages/router/BUILD.bazel`**: Added a dependency on `//packages/core/rxjs-interop`.
 *   **`packages/router/src/recognize.ts`**: Modified to handle the `load` property attached by the `.lazy()` method.
 *   **`packages/router/src/utils/config.ts`**: Modified to allow the `load` property.
-*   **`packages/router/test/typed_router_spec.ts`**: Refactored all tests to use the new fluent API.
+*   **`packages/router/test/typed_router_spec.ts`**: Refactored all tests to use the new API.
 
 ## 9. Runtime Behavior and `paramsInheritanceStrategy`
 
@@ -309,7 +304,7 @@ The goal was to create an API that was:
     -   It requires an `initialValue` to be passed to `toSignal` to ensure the signal has a non-nullable type from the start.
 
 2.  **`injectTypedRoute` Function:**
-    -   A new injection function, `injectTypedRoute(route: TRoute)`, was introduced as the public API.
+    -   A new injection function, `injectTypedRoute(path: string)`, was introduced as the public API.
     -   It injects the standard `ActivatedRoute`.
     -   It instantiates the `TypedActivatedRoute` wrapper.
     -   **Memoization:** To ensure that the same wrapper instance is returned for the same `ActivatedRoute` instance, the wrapper is cached on the `ActivatedRoute` instance itself using a private property (`_typedRoute`). This prevents re-computation and ensures that signals are not recreated unnecessarily.
@@ -330,6 +325,6 @@ This new API results in a much cleaner and more modern developer experience in c
 })
 class UserComponent {
   // The route is fully typed and signal-based, with no casting needed.
-  route = injectTypedRoute(userRoute);
+  route = injectTypedRoute('/user/:userId');
 }
 ```
