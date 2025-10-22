@@ -89,25 +89,28 @@ type AllRouteInfos<
           fullPath: infer TFullPath extends string;
           params: infer TParams extends Record<string, unknown>;
         }
-          ? TChildren extends ReadonlyArray<Route>
-            ? AllRouteInfos<TChildren[number], TFullPath, TParams>
+          ? TChildren extends ReadonlyArray<Route | UntypedRoute>
+            ? AllRouteInfos<Extract<TChildren[number], Route>, TFullPath, TParams>
             : TChildren extends Record<string, Route>
               ? AllRouteInfos<TChildren[keyof TChildren], TFullPath, TParams>
               : never
           : never)
   : never;
 
-export type AllPaths<TRouteTree extends Route> = AllRouteInfos<TRouteTree>['fullPath'];
+export type AllPaths<TRouteTree extends Route> = AnyRoute extends TRouteTree
+  ? string
+  : AllRouteInfos<TRouteTree>['fullPath'];
 
-export type ParamsForPath<TRouteTree extends Route, TPath extends string> = Extract<
-  AllRouteInfos<TRouteTree>,
-  {fullPath: TPath}
->['params'];
+export type ParamsForPath<
+  TRouteTree extends Route,
+  TPath extends string,
+> = AnyRoute extends TRouteTree
+  ? Record<string, any>
+  : Extract<AllRouteInfos<TRouteTree>, {fullPath: TPath}>['params'];
 
-type RouteForPath<TRouteTree extends Route, TPath extends string> = Extract<
-  AllRouteInfos<TRouteTree>,
-  {fullPath: TPath}
->['route'];
+type RouteForPath<TRouteTree extends Route, TPath extends string> = AnyRoute extends TRouteTree
+  ? AnyRoute
+  : Extract<AllRouteInfos<TRouteTree>, {fullPath: TPath}>['route'];
 
 export type RootRoute<TChildren = unknown> = BaseRoute<'', '/', {}, {}, {}, {}, {}, TChildren>;
 
@@ -210,7 +213,7 @@ export type RouteAddChildrenFn<
   TData extends Record<string, unknown>,
   TResolve extends Record<string, unknown>,
 > = <const TNewChildren>(
-  children: Constrain<TNewChildren, ReadonlyArray<AnyRoute>>,
+  children: Constrain<TNewChildren, ReadonlyArray<AnyRoute | UntypedRoute>>,
 ) => BaseRoute<
   TPath,
   TFullPath,
@@ -235,7 +238,7 @@ class BaseRoute<
 {
   public parent?: Route;
   public path: TPath;
-  public fullPath: TFullPath;
+  public fullPath!: TFullPath;
   public getParentRoute?: () => Route | undefined;
   public data?: TData;
   public resolve?: ResolverMap<TParentParams & TParams, TParentData & TData>;
@@ -265,8 +268,11 @@ class BaseRoute<
     this.path = route.path;
     this.getParentRoute = route.getParentRoute;
     this.data = route.data;
+  }
 
+  init() {
     const parent = this.getParentRoute?.();
+    this.parent = parent;
     const parentFullPath = parent?.fullPath ?? '';
     this.fullPath = joinPaths(parentFullPath, this.path) as TFullPath;
   }
@@ -281,8 +287,31 @@ class BaseRoute<
     TResolve
   > = (children) => {
     (this as Writable<this>).children = children as any;
+    for (const child of children) {
+      if (child instanceof BaseRoute) {
+        child.init();
+      }
+    }
     return this as any;
   };
+
+  setResolvers<
+    const TNewResolvers extends ResolverMap<TParentParams & TParams, TParentData & TData>,
+  >(
+    resolvers: TNewResolvers,
+  ): BaseRoute<
+    TPath,
+    TFullPath,
+    TParentParams,
+    TParentData,
+    TParams,
+    TData,
+    {[K in keyof TNewResolvers]: ReturnType<TNewResolvers[K]>},
+    TChildren
+  > {
+    (this as Writable<this>).resolve = resolvers;
+    return this as any;
+  }
 
   lazy<
     TLoadResolve extends Record<
@@ -383,10 +412,12 @@ export function createRootRoute<TData extends Record<string, unknown> = {}>(
   } = {},
 ): RootRoute {
   // The root route has an empty path.
-  return new BaseRoute({path: '', ...route}) as any;
+  const newRoute = new BaseRoute({path: '', ...route});
+  newRoute.init();
+  return newRoute as any;
 }
 
-export function provideRouter<TRootRoute extends AnyRoute = RegisteredRouter['routeTree']>(
+export function provideRouter<TRootRoute extends AnyRoute>(
   route: TRootRoute,
   ...features: RouterFeatures[]
 ): EnvironmentProviders {

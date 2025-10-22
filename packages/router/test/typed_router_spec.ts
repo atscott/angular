@@ -3,12 +3,15 @@ import {TestBed} from '@angular/core/testing';
 import {RouterOutlet} from '@angular/router';
 import {RouterTestingHarness} from '@angular/router/testing';
 import {
+  AllPaths,
   createRoute,
   createRootRoute,
   injectRoute,
   injectRouter,
   provideRouter,
+  Router,
   SnapshotFromRoute,
+  AnyRoute,
 } from '../src/typed_router';
 
 @Component({
@@ -53,6 +56,14 @@ class PostsWithDataComponent {
     // @ts-expect-error
     this.route.params().nonExistent;
   }
+}
+
+@Component({
+  standalone: true,
+  template: `user: {{ route.data().user.name }}`,
+})
+class SetResolversComponent {
+  route = injectRoute('/set-resolvers/:userId');
 }
 
 @Component({
@@ -111,6 +122,14 @@ const postsRouteWithResolver = createRoute({
   },
 });
 
+const setResolversRoute = createRoute({
+  path: 'set-resolvers/:userId',
+  getParentRoute: () => rootRoute,
+  component: SetResolversComponent,
+}).setResolvers({
+  user: (route) => ({id: route.params.userId, name: 'Set Angular'}),
+});
+
 const lazyRouteShape = createRoute({
   path: 'lazy/:userId',
   getParentRoute: () => rootRoute,
@@ -127,6 +146,7 @@ const lazyRoute = lazyRouteShape.lazy(() =>
 const routerTree = rootRoute.addChildren([
   userRoute.addChildren([postsRoute]),
   userRouteWithResolver.addChildren([postsRouteWithResolver]),
+  setResolversRoute,
   lazyRoute,
 ]);
 
@@ -167,6 +187,71 @@ describe('TypedRouter', () => {
       expect(harness.fixture.nativeElement.innerHTML).toContain(
         'user: Angular, post: Post by Angular',
       );
+    });
+
+    it('should support setting resolvers with setResolvers', async () => {
+      TestBed.configureTestingModule({
+        providers: [provideRouter(routerTree)],
+      });
+      const harness = await RouterTestingHarness.create('/set-resolvers/123');
+      harness.fixture.detectChanges();
+      expect(harness.fixture.nativeElement.innerHTML).toContain('user: Set Angular');
+    });
+
+    it('should allow mixing typed and untyped routes', () => {
+      // This test is for compile-time type checking.
+      @Component({standalone: true, template: ''})
+      class UntypedComponent {}
+
+      const typedRoute = createRoute({path: 'typed', component: UntypedComponent});
+      const mixedTree = createRootRoute().addChildren([
+        typedRoute,
+        {
+          path: 'untyped',
+          component: UntypedComponent,
+        },
+      ]);
+
+      // @ts-expect-error: '/untyped' should not be in the type map
+      const x: AllPaths<typeof mixedTree> = '/untyped';
+      void x;
+
+      // The typed path should be present
+      const y: AllPaths<typeof mixedTree> = '/typed';
+      void y;
+
+      expect().nothing();
+    });
+  });
+
+  describe('AnyRoute fallback', () => {
+    it('should allow any path and params when no route tree is registered', async () => {
+      @Component({standalone: true, template: ''})
+      class BlankCmp {}
+      const root = createRootRoute().addChildren([
+        createRoute({
+          path: '',
+          component: BlankCmp,
+        }),
+        createRoute({
+          path: '**',
+          component: BlankCmp,
+        }),
+      ]);
+
+      TestBed.configureTestingModule({
+        providers: [provideRouter(root)],
+      });
+      const router: Router<AnyRoute> = TestBed.inject(Router);
+      await router.navigate('/some/unregistered/path', {id: 123, other: 'abc'});
+
+      const route = TestBed.runInInjectionContext(() =>
+        injectRoute<any>('/some/unregistered/path'),
+      );
+      route.data().anything;
+      route.params().anything;
+
+      expect().nothing();
     });
   });
 
