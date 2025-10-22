@@ -15,7 +15,6 @@ import {convertToParamMap, ParamMap, Params, PRIMARY_OUTLET, RouteTitleKey} from
 import {equalSegments, UrlSegment} from './url_tree';
 import {shallowEqual, shallowEqualArrays} from './utils/collection';
 import {Tree, TreeNode} from './utils/tree';
-import {TypedActivatedRoute} from './typed_router';
 
 /**
  * Represents the state of the router as a tree of activated routes.

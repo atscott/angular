@@ -144,13 +144,13 @@ export {
 } from './utils/functional_guards';
 export {VERSION} from './version';
 export {
-  TypedActivatedRoute,
-  injectTypedRoute,
-  createRoute,
-  createRootRoute,
-  provideTypedRouter,
-  SnapshotFromTypedRoute,
-  TypedRouter,
+  ActivatedRoute as TypedActivatedRoute,
+  injectRoute as injectTypedRoute,
+  createRoute as createTypedRoute,
+  createRootRoute as createTypedRootRoute,
+  provideRouter as provideTypedRouter,
+  SnapshotFromRoute as SnapshotFromTypedRoute,
+  Router as TypedRouter,
 } from './typed_router';
 
 export * from './private_export';
