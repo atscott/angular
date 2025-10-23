@@ -151,19 +151,19 @@ The `canMatch` guard feature can create ambiguity if it is used to guard two rou
 
 For complex cases where this is not feasible, you can fall back to the traditional `Route` object from `@angular/router`. The `.addChildren()` method accepts both typed and untyped route objects, allowing you to opt out of type safety for specific, ambiguous branches of your application tree.
 
-### Considered Future Enhancement: Relative Navigation
+### Type-Safe Relative Navigation
 
-A powerful feature under consideration for a future release is the addition of type-safe relative navigation, inspired by libraries like TanStack Router. This would enhance ergonomics by allowing navigation calls to be made relative to a known route, rather than always being absolute from the application root.
+A powerful feature of the typed router is its support for type-safe relative navigation, inspired by libraries like TanStack Router. This enhances ergonomics by allowing navigation calls to be made relative to a known route, rather than always being absolute from the application root.
 
-The proposed design includes two main additions:
+The API includes two main additions:
 
-1.  **An enhanced `router.navigate()` method:** The global `router.navigate()` method would be overloaded to accept a `NavigateOptions` object. When this object includes a `from` property (referencing a route's `fullPath` string), the `to` property would be type-safe for relative paths (e.g., `'./edit'`, `'../'`).
+1.  **An enhanced `router.navigate()` method:** The global `router.navigate()` method is overloaded to accept a `NavigateOptions` object. When this object includes a `from` property (referencing a route's `fullPath` string), the `to` property is type-safe for relative paths (e.g., `'./edit'`, `'../'`).
 
-2.  **A hook-like `injectNavigate()` function:** For the most ergonomic experience within components, a new `injectNavigate()` function would be introduced.
-    -   `injectNavigate()` would return the global, fully-featured `navigate` function.
-    -   `injectNavigate({ from: userRoute.fullPath })` would return a specialized `navigate` function with the "from" context already baked in, making subsequent calls for relative navigation extremely concise.
+2.  **A hook-like `injectNavigate()` function:** For the most ergonomic experience within components, a new `injectNavigate()` function was introduced.
+    -   `injectNavigate()` returns the global, fully-featured `navigate` function.
+    -   `injectNavigate({ from: userRoute.fullPath })` returns a specialized `navigate` function with the "from" context already baked in, making subsequent calls for relative navigation extremely concise.
 
-This would enable powerful, type-safe patterns like this:
+This enables powerful, type-safe patterns like this:
 
 ```typescript
 // Proposed API
@@ -176,16 +176,17 @@ class UserComponent {
     this.navigate({ to: './edit' });
   }
 
-  updateQuery() {
+  updateParams() {
     // Get a type-safe previous state for query param updates
     this.navigate({
-      queryParams: (prev) => ({ ...prev, page: (prev.page ?? 0) + 1 }),
+      to: '.',
+      params: (prev) => ({ ...prev, userId: 'new-id' }),
     });
   }
 }
 ```
 
-This feature would represent a significant improvement in developer experience for imperative navigation.
+This feature represents a significant improvement in developer experience for imperative navigation.
 
     ```typescript
     // In a component used for testing

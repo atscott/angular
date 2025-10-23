@@ -6,6 +6,7 @@ import {
   AllPaths,
   createRoute,
   createRootRoute,
+  injectNavigate,
   injectRoute,
   injectRouter,
   provideRouter,
@@ -303,6 +304,94 @@ describe('TypedRouter', () => {
       harness.fixture.detectChanges();
       expect(harness.fixture.nativeElement.innerHTML).toContain('userId: snapshot-test');
       expect(harness.fixture.nativeElement.innerHTML).toContain('user name: Angular');
+    });
+  });
+
+  describe('relative navigation', () => {
+    const root = createRootRoute();
+    const user = createRoute({
+      path: 'user/:userId',
+      getParentRoute: () => root,
+      component: UserComponent,
+    });
+    const posts = createRoute({
+      path: 'posts/:postId',
+      getParentRoute: () => user,
+      component: PostsComponent,
+    });
+    const resolvers = createRoute({
+      path: 'set-resolvers/:userId',
+      getParentRoute: () => root,
+      component: SetResolversComponent,
+    }).setResolvers({
+      user: (route) => ({id: route.params.userId, name: 'Set Angular'}),
+    });
+    const tree = root.addChildren([user.addChildren([posts]), resolvers]);
+
+    it('should navigate to a child route', async () => {
+      TestBed.configureTestingModule({
+        providers: [provideRouter(tree)],
+      });
+      const harness = await RouterTestingHarness.create('/');
+      const typedRouter = TestBed.runInInjectionContext(injectRouter);
+      await typedRouter.navigate({
+        from: '/user/:userId',
+        to: 'posts/:postId',
+        params: {
+          userId: '123',
+          postId: '456',
+        },
+      });
+      harness.fixture.detectChanges();
+      await harness.fixture.whenStable();
+      expect(harness.fixture.nativeElement.innerHTML).toContain('userId: 123, postId: 456');
+    });
+
+    it('should navigate to a sibling route with ../', async () => {
+      TestBed.configureTestingModule({
+        providers: [provideRouter(tree)],
+      });
+      const harness = await RouterTestingHarness.create('/user/123');
+      const typedRouter = TestBed.runInInjectionContext(injectRouter);
+      await typedRouter.navigate({
+        from: '/user/:userId',
+        to: '../../set-resolvers/:userId',
+        params: {
+          userId: '789',
+        },
+      });
+      harness.fixture.detectChanges();
+      await harness.fixture.whenStable();
+      expect(harness.fixture.nativeElement.innerHTML).toContain('user: Set Angular');
+    });
+
+    it('should navigate with a params function', async () => {
+      TestBed.configureTestingModule({
+        providers: [provideRouter(tree)],
+      });
+      const harness = await RouterTestingHarness.create('/user/123');
+      const typedRouter = TestBed.runInInjectionContext(injectRouter);
+      await typedRouter.navigate({
+        from: '/user/:userId',
+        to: '.',
+        params: (prev) => ({
+          ...prev,
+          userId: `${prev.userId}-updated`,
+        }),
+      });
+      harness.fixture.detectChanges();
+      await harness.fixture.whenStable();
+      expect(harness.fixture.nativeElement.innerHTML).toContain('userId: 123-updated');
+    });
+
+    it('should navigate with injectNavigate', async () => {
+      TestBed.configureTestingModule({providers: [provideRouter(tree)]});
+      const navigate = TestBed.runInInjectionContext(() => injectNavigate({from: '/user/:userId'}));
+      navigate({to: 'posts/:postId', params: {userId: 'abc', postId: 'def'}});
+      navigate({to: './', params: {userId: 'abc'}});
+      navigate({to: '../:userId', params: {userId: 'def'}});
+      // @ts-expect-error
+      navigate({to: '../posts/:postId', params: {userId: 'abc', postId: 'def'}});
     });
   });
 

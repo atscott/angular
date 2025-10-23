@@ -32,6 +32,90 @@ import {ParamMap, Params} from './shared';
 import {toSignal} from '@angular/core/rxjs-interop';
 import {NavigationExtras} from './navigation_transition';
 
+type AddTrailingSlash<T> = T extends `${string}/` ? T : `${T & string}/`;
+type RemoveTrailingSlashes<T> = T & `${string}/` extends never
+  ? T
+  : T extends `${infer R}/`
+    ? R
+    : T;
+type AddLeadingSlash<T> = T & `/${string}` extends never ? `/${T & string}` : T;
+type RemoveLeadingSlashes<T> = T & `/${string}` extends never ? T : T extends `/${infer R}` ? R : T;
+
+type JoinPath<TLeft extends string, TRight extends string> = TRight extends ''
+  ? TLeft
+  : TLeft extends ''
+    ? TRight
+    : `${RemoveTrailingSlashes<TLeft>}/${RemoveLeadingSlashes<TRight>}`;
+
+type RemoveLastSegment<
+  T extends string,
+  TAcc extends string = '',
+> = T extends `${infer TSegment}/${infer TRest}`
+  ? TRest & `${string}/${string}` extends never
+    ? TRest extends ''
+      ? TAcc
+      : `${TAcc}${TSegment}`
+    : RemoveLastSegment<TRest, `${TAcc}${TSegment}/`>
+  : TAcc;
+
+type ResolveCurrentPath<TFrom extends string, TTo extends string> = TTo extends '.'
+  ? TFrom
+  : TTo extends './'
+    ? TFrom
+    : TTo & `./${string}` extends never
+      ? never
+      : TTo extends `./${infer TRest}`
+        ? AddLeadingSlash<JoinPath<TFrom, TRest>>
+        : never;
+type ResolveParentPath<TFrom extends string, TTo extends string> = TTo extends '../' | '..'
+  ? TFrom extends '' | '/'
+    ? never
+    : AddLeadingSlash<RemoveLastSegment<TFrom>>
+  : TTo & `../${string}` extends never
+    ? AddLeadingSlash<JoinPath<TFrom, TTo>>
+    : TFrom extends '' | '/'
+      ? never
+      : TTo extends `../${infer ToRest}`
+        ? ResolveParentPath<RemoveLastSegment<TFrom>, ToRest>
+        : AddLeadingSlash<JoinPath<TFrom, TTo>>;
+
+export type ResolveRelativePath<TFrom extends string, TTo = '.'> = string extends TFrom
+  ? TTo
+  : string extends TTo
+    ? TFrom
+    : undefined extends TTo
+      ? TFrom
+      : TTo extends string
+        ? TFrom extends string
+          ? TTo extends `/${string}`
+            ? TTo
+            : TTo extends `..${string}`
+              ? ResolveParentPath<TFrom, TTo>
+              : TTo extends `.${string}`
+                ? ResolveCurrentPath<TFrom, TTo>
+                : AddLeadingSlash<JoinPath<TFrom, TTo>>
+          : never
+        : never;
+
+function resolvePath(from: string, to: string): string {
+  if (to.startsWith('/')) {
+    return to;
+  }
+
+  const fromParts = from.split('/').filter((p) => p);
+  const toParts = to.split('/');
+
+  for (const segment of toParts) {
+    if (segment === '..') {
+      fromParts.pop();
+    } else if (segment !== '.' && segment !== '') {
+      fromParts.push(segment);
+    }
+  }
+
+  return '/' + fromParts.join('/');
+}
+
 export interface Register {}
 export type RegisteredRouter<TRegister = Register> = TRegister extends {
   router: infer TRouter;
@@ -134,7 +218,7 @@ export interface Route<
     resolved: TResolved;
   };
 }
-export type AnyRoute = Route<any, any, any, any, any, any, any>;
+export type AnyRoute = Route<string, string, any, any, any, any, any>;
 
 export type PathParams<TPath extends string> =
   // Split the path by slashes
@@ -145,7 +229,7 @@ export type PathParams<TPath extends string> =
       TPath extends `:${infer Param}`
       ? {[K in Param]: string}
       : // Otherwise, it's not a parameter
-        {};
+        Record<never, never>;
 
 export type RouteParams<T extends Route> =
   T extends Route<infer TPath, any, infer TParentParams, any, any, any, any>
@@ -407,6 +491,8 @@ export function createRootRoute<TData extends Record<string, unknown> = {}>(
     | 'loadChildren'
     | 'load'
     | 'getParentRoute'
+    | 'pathMatch'
+    | 'matcher'
   > & {
     data?: TData;
   } = {},
@@ -441,19 +527,70 @@ export class Router<TRouteTree extends AnyRoute> {
     path: TPath,
     params: TPath extends AllPaths<TRouteTree> ? ParamsForPath<TRouteTree, TPath> : never,
     extras?: NavigationExtras,
+  ): Promise<boolean>;
+  navigate<TFrom extends AllPaths<TRouteTree>, TTo extends string>(options: {
+    to: TTo;
+    from: TFrom;
+    params:
+      | ParamsForPath<TRouteTree, ResolveRelativePath<TFrom, TTo> & AllPaths<TRouteTree>>
+      | ((
+          prev: ParamsForPath<TRouteTree, TFrom>,
+        ) => ParamsForPath<TRouteTree, ResolveRelativePath<TFrom, TTo> & AllPaths<TRouteTree>>);
+    extras?: NavigationExtras;
+  }): Promise<boolean>;
+  navigate<TPath extends AllPaths<TRouteTree>>(options: {
+    to: TPath;
+    params: ParamsForPath<TRouteTree, TPath>;
+    extras?: NavigationExtras;
+  }): Promise<boolean>;
+  navigate(
+    pathOrOptions:
+      | AllPaths<TRouteTree>
+      | {
+          to: string;
+          from?: string;
+          params?: Record<string, any> | ((prev: Record<string, any>) => Record<string, any>);
+          extras?: NavigationExtras;
+        },
+    params?: Record<string, any>,
+    extras?: NavigationExtras,
   ): Promise<boolean> {
-    const pathSegments = (path as string).split('/');
+    let path: string;
+    let navParams: Record<string, any> | undefined;
+    let navExtras: NavigationExtras | undefined;
+
+    if (typeof pathOrOptions === 'string') {
+      path = pathOrOptions;
+      navParams = params;
+      navExtras = extras;
+    } else {
+      const {to, from, params: optionsParams, extras: optionsExtras} = pathOrOptions;
+      path = from ? resolvePath(from, to) : to;
+      if (typeof optionsParams === 'function') {
+        let currentSnapshot = this.router.routerState.snapshot.root;
+        while (currentSnapshot.firstChild) {
+          currentSnapshot = currentSnapshot.firstChild;
+        }
+        const prevParams = currentSnapshot.params;
+        navParams = optionsParams(prevParams);
+      } else {
+        navParams = optionsParams as Record<string, any> | undefined;
+      }
+      navExtras = optionsExtras;
+    }
+
+    const pathSegments = (path as string).split('/').filter((s) => s !== '');
     const commands: any[] = [];
     for (const segment of pathSegments) {
       if (segment.startsWith(':')) {
         const paramName = segment.substring(1);
-        commands.push((params as any)[paramName]);
+        commands.push((navParams as any)[paramName]);
       } else {
         commands.push(segment);
       }
     }
 
-    return this.router.navigate(commands, extras);
+    return this.router.navigate(commands, navExtras);
   }
 }
 export type AnyRouter = Router<AnyRoute>;
@@ -465,7 +602,7 @@ export type SnapshotFromRoute<TRoute extends Route> = Omit<
   params: RouteParams<TRoute>;
   data: TRoute extends Route<any, any, any, infer TParentData, any, infer TData, infer TResolved>
     ? TParentData & TData & TResolved
-    : {};
+    : Record<never, never>;
 };
 
 export class ActivatedRoute<TRoute extends Route> {
@@ -500,8 +637,10 @@ export class ActivatedRoute<TRoute extends Route> {
   }
 }
 
-export function injectRouter(): Router<RegisteredRouter['routeTree']> {
-  return inject(Router<RegisteredRouter['routeTree']>);
+export function injectRouter<
+  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
+>(): Router<TRouteTree> {
+  return inject(Router<TRouteTree>);
 }
 
 export function injectRoute<
@@ -510,4 +649,37 @@ export function injectRoute<
 >(_path: TPath): ActivatedRoute<RouteForPath<TRouteTree, TPath>> {
   const route = inject(UntypedActivatedRoute);
   return new ActivatedRoute(route);
+}
+
+export function injectNavigate<
+  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
+>(): Router<TRouteTree>['navigate'];
+export function injectNavigate<
+  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
+  TFrom extends AllPaths<TRouteTree> = AllPaths<TRouteTree>,
+>(options: {
+  from: TFrom;
+}): <TTo extends string>(options: {
+  to: TTo;
+  params:
+    | ParamsForPath<TRouteTree, ResolveRelativePath<TFrom, TTo> & AllPaths<TRouteTree>>
+    | ((
+        prev: ParamsForPath<TRouteTree, TFrom>,
+      ) => ParamsForPath<TRouteTree, ResolveRelativePath<TFrom, TTo> & AllPaths<TRouteTree>>);
+  extras?: NavigationExtras;
+}) => Promise<boolean>;
+export function injectNavigate<
+  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
+  TFrom extends AllPaths<TRouteTree> = AllPaths<TRouteTree>,
+>(options?: {from: TFrom}) {
+  const router = injectRouter<TRouteTree>();
+
+  if (options?.from) {
+    const from = options.from;
+    return (navOptions: any) => {
+      return router.navigate({...navOptions, from});
+    };
+  }
+
+  return router.navigate.bind(router);
 }

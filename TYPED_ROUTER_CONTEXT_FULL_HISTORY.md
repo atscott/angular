@@ -582,4 +582,37 @@ class UserComponent {
   // The route is fully typed and signal-based, with no casting needed.
   route = injectRoute('/user/:userId');
 }
+
+## 12. Refining Relative Navigation and Parameter Typing
+
+Further implementation and testing revealed several subtle but important areas for refinement in the API's type safety and runtime behavior, particularly around relative navigation and parameter handling.
+
+### Correcting Relative Path Resolution (`../` and `./`)
+
+The initial implementation of relative navigation contained flaws in both its runtime logic and its type definitions that led to incorrect and unintuitive behavior.
+
+-   **`../` Resolution:** The `resolvePath` function incorrectly treated the `from` path like a file-system path, causing it to ascend two levels (from the parent directory) instead of one URL segment. The `ResolveRelativePath` type mirrored this incorrect logic. This was fixed by removing the faulty logic from `resolvePath` so that it correctly treats the path as a URL, and updating the corresponding types to match. Now, navigating from `/user/123` with `to: '../posts/456'` correctly resolves to `/posts/456`.
+
+-   **`./` Resolution:** The `ResolveCurrentPath` type was incorrectly adding a trailing slash to paths resolved with `'./'`. This created a type mismatch, as route paths are not defined with trailing slashes. The type was corrected to resolve `'./'` to the `from` path without modification.
+
+### Implementing Functional `params` for Relative Navigation
+
+To improve the ergonomics of updating parameters during relative navigation, a feature inspired by TanStack Router was implemented. The `params` option in `router.navigate()` now accepts a function.
+
+This function receives the previous route's parameters as its argument, allowing developers to easily create the new parameters based on the previous state.
+
+```typescript
+// Navigate from /user/123
+router.navigate({
+  from: '/user/:userId',
+  to: './',
+  // The `prev` object is strongly typed to { userId: string }
+  params: (prev) => ({
+    userId: `${prev.userId}-updated`,
+  }),
+});
+// This will navigate to /user/123-updated
+```
+
+This was achieved by overloading the `navigate` method and its corresponding types. The implementation retrieves the current `ActivatedRouteSnapshot` to access the existing parameters and passes them to the updater function, providing a powerful and type-safe pattern for state transitions.
 ```
