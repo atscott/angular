@@ -151,6 +151,42 @@ The `canMatch` guard feature can create ambiguity if it is used to guard two rou
 
 For complex cases where this is not feasible, you can fall back to the traditional `Route` object from `@angular/router`. The `.addChildren()` method accepts both typed and untyped route objects, allowing you to opt out of type safety for specific, ambiguous branches of your application tree.
 
+### Considered Future Enhancement: Relative Navigation
+
+A powerful feature under consideration for a future release is the addition of type-safe relative navigation, inspired by libraries like TanStack Router. This would enhance ergonomics by allowing navigation calls to be made relative to a known route, rather than always being absolute from the application root.
+
+The proposed design includes two main additions:
+
+1.  **An enhanced `router.navigate()` method:** The global `router.navigate()` method would be overloaded to accept a `NavigateOptions` object. When this object includes a `from` property (referencing a route's `fullPath` string), the `to` property would be type-safe for relative paths (e.g., `'./edit'`, `'../'`).
+
+2.  **A hook-like `injectNavigate()` function:** For the most ergonomic experience within components, a new `injectNavigate()` function would be introduced.
+    -   `injectNavigate()` would return the global, fully-featured `navigate` function.
+    -   `injectNavigate({ from: userRoute.fullPath })` would return a specialized `navigate` function with the "from" context already baked in, making subsequent calls for relative navigation extremely concise.
+
+This would enable powerful, type-safe patterns like this:
+
+```typescript
+// Proposed API
+class UserComponent {
+  // Get a navigator that already knows it's inside the `userRoute`
+  private navigate = injectNavigate({ from: userRoute.fullPath });
+
+  editUser() {
+    // Navigate to a relative path without re-specifying context
+    this.navigate({ to: './edit' });
+  }
+
+  updateQuery() {
+    // Get a type-safe previous state for query param updates
+    this.navigate({
+      queryParams: (prev) => ({ ...prev, page: (prev.page ?? 0) + 1 }),
+    });
+  }
+}
+```
+
+This feature would represent a significant improvement in developer experience for imperative navigation.
+
     ```typescript
     // In a component used for testing
     const userRoute = createRoute({ path: 'user/:userId', component: UserComponent });

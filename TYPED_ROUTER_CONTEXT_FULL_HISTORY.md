@@ -187,7 +187,40 @@ To complete the modern, ergonomic feel of the API, the primary way to access rou
 -   **`injectRoute(path: string)`:** This injection function takes the route's full path string (e.g., `/user/:userId`) and returns a `ActivatedRoute` instance.
 -   **`ActivatedRoute`:** This is a signal-based wrapper around the standard `ActivatedRoute`. It exposes `params`, `data`, `queryParams`, etc., as signals, which are fully typed based on the route definition matching the path you pass to the injection function.
 
-This eliminates the need for manual casting of `ActivatedRoute.snapshot` and encourages a more reactive, signal-based approach to component design. A `fullPath` property was also added to the route instances themselves, allowing for safer injection and navigation calls like `injectRoute(userRoute.fullPath)` or `router.navigate(userRoute.fullPath, { ... })`, which avoids the use of ## Architectural Boundary: Dynamic `canMatch` Guards and Static Typing
+This eliminates the need for manual casting of `ActivatedRoute.snapshot` and encourages a more reactive, signal-based approach to component design. A `fullPath` property was also added to the route instances themselves, allowing for safer injection and navigation calls like `injectRoute(userRoute.fullPath)` or `router.navigate(userRoute.fullPath, { ... })`, which avoids the use of ## Future Direction: Type-Safe Relative Navigation
+
+A powerful enhancement planned for the typed router is the introduction of type-safe relative navigation, a feature inspired by the ergonomics of libraries like TanStack Router. This would allow developers to make navigation calls relative to a known route, which is a more intuitive and less error-prone pattern for component-level navigation.
+
+### The Core Concept: The "From" Context
+
+The key to this feature is establishing a **"from" context** for a navigation call. By telling the `navigate` function where the navigation is originating *from*, the type system can:
+
+1.  **Validate Relative Paths:** Correctly infer and type-check relative paths like `'./edit'`, `'../'`, and `'../sibling'`.
+2.  **Infer Contextual Parameters:** Understand which parameters are already present in the URL and only require the developer to provide params for the new segments of the path.
+3.  **Provide Typed Updaters:** Strongly type the `prev` value in functional updaters for `queryParams`.
+
+### Proposed Implementation Plan
+
+The design follows a pattern that is both powerful and idiomatic for Angular's architecture.
+
+#### 1. A Conditional `NavigateOptions` Type
+
+The core of the feature will be a single, sophisticated `NavigateOptions` type that uses conditional typing to change its requirements based on whether a `from` property (a `fullPath` string) is provided. This allows a single `navigate` function to have two distinct, type-safe behaviors.
+
+#### 2. An Overloaded Global `router.navigate()`
+
+The main `Router` service's `.navigate()` method will be overloaded to accept this new `NavigateOptions` object. This makes the full power of the API available from anywhere the global router can be injected, such as in application services.
+
+#### 3. An Overloaded, Hook-Like `injectNavigate()` Function
+
+To provide the best ergonomics within components, a new `injectNavigate()` function will be created with two signatures:
+
+-   `injectNavigate()`: When called with no arguments, it will return the global `navigate` function, which is powerful but requires the `from` property to be passed manually for relative navigation.
+-   `injectNavigate({ from: someRoute.fullPath })`: When called with a `from` property (which is a `fullPath` string), it will return a *new* navigation function that has the "from" context **baked in**. All subsequent calls to this function will be implicitly relative to the route corresponding to that path, making them extremely concise and readable.
+
+This complete design provides a layered API that is flexible enough for complex service-level logic while being highly ergonomic for the common case of component-based navigation.
+
+## Architectural Boundary: Dynamic `canMatch` Guards and Static Typing
 
 A key architectural decision and limitation of the typed router lies in its interaction with the `canMatch` guard. This feature highlights the fundamental trade-off between a fully dynamic runtime and a predictable, statically typed API.
 
