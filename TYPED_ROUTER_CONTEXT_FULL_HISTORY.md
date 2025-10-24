@@ -615,4 +615,76 @@ router.navigate({
 ```
 
 This was achieved by overloading the `navigate` method and its corresponding types. The implementation retrieves the current `ActivatedRouteSnapshot` to access the existing parameters and passes them to the updater function, providing a powerful and type-safe pattern for state transitions.
+## Architectural Pivot: Embracing a Flat-Map Approach for Performance and Ergonomics
+
+Despite the robust, type-inferred API developed, further research and analysis of the broader ecosystem revealed a critical potential issue: TypeScript performance. Libraries like TanStack Router, which initially used a similar deep, programmatic, and composable API, encountered significant performance bottlenecks as route trees grew in size and complexity. The recursive nature of the type inference would lead to the compiler error "Type instantiation is excessively deep and possibly infinite."
+
+Their solution, and the one adopted by file-based routing frameworks like Nuxt and Remix, was to pivot to a model where a build-time process generates a "flat map" of the application's routes. This generated artifact provides a complete, non-recursive type definition of all possible paths, which is highly performant for TypeScript to process.
+
+This insight led to a strategic pivot in the Angular Typed Router's design to preemptively solve this performance issue and, as a major benefit, align the API more closely with the traditional, familiar Angular Router configuration.
+
+### The New Direction: A Hybrid of Inference and Explicit Composition
+
+The core of this pivot is to blend the powerful type-inference of the initial design with the performance and familiarity of the traditional Angular Router API. The fluent, composable API (`.addChildren()`, `.lazy()`) is removed, but the `createRoute` function is retained in a simplified form.
+
+1.  **Simplified `createRoute` for Type Inference**: A `createRoute` function remains the key to defining a type-safe route. Its primary responsibility is to use its `getParentRoute` property to infer the parameter and data shapes from the parent, making them available to the current route's resolvers and guards.
+
+2.  **Familiar `children`/`loadChildren` for Composition**: The objects returned by `createRoute` are composed into a final route tree using the standard `children` and `loadChildren` properties. This aligns the API with existing Angular patterns and uses the well-established dynamic `import()` of `loadChildren` to break circular dependencies between route files in modular applications.
+
+3.  **Explicit Flat Map for Global Type Safety**: The source of truth for global type-safety (powering `injectRouter` and `injectRoute`) is an explicit, flat object that maps full path strings to their corresponding `createRoute`-defined route objects. This avoids deep, recursive type inference and guarantees performance.
+
+4.  **Manual Definition as a Fallback**: In the absence of a file-based routing system that would generate this map automatically, developers are responsible for creating and maintaining this map manually.
+
+### Trade-offs and Benefits
+
+-   **Benefit - Performance**: This architecture guarantees high performance for TypeScript, regardless of the size of the application.
+-   **Benefit - Ergonomics & Familiarity**: The API for composing routes is nearly identical to the one Angular developers already know.
+-   **Benefit - Powerful Type Inference**: The core feature of inferring parent data and params is retained, providing a superior developer experience for writing resolvers and guards.
+-   **Trade-off - Manual Work**: For applications not using a future file-based routing system, there is the added manual step of defining the route map.
+
+This hybrid approach is a pragmatic decision that delivers the best of both worlds: the powerful, context-aware type-safety of the initial design and the performance, scalability, and familiarity of the traditional router API.
+## Course Correction: Reinstating Modularity and Ergonomics
+
+An incorrect refactoring step was made that removed two critical features from the API: the `.setResolvers()` method and the `fullPath` property on route objects. This was a mistake that deviated from the agreed-upon hybrid architecture. This section documents the correction.
+
+### The Mistake
+
+In the process of removing the fluent composition API (`.addChildren()`, `.lazy()`), the `.setResolvers()` method was also removed. This was incorrect, as `.setResolvers()` is not about composition, but about **modularity**. It is the key to breaking circular dependencies when a route's definition and its resolver functions live in separate files.
+
+Simultaneously, the `fullPath` property was removed from the route objects. This was also a mistake, as this property is a crucial ergonomic feature that allows for type-safe navigation (`router.navigate(myRoute.fullPath, ...)` and route injection (`injectRoute(myRoute.fullPath)`) without using brittle "magic strings".
+
+### The Correction
+
+The architecture has been corrected to reintroduce these features, solidifying the hybrid model:
+
+1.  **`RouteBuilder` Class**: The `createRoute` function now returns an instance of a `RouteBuilder` class (an internal detail). This class holds the route's configuration.
+
+2.  **`.setResolvers()` Reinstated**: The `RouteBuilder` class has a `.setResolvers()` method, restoring the ability to define resolvers in separate files and attach them to a route in a type-safe way.
+
+3.  **`fullPath` and Deferred Initialization**: The `RouteBuilder` instance has a `fullPath` property. To make this work with the standard `children` array, a deferred initialization process is used. When `provideRouter` is called, it traverses the user-provided route tree, finds all `RouteBuilder` instances, and calls an internal `init()` method on each one. This method uses the `getParentRoute()` function to find its parent and recursively build the full, absolute path.
+
+This correction ensures the final API is not only performant and familiar, but also fully supports the critical real-world requirements of modular code organization and ergonomic, type-safe navigation.
+
+### A Note on TypeScript Inference and Route Composition
+
+A key learning during the refinement of the hybrid API was a practical limitation of TypeScript's type inference. The `getParentRoute` feature relies on a child route being able to access the fully-inferred type of its parent at definition time.
+
+This leads to a specific constraint on how route trees are composed: **routes must be defined as separate constants before they are assembled in a `children` array.**
+
+Attempting to define a child route inline inside its parent's `children` array will result in a compiler error: `"implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer"`. This happens because TypeScript tries to resolve the type of the entire inline configuration at once, creating a circular dependency: the parent's type depends on the child's type, but the child's `getParentRoute` function refers back to the parent, whose type is not yet finalized.
+
+Separating definition from composition solves this cleanly:
+
+```typescript
+// 1. Define parent. Its type is fully inferred here.
+const parentRoute = createRoute({ ... });
+
+// 2. Define child. It can now safely access the stable type of `parentRoute`.
+const childRoute = createRoute({ getParentRoute: () => parentRoute, ... });
+
+// 3. Assemble the tree.
+const appRoutes = [{ ...parentRoute, children: [childRoute] }];
 ```
+
+This pattern is a fundamental requirement for using the typed router and ensures the type inference engine works reliably.
+

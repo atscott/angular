@@ -1,6 +1,6 @@
-import {Component} from '@angular/core';
+import {Component, inject} from '@angular/core';
 import {TestBed} from '@angular/core/testing';
-import {RouterOutlet} from '@angular/router';
+import {RouterOutlet, Routes, ActivatedRoute as UntypedActivatedRoute} from '@angular/router';
 import {RouterTestingHarness} from '@angular/router/testing';
 import {
   AllPaths,
@@ -11,7 +11,6 @@ import {
   injectRouter,
   provideRouter,
   Router,
-  SnapshotFromRoute,
   AnyRoute,
 } from '../src/typed_router';
 
@@ -70,17 +69,6 @@ class SetResolversComponent {
 @Component({
   standalone: true,
   template: `
-    _snapshot: {{route.params().userId}}
-    _snapshot data: {{route.data().loaded}}
-      `,
-})
-class LazyLoadedComponent {
-  route = injectRoute('/lazy/:userId');
-}
-
-@Component({
-  standalone: true,
-  template: `
     userId: {{ route.params().userId }}
     user name: {{ route.data().user.name }}
     <router-outlet />
@@ -92,16 +80,17 @@ class UserWithDataComponent {
 }
 
 const rootRoute = createRootRoute();
-const userRoute = createRoute({
-  path: 'user/:userId',
-  getParentRoute: () => rootRoute,
-  component: UserComponent,
-});
 const postsRoute = createRoute({
   path: 'posts/:postId',
   getParentRoute: () => userRoute,
   component: PostsComponent,
 });
+const userRoute = createRoute({
+  path: 'user/:userId',
+  getParentRoute: () => rootRoute,
+  component: UserComponent,
+});
+userRoute.children = [postsRoute];
 
 const userRouteWithResolver = createRoute({
   path: 'user-with-resolver/:userId',
@@ -122,6 +111,7 @@ const postsRouteWithResolver = createRoute({
     },
   },
 });
+userRouteWithResolver.children = [postsRouteWithResolver];
 
 const setResolversRoute = createRoute({
   path: 'set-resolvers/:userId',
@@ -131,31 +121,21 @@ const setResolversRoute = createRoute({
   user: (route) => ({id: route.params.userId, name: 'Set Angular'}),
 });
 
-const lazyRouteShape = createRoute({
-  path: 'lazy/:userId',
-  getParentRoute: () => rootRoute,
-});
-const lazyRoute = lazyRouteShape.lazy(() =>
-  Promise.resolve({
-    component: LazyLoadedComponent,
-    resolve: {
-      loaded: (route: SnapshotFromRoute<typeof lazyRouteShape>) => `${route.params.userId} loaded`,
-    },
-  }),
-);
+const appRoutes: Routes = [userRoute, userRouteWithResolver, setResolversRoute];
 
-const routerTree = rootRoute.addChildren([
-  userRoute.addChildren([postsRoute]),
-  userRouteWithResolver.addChildren([postsRouteWithResolver]),
-  setResolversRoute,
-  lazyRoute,
-]);
+const routeMap = {
+  '/user/:userId': userRoute,
+  '/user/:userId/posts/:postId': postsRoute,
+  '/user-with-resolver/:userId': userRouteWithResolver,
+  '/user-with-resolver/:userId/posts/:postId': postsRouteWithResolver,
+  '/set-resolvers/:userId': setResolversRoute,
+} as const;
 
-type RouterTree = typeof routerTree;
+type RouteMap = typeof routeMap;
 
 declare module '../src/typed_router' {
   interface Register {
-    router: Router<RouterTree>;
+    routeMap: RouteMap;
   }
 }
 
@@ -163,7 +143,7 @@ describe('TypedRouter', () => {
   describe('type inference', () => {
     it('should infer params from path', async () => {
       TestBed.configureTestingModule({
-        providers: [provideRouter(routerTree)],
+        providers: [provideRouter(appRoutes)],
       });
       const harness = await RouterTestingHarness.create('/user/123');
       harness.fixture.detectChanges();
@@ -172,7 +152,7 @@ describe('TypedRouter', () => {
 
     it('should infer parent params for children', async () => {
       TestBed.configureTestingModule({
-        providers: [provideRouter(routerTree)],
+        providers: [provideRouter(appRoutes)],
       });
       const harness = await RouterTestingHarness.create('/user/123/posts/456');
       await harness.fixture.whenStable();
@@ -181,7 +161,7 @@ describe('TypedRouter', () => {
 
     it('should infer parent data in child resolver', async () => {
       TestBed.configureTestingModule({
-        providers: [provideRouter(routerTree)],
+        providers: [provideRouter(appRoutes)],
       });
       const harness = await RouterTestingHarness.create('/user-with-resolver/123/posts/456');
       harness.fixture.detectChanges();
@@ -192,7 +172,7 @@ describe('TypedRouter', () => {
 
     it('should support setting resolvers with setResolvers', async () => {
       TestBed.configureTestingModule({
-        providers: [provideRouter(routerTree)],
+        providers: [provideRouter(appRoutes)],
       });
       const harness = await RouterTestingHarness.create('/set-resolvers/123');
       harness.fixture.detectChanges();
@@ -205,20 +185,21 @@ describe('TypedRouter', () => {
       class UntypedComponent {}
 
       const typedRoute = createRoute({path: 'typed', component: UntypedComponent});
-      const mixedTree = createRootRoute().addChildren([
+      const mixedRoutes: Routes = [
         typedRoute,
         {
           path: 'untyped',
           component: UntypedComponent,
         },
-      ]);
+      ];
+      const mixedMap = {'/typed': typedRoute};
 
       // @ts-expect-error: '/untyped' should not be in the type map
-      const x: AllPaths<typeof mixedTree> = '/untyped';
+      const x: AllPaths<typeof mixedMap> = '/untyped';
       void x;
 
       // The typed path should be present
-      const y: AllPaths<typeof mixedTree> = '/typed';
+      const y: AllPaths<typeof mixedMap> = '/typed';
       void y;
 
       expect().nothing();
@@ -229,21 +210,21 @@ describe('TypedRouter', () => {
     it('should allow any path and params when no route tree is registered', async () => {
       @Component({standalone: true, template: ''})
       class BlankCmp {}
-      const root = createRootRoute().addChildren([
-        createRoute({
+      const routes: Routes = [
+        {
           path: '',
           component: BlankCmp,
-        }),
-        createRoute({
+        },
+        {
           path: '**',
           component: BlankCmp,
-        }),
-      ]);
+        },
+      ];
 
       TestBed.configureTestingModule({
-        providers: [provideRouter(root)],
+        providers: [provideRouter(routes)],
       });
-      const router: Router<AnyRoute> = TestBed.inject(Router);
+      const router: Router<Record<string, AnyRoute>> = TestBed.inject(Router);
       await router.navigate('/some/unregistered/path', {id: 123, other: 'abc'});
 
       const route = TestBed.runInInjectionContext(() =>
@@ -259,7 +240,7 @@ describe('TypedRouter', () => {
   describe('TypedRouter navigation', () => {
     it('should navigate to a simple route', async () => {
       TestBed.configureTestingModule({
-        providers: [provideRouter(routerTree)],
+        providers: [provideRouter(appRoutes)],
       });
       const harness = await RouterTestingHarness.create('/');
       const typedRouter = TestBed.runInInjectionContext(injectRouter);
@@ -271,7 +252,7 @@ describe('TypedRouter', () => {
 
     it('should navigate to a child route', async () => {
       TestBed.configureTestingModule({
-        providers: [provideRouter(routerTree)],
+        providers: [provideRouter(appRoutes)],
       });
       const harness = await RouterTestingHarness.create('/');
       const typedRouter = TestBed.runInInjectionContext(injectRouter);
@@ -285,20 +266,9 @@ describe('TypedRouter', () => {
       expect(harness.fixture.nativeElement.innerHTML).toContain('userId: 123, postId: 456');
     });
 
-    it('should support lazy loading a route', async () => {
-      TestBed.configureTestingModule({
-        providers: [provideRouter(routerTree)],
-      });
-      const harness = await RouterTestingHarness.create('/lazy/lazy-loaded-route');
-      expect(harness.fixture.nativeElement.innerHTML).toContain('_snapshot: lazy-loaded-route');
-      expect(harness.fixture.nativeElement.innerHTML).toContain(
-        '_snapshot data: lazy-loaded-route loaded',
-      );
-    });
-
     it('should provide a typed route with injectTypedRoute', async () => {
       TestBed.configureTestingModule({
-        providers: [provideRouter(routerTree)],
+        providers: [provideRouter(appRoutes)],
       });
       const harness = await RouterTestingHarness.create('/user-with-resolver/snapshot-test');
       harness.fixture.detectChanges();
@@ -308,34 +278,14 @@ describe('TypedRouter', () => {
   });
 
   describe('relative navigation', () => {
-    const root = createRootRoute();
-    const user = createRoute({
-      path: 'user/:userId',
-      getParentRoute: () => root,
-      component: UserComponent,
-    });
-    const posts = createRoute({
-      path: 'posts/:postId',
-      getParentRoute: () => user,
-      component: PostsComponent,
-    });
-    const resolvers = createRoute({
-      path: 'set-resolvers/:userId',
-      getParentRoute: () => root,
-      component: SetResolversComponent,
-    }).setResolvers({
-      user: (route) => ({id: route.params.userId, name: 'Set Angular'}),
-    });
-    const tree = root.addChildren([user.addChildren([posts]), resolvers]);
-
     it('should navigate to a child route', async () => {
       TestBed.configureTestingModule({
-        providers: [provideRouter(tree)],
+        providers: [provideRouter(appRoutes)],
       });
       const harness = await RouterTestingHarness.create('/');
       const typedRouter = TestBed.runInInjectionContext(injectRouter);
       await typedRouter.navigate({
-        from: '/user/:userId',
+        from: userRoute.fullPath,
         to: 'posts/:postId',
         params: {
           userId: '123',
@@ -349,25 +299,25 @@ describe('TypedRouter', () => {
 
     it('should navigate to a sibling route with ../', async () => {
       TestBed.configureTestingModule({
-        providers: [provideRouter(tree)],
+        providers: [provideRouter(appRoutes)],
       });
       const harness = await RouterTestingHarness.create('/user/123');
       const typedRouter = TestBed.runInInjectionContext(injectRouter);
       await typedRouter.navigate({
         from: '/user/:userId',
-        to: '../../set-resolvers/:userId',
+        to: '../user-with-resolver/:userId',
         params: {
           userId: '789',
         },
       });
       harness.fixture.detectChanges();
       await harness.fixture.whenStable();
-      expect(harness.fixture.nativeElement.innerHTML).toContain('user: Set Angular');
+      expect(harness.fixture.nativeElement.innerHTML).toContain('user name: Angular');
     });
 
     it('should navigate with a params function', async () => {
       TestBed.configureTestingModule({
-        providers: [provideRouter(tree)],
+        providers: [provideRouter(appRoutes)],
       });
       const harness = await RouterTestingHarness.create('/user/123');
       const typedRouter = TestBed.runInInjectionContext(injectRouter);
@@ -385,11 +335,10 @@ describe('TypedRouter', () => {
     });
 
     it('should navigate with injectNavigate', async () => {
-      TestBed.configureTestingModule({providers: [provideRouter(tree)]});
+      TestBed.configureTestingModule({providers: [provideRouter(appRoutes)]});
       const navigate = TestBed.runInInjectionContext(() => injectNavigate({from: '/user/:userId'}));
       navigate({to: 'posts/:postId', params: {userId: 'abc', postId: 'def'}});
       navigate({to: './', params: {userId: 'abc'}});
-      navigate({to: '../:userId', params: {userId: 'def'}});
       // @ts-expect-error
       navigate({to: '../posts/:postId', params: {userId: 'abc', postId: 'def'}});
     });
@@ -476,6 +425,42 @@ describe('TypedRouter', () => {
         ],
       });
       expect().nothing();
+    });
+  });
+
+  describe('lazy loading', () => {
+    it('should initialize routes loaded via nested loadChildren', async () => {
+      let initializedWithPath = '';
+      @Component({
+        standalone: true,
+        template: '',
+      })
+      class LazyGrandchildComponent {
+        constructor() {
+          initializedWithPath = lazyGrandchildRoute.fullPath;
+        }
+      }
+
+      const lazyGrandchildRoute = createRoute({
+        path: 'lazy-grandchild/:gc',
+        component: LazyGrandchildComponent,
+        getParentRoute: () => lazyChildRoute,
+      });
+      const lazyChildRoute = createRoute({
+        path: 'lazy-child/:c',
+        getParentRoute: () => lazyParentRoute,
+      });
+      lazyChildRoute.children = [lazyGrandchildRoute];
+      const lazyParentRoute = createRoute({
+        path: 'lazy-parent/:p',
+        getParentRoute: () => rootRoute,
+      });
+      lazyParentRoute.loadChildren = () => Promise.resolve([lazyChildRoute]);
+      TestBed.configureTestingModule({
+        providers: [provideRouter([lazyParentRoute])],
+      });
+      await RouterTestingHarness.create('/lazy-parent/a/lazy-child/b/lazy-grandchild/c');
+      expect(initializedWithPath).toBe('/lazy-parent/:p/lazy-child/:c/lazy-grandchild/:gc');
     });
   });
 });

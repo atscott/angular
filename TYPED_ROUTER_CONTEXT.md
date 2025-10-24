@@ -9,94 +9,101 @@ This document summarizes the final architectural decisions for the type-safe Ang
 -   Type-safe `ActivatedRoute` for parameters and resolved data.
 -   A developer experience that feels natural within Angular.
 
-## 2. Final Architecture: A Composable, Type-Inferred API
+## 2. Final Architecture: A Hybrid, Performance-First API
 
-Early designs struggled with TypeScript's limitations, particularly circular dependencies when trying to infer resolver types within a large, nested route configuration object. The final architecture solves this by adopting a composable, function-based approach inspired by TanStack Router.
+Early designs focused on a fully-composable, function-based API that used deep TypeScript inference to build a type-safe route tree. However, after observing potential performance issues in other libraries with similar approaches (like TanStack Router), the architecture was pivoted to a more performant and familiar model that combines the best of explicit definition and type inference.
+
+The final architecture prioritizes TypeScript performance and a developer experience that aligns closely with the traditional Angular Router, while retaining the powerful parent-data inference that was a core goal.
 
 ### API Overview
 
-The final architecture uses a class-based, fluent-style API, initiated by factory functions.
+The API uses a `createRoute` function to define individual, type-safe route segments. These segments are instances of a `RouteBuilder` class, which provides methods for advanced configuration. The routes are then composed into a tree using the standard `children` and `loadChildren` properties. This avoids the performance pitfalls of deep, recursive type inference while still providing strong type guarantees and support for modular code organization.
 
-1.  **`createRootRoute`**: The main factory function for creating the root of a typed route hierarchy. It returns a `RootRoute` instance, which is a special branded type that `provideRouter` requires.
+The core of the global type-safety will be powered by a "flat map" of route paths to their corresponding route objects.
 
-2.  **`createRoute`**: The main factory function for creating a typed child route. It takes the route's configuration as a single object, including its `path`, `getParentRoute`, `component`, `data`, `resolve`, `canActivate`, `canActivateChild`, and `canDeactivate` properties. It returns a `RouteBuilder` instance.
-    > **Note on Property Ordering**: For TypeScript's type inference to work correctly, properties must be ordered based on their dependencies. The `getParentRoute` property must be defined first, followed by `data`, then `resolve`, and finally `canActivate`, `canActivateChild`, or `canDeactivate`. This allows the compiler to correctly build up the full data shape of the route, which is necessary to correctly type the function signatures of the resolvers and guards.
+1.  **`createRoute` function**: A factory function that returns an instance of a `RouteBuilder`. It takes the route's configuration, including `path`, `component`, `resolve`, guards, and crucially, `getParentRoute`. The `getParentRoute` property is used by TypeScript to infer the data and parameter types from the parent route, making them available in the current route's resolvers and guards.
 
-3.  **`RouteBuilder`**: This class is returned by `createRoute` and provides methods to continue defining the route.
+2.  **`RouteBuilder` Class**: The object returned by `createRoute`. It contains all the route's properties and provides a `.setResolvers()` method.
 
-4.  **`.setResolvers()` method**: The `RouteBuilder` instance has a `.setResolvers()` method that allows you to attach resolvers after the route has been created. This method will overwrite any resolvers that may have been provided inline in `createRoute`. This is the key to organizing code and avoiding circular dependencies when defining resolvers in separate files.
+3.  **`.setResolvers()` method**: This method allows resolver functions to be attached to a route after its initial definition. This is a key feature for architectural modularity, as it allows resolvers to be defined in separate files from their routes, preventing circular module dependencies.
 
-5.  **`.lazy()` method**: The `RouteBuilder` instance has a `.lazy()` method for defining lazy-loaded properties. This method is the solution for code-splitting in the typed router. It solves the core problem of traditional `loadChildren`, which hides a route's *shape* (its path and params) from the type system. The `.lazy()` method allows the route's shape to be defined eagerly—so it is included in the global type information—while deferring the loading of its *implementation* (the `component` and `resolve` functions) until the route is activated.
+4.  **`fullPath` property**: Each `RouteBuilder` instance will have a `fullPath` property. This property is not available at creation time but is calculated when the route tree is provided to the router. It provides a type-safe string that can be used for navigation and in `injectRoute`, avoiding "magic strings".
 
-6.  **`.addChildren()` method**: The `RouteBuilder` instance has an `.addChildren()` method that takes an array of child route builders. It returns a new `RouteBuilder` instance where the `children` property is strongly typed to match the children that were passed in. This allows for a fully fluent and composable way to define the route hierarchy.
-    > **Why not define children inline?** The `.addChildren()` method is used instead of a `children` property inside `createRoute` for two main reasons. First, it ensures that each route is created as a distinct, referenceable instance. Second, it helps prevent circular module dependencies in TypeScript. The API relies on the `getParentRoute` function returning an actual parent *value* at creation time. This direct link provides the most robust and straightforward way for TypeScript to infer the parent's context for the child's resolvers and guards. While an alternative using `import type` and type assertions (`() => null! as ParentType`) could enable inline children, it was avoided in favor of this more explicit and less "magical" approach.
-    > 
-    > **Note on `<const TNewChildren>`**: The method signature uses a `const` generic (`<const TNewChildren>`). This is a critical optimization that signals to TypeScript to treat the input array as a read-only tuple with a fixed structure. Without this, TypeScript may attempt to serialize the full, deeply-nested type of the children array, often leading to a "Type instantiation is excessively deep and possibly infinite" error for large route configurations.
+5.  **Standard `children` and `loadChildren`**: The fluent `.addChildren()` method is removed. The `RouteBuilder` instances returned by `createRoute` are composed into a route tree using the familiar `children` and `loadChildren` properties.
 
-This API provides a clean, composable, and highly type-safe way to define routes.
+6.  **A Global Route Map**: For global type-safety to work, the API requires a flat map of full route paths to their corresponding route objects. This map will be manually defined in non-file-based routing environments.
 
-### Organizing Code with `.setResolvers()`
+7.  **Global Type Safety with Declaration Merging**: The API leverages TypeScript's declaration merging via a `Register` interface. This allows you to register your final route map type once, making it available to `injectRouter` and `injectRoute` throughout your application.
 
-While `resolve` can be defined inline within `createRoute` for simple cases, this can lead to circular module dependencies if the resolver functions are in separate files. The `.setResolvers()` method is the solution for this architectural challenge.
+> **Note on Route Definition**: For `getParentRoute`'s type inference to work correctly, parent and child routes must be defined as separate constants before being assembled into a tree. Defining a child route inline within a parent's `children` array will cause a TypeScript error, as the compiler cannot resolve the circular type dependency. The `loadChildren` property with a dynamic `import()` is the recommended way to break dependency cycles between route files.
 
-The recommended pattern is:
-1.  Define the route's shape in one file (`user.routes.ts`).
-2.  Define the resolver functions in a second file, which can safely import the route's type (`user.resolvers.ts`).
-3.  Use `.setResolvers()` in a third assembly file (or back in the original route file) to combine them.
+### Runtime Initialization
+
+To support features like `fullPath`, the route tree undergoes an initialization step. When `provideRouter` is called, it traverses the entire route tree, establishes the parent-child relationships, and calls an internal `init()` method on each `RouteBuilder` instance. This `init()` method is responsible for calculating the `fullPath` based on the parent's path. This deferred initialization ensures that all properties are correctly configured before the router starts its first navigation.
+
+### Example of Manual Map Definition
 
 ```typescript
-// user.routes.ts
+// 1. Define routes as standalone constants using createRoute for type safety
+const rootRoute = createRootRoute();
+
 export const userRoute = createRoute({
   path: 'user/:userId',
   getParentRoute: () => rootRoute,
+  component: UserComponent,
+  resolve: {
+    user: (route) => ({ id: route.params.userId, name: 'Resolved User' }),
+  },
 });
 
-// user.resolvers.ts
-import type { SnapshotFromRoute } from '@angular/router';
-import { userRoute } from './user.routes';
+export const postsRoute = createRoute({
+  path: 'posts/:postId',
+  getParentRoute: () => userRoute,
+  component: PostsComponent,
+  resolve: {
+    // `route.data.user` is fully typed here from the parent!
+    post: (route) => ({ id: route.params.postId, title: `Post by ${route.data.user.name}` }),
+  }
+});
 
-export const userResolvers = {
-  user: (route: SnapshotFromRoute<typeof userRoute>) => {
-    // `route.params.userId` is fully typed!
-    return { id: route.params.userId, name: 'Resolved User' };
-  },
-};
+// 2. Assemble the final route array for the router provider using standard `children`
+export const appRoutes: Route[] = [
+  {
+    ...userRoute,
+    children: [
+      postsRoute,
+    ]
+  }
+];
 
-// app.routes.ts (or another assembly file)
-import { userRoute } from './user.routes';
-import { userResolvers } from './user.resolvers';
+// 3. Create the flat map for type-safety, referencing the route constants
+export const routeMap = {
+  '/user/:userId': userRoute,
+  '/user/:userId/posts/:postId': postsRoute,
+} as const;
 
-const userRouteWithResolver = userRoute.setResolvers(userResolvers);
-// ... add userRouteWithResolver to the router tree
-```
+// 4. Define the global type for the router
+export type AppRouteMap = typeof routeMap;
 
-### Global Type Safety with Declaration Merging
-
-To achieve a truly global and ergonomic type-safe experience, the API leverages TypeScript's declaration merging via a `Register` interface. This allows you to register your final route tree type once, making it available to `injectRouter` and `injectRoute` throughout your application without needing to pass generic parameters manually.
-
-```typescript
-// 1. Define your routes and export the final type
-export const appRoutes = createRootRoute().addChildren([...]);
-export type AppRouteTree = typeof appRoutes;
-
-// 2. Use declaration merging to register the type globally
+// 5. Use declaration merging to register the type globally
 declare module '@angular/router' {
   interface Register {
-    router: Router<AppRouteTree>;
+    routeMap: AppRouteMap;
   }
 }
 
-// 3. Now, injection functions are automatically typed
+// 6. Now, injection functions are automatically typed
 class MyComponent {
-  // No generic needed, it's inferred from the Register interface
   private router = injectRouter();
 
   navigateToPost() {
-    // Path and params are fully typed based on AppRouteTree
+    // Path and params are fully typed based on AppRouteMap
     this.router.navigate('/user/:userId/posts/:postId', { userId: '123', postId: '456' });
   }
 }
 ```
+
+This hybrid approach provides a highly performant and scalable solution for type-safe routing, preserving powerful type-inference features while aligning with familiar Angular patterns.
 
 ### Runtime Implementation
 

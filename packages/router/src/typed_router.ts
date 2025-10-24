@@ -1,11 +1,3 @@
-/**
- * @license
- * Copyright Google LLC All Rights Reserved.
- *
- * Use of this source code is governed by an MIT-style license that can be
- * found in the LICENSE file at https://angular.dev/license
- */
-
 import {
   EnvironmentProviders,
   inject,
@@ -15,8 +7,10 @@ import {
   Type,
   ɵWritable as Writable,
 } from '@angular/core';
+import {toSignal} from '@angular/core/rxjs-interop';
 
-import {Route as UntypedRoute, MaybeAsync, GuardResult} from './models';
+import {GuardResult, LoadChildrenCallback, MaybeAsync, Route as UntypedRoute} from './models';
+import {NavigationExtras} from './navigation_transition';
 import {
   provideRouter as provideUntypedRouter,
   RouterFeatures,
@@ -29,16 +23,13 @@ import {
   RouterStateSnapshot,
 } from './router_state';
 import {ParamMap, Params} from './shared';
-import {toSignal} from '@angular/core/rxjs-interop';
-import {NavigationExtras} from './navigation_transition';
 
-type AddTrailingSlash<T> = T extends `${string}/` ? T : `${T & string}/`;
+type AddLeadingSlash<T> = T & `/${string}` extends never ? `/${T & string}` : T;
 type RemoveTrailingSlashes<T> = T & `${string}/` extends never
   ? T
   : T extends `${infer R}/`
     ? R
     : T;
-type AddLeadingSlash<T> = T & `/${string}` extends never ? `/${T & string}` : T;
 type RemoveLeadingSlashes<T> = T & `/${string}` extends never ? T : T extends `/${infer R}` ? R : T;
 
 type JoinPath<TLeft extends string, TRight extends string> = TRight extends ''
@@ -72,12 +63,12 @@ type ResolveParentPath<TFrom extends string, TTo extends string> = TTo extends '
     ? never
     : AddLeadingSlash<RemoveLastSegment<TFrom>>
   : TTo & `../${string}` extends never
-    ? AddLeadingSlash<JoinPath<TFrom, TTo>>
+    ? AddLeadingSlash<JoinPath<RemoveLastSegment<TFrom>, TTo>>
     : TFrom extends '' | '/'
       ? never
       : TTo extends `../${infer ToRest}`
         ? ResolveParentPath<RemoveLastSegment<TFrom>, ToRest>
-        : AddLeadingSlash<JoinPath<TFrom, TTo>>;
+        : AddLeadingSlash<JoinPath<RemoveLastSegment<TFrom>, TTo>>;
 
 export type ResolveRelativePath<TFrom extends string, TTo = '.'> = string extends TFrom
   ? TTo
@@ -105,6 +96,11 @@ function resolvePath(from: string, to: string): string {
   const fromParts = from.split('/').filter((p) => p);
   const toParts = to.split('/');
 
+  // Remove the last segment of the `from` path if `to` starts with `..`
+  if (to.startsWith('..')) {
+    fromParts.pop();
+  }
+
   for (const segment of toParts) {
     if (segment === '..') {
       fromParts.pop();
@@ -117,21 +113,11 @@ function resolvePath(from: string, to: string): string {
 }
 
 export interface Register {}
-export type RegisteredRouter<TRegister = Register> = TRegister extends {
-  router: infer TRouter;
+export type RegisteredRouteMap<TRegister = Register> = TRegister extends {
+  routeMap: infer TRouteMap;
 }
-  ? TRouter
-  : AnyRouter;
-
-type JoinPaths<A extends string, B extends string> = B extends ''
-  ? A extends ''
-    ? '/'
-    : A
-  : A extends ''
-    ? `/${B}`
-    : A extends '/'
-      ? `/${B}`
-      : `${A}/${B}`;
+  ? TRouteMap
+  : Record<string, AnyRoute>;
 
 function joinPaths(a: string, b: string): string {
   if (b === '') {
@@ -145,80 +131,38 @@ function joinPaths(a: string, b: string): string {
   }
   return `${a}/${b}`;
 }
-
-type RouteInfo<
-  TRoute extends Route,
-  TParentPath extends string = '',
-  TParentParams extends Record<string, unknown> = {},
-> =
-  TRoute extends BaseRoute<infer TPath, any, any, any, any, any, any, infer TChildren>
-    ? {
-        route: TRoute;
-        path: TPath;
-        fullPath: JoinPaths<TParentPath, TPath>;
-        params: TParentParams & PathParams<TPath>;
-        children: TChildren;
-      }
-    : never;
-
-type AllRouteInfos<
-  TRoute extends Route,
-  TParentPath extends string = '',
-  TParentParams extends Record<string, unknown> = {},
-> = TRoute extends any // Distribute over union
-  ?
-      | RouteInfo<TRoute, TParentPath, TParentParams>
-      | (RouteInfo<TRoute, TParentPath, TParentParams> extends {
-          children: infer TChildren;
-          fullPath: infer TFullPath extends string;
-          params: infer TParams extends Record<string, unknown>;
-        }
-          ? TChildren extends ReadonlyArray<Route | UntypedRoute>
-            ? AllRouteInfos<Extract<TChildren[number], Route>, TFullPath, TParams>
-            : TChildren extends Record<string, Route>
-              ? AllRouteInfos<TChildren[keyof TChildren], TFullPath, TParams>
-              : never
-          : never)
-  : never;
-
-export type AllPaths<TRouteTree extends Route> = AnyRoute extends TRouteTree
-  ? string
-  : AllRouteInfos<TRouteTree>['fullPath'];
+export type AllPaths<TRouteMap extends Record<string, Route>> = keyof TRouteMap;
 
 export type ParamsForPath<
-  TRouteTree extends Route,
-  TPath extends string,
-> = AnyRoute extends TRouteTree
-  ? Record<string, any>
-  : Extract<AllRouteInfos<TRouteTree>, {fullPath: TPath}>['params'];
+  TRouteMap extends Record<string, Route>,
+  TPath extends keyof TRouteMap,
+> = AnyRoute extends TRouteMap[TPath] ? Record<string, any> : RouteParams<TRouteMap[TPath]>;
 
-type RouteForPath<TRouteTree extends Route, TPath extends string> = AnyRoute extends TRouteTree
-  ? AnyRoute
-  : Extract<AllRouteInfos<TRouteTree>, {fullPath: TPath}>['route'];
-
-export type RootRoute<TChildren = unknown> = BaseRoute<'', '/', {}, {}, {}, {}, {}, TChildren>;
+type RouteForPath<
+  TRouteMap extends Record<string, Route>,
+  TPath extends keyof TRouteMap,
+> = AnyRoute extends TRouteMap[TPath] ? AnyRoute : TRouteMap[TPath];
 
 export interface Route<
   TPath extends string = string,
   TFullPath extends string = string,
   TParentParams extends Record<string, unknown> = {},
   TParentData extends Record<string, unknown> = {},
-  TParams extends Record<string, unknown> = {},
   TData extends Record<string, unknown> = {},
   TResolved extends Record<string, unknown> = {},
 > extends UntypedRoute {
   fullPath: TFullPath;
+  // Note: this is a branding, not a real property
   type?: {
     path: TPath;
     fullPath: TFullPath;
     parentParams: TParentParams;
     parentData: TParentData;
-    params: TParams;
     data: TData;
     resolved: TResolved;
   };
 }
-export type AnyRoute = Route<string, string, any, any, any, any, any>;
+export type AnyRoute = Route<string, string, any, any, any, any>;
 
 export type PathParams<TPath extends string> =
   // Split the path by slashes
@@ -232,12 +176,12 @@ export type PathParams<TPath extends string> =
         Record<never, never>;
 
 export type RouteParams<T extends Route> =
-  T extends Route<infer TPath, any, infer TParentParams, any, any, any, any>
+  T extends Route<infer TPath, any, infer TParentParams, any, any, any>
     ? TParentParams & PathParams<TPath>
     : {};
 
 export type ResolvedData<T extends Route | undefined> =
-  T extends Route<string, string, any, infer TParentData, any, infer TData, infer TResolved>
+  T extends Route<string, string, any, infer TParentData, infer TData, infer TResolved>
     ? TParentData & TData & TResolved
     : {};
 
@@ -284,59 +228,38 @@ type ResolverMap<
   (route: ActivatedRouteSnapshot<TParams, TData>, state: RouterStateSnapshot) => any
 >;
 
-export type Constrain<T, TConstraint, TDefault = TConstraint> =
-  | (T extends TConstraint ? T : never)
-  | TDefault;
-
-export type RouteAddChildrenFn<
-  TPath extends string,
-  TFullPath extends string,
-  TParentParams extends Record<string, unknown>,
-  TParentData extends Record<string, unknown>,
-  TParams extends Record<string, unknown>,
-  TData extends Record<string, unknown>,
-  TResolve extends Record<string, unknown>,
-> = <const TNewChildren>(
-  children: Constrain<TNewChildren, ReadonlyArray<AnyRoute | UntypedRoute>>,
-) => BaseRoute<
-  TPath,
-  TFullPath,
-  TParentParams,
-  TParentData,
-  TParams,
-  TData,
-  TResolve,
-  TNewChildren
->;
-
 class BaseRoute<
   TPath extends string,
   TFullPath extends string,
   TParentParams extends Record<string, unknown>,
   TParentData extends Record<string, unknown>,
-  TParams extends Record<string, unknown>,
   TData extends Record<string, unknown>,
   TResolve extends Record<string, unknown>,
-  TChildren = unknown,
-> implements Route<TPath, TFullPath, TParentParams, TParentData, TParams, TData, TResolve>
+> implements Route<TPath, TFullPath, TParentParams, TParentData, TData, TResolve>
 {
   public parent?: Route;
   public path: TPath;
   public fullPath!: TFullPath;
   public getParentRoute?: () => Route | undefined;
   public data?: TData;
-  public resolve?: ResolverMap<TParentParams & TParams, TParentData & TData>;
+  public resolve?: ResolverMap<TParentParams & PathParams<TPath>, TParentData & TData>;
   public children?: UntypedRoute[];
-  public load?: () => Promise<any>;
-  public canActivate?: CanActivateFn<TParentParams & TParams, TParentData & TData>[];
-  public canActivateChild?: CanActivateChildFn<TParentParams & TParams, TParentData & TData>[];
-  public canDeactivate?: CanDeactivateFn<any, TParentParams & TParams, TParentData & TData>[];
+  public loadChildren?: LoadChildrenCallback;
+  public canActivate?: CanActivateFn<TParentParams & PathParams<TPath>, TParentData & TData>[];
+  public canActivateChild?: CanActivateChildFn<
+    TParentParams & PathParams<TPath>,
+    TParentData & TData
+  >[];
+  public canDeactivate?: CanDeactivateFn<
+    any,
+    TParentParams & PathParams<TPath>,
+    TParentData & TData
+  >[];
   type?: {
     path: TPath;
     fullPath: TFullPath;
     parentParams: TParentParams;
     parentData: TParentData;
-    params: TParams;
     data: TData;
     resolved: TResolve;
   };
@@ -361,26 +284,8 @@ class BaseRoute<
     this.fullPath = joinPaths(parentFullPath, this.path) as TFullPath;
   }
 
-  addChildren: RouteAddChildrenFn<
-    TPath,
-    TFullPath,
-    TParentParams,
-    TParentData,
-    TParams,
-    TData,
-    TResolve
-  > = (children) => {
-    (this as Writable<this>).children = children as any;
-    for (const child of children) {
-      if (child instanceof BaseRoute) {
-        child.init();
-      }
-    }
-    return this as any;
-  };
-
   setResolvers<
-    const TNewResolvers extends ResolverMap<TParentParams & TParams, TParentData & TData>,
+    const TNewResolvers extends ResolverMap<TParentParams & PathParams<TPath>, TParentData & TData>,
   >(
     resolvers: TNewResolvers,
   ): BaseRoute<
@@ -388,36 +293,10 @@ class BaseRoute<
     TFullPath,
     TParentParams,
     TParentData,
-    TParams,
     TData,
-    {[K in keyof TNewResolvers]: ReturnType<TNewResolvers[K]>},
-    TChildren
+    {[K in keyof TNewResolvers]: ReturnType<TNewResolvers[K]>}
   > {
     (this as Writable<this>).resolve = resolvers;
-    return this as any;
-  }
-
-  lazy<
-    TLoadResolve extends Record<
-      string,
-      (
-        route: ActivatedRouteSnapshot<TParentParams & TParams, TParentData & TData>,
-        state: RouterStateSnapshot,
-      ) => any
-    >,
-  >(
-    loader: () => Promise<{component?: any; resolve?: TLoadResolve}>,
-  ): BaseRoute<
-    TPath,
-    TFullPath,
-    TParentParams,
-    TParentData,
-    TParams,
-    TData,
-    TResolve & {[K in keyof TLoadResolve]: ReturnType<TLoadResolve[K]>},
-    TChildren
-  > {
-    (this as Writable<this>).load = loader;
     return this as any;
   }
 }
@@ -461,7 +340,6 @@ export function createRoute<
     | 'resolve'
     | 'children'
     | 'loadChildren'
-    | 'load'
     | 'component'
     | 'canActivate'
     | 'canActivateChild'
@@ -469,13 +347,11 @@ export function createRoute<
   >,
 ): BaseRoute<
   TPath,
-  JoinPaths<TParentRoute extends Route<any, infer P> ? P : '', TPath>,
+  JoinPath<TParentRoute extends Route<any, infer P> ? P : '', TPath>,
   TParentRoute extends Route ? RouteParams<TParentRoute> : {},
   TParentRoute extends Route ? ResolvedData<TParentRoute> : {},
-  PathParams<TPath>,
   TData,
-  {[K in keyof TResolvers]: ReturnType<TResolvers[K]>},
-  never
+  {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}
 > {
   return new BaseRoute(route as any) as any;
 }
@@ -496,20 +372,33 @@ export function createRootRoute<TData extends Record<string, unknown> = {}>(
   > & {
     data?: TData;
   } = {},
-): RootRoute {
+): BaseRoute<'', '/', {}, {}, TData, {}> {
   // The root route has an empty path.
   const newRoute = new BaseRoute({path: '', ...route});
   newRoute.init();
   return newRoute as any;
 }
 
-export function provideRouter<TRootRoute extends AnyRoute>(
-  route: TRootRoute,
+export function initRoutes(routes: Array<Route | UntypedRoute>, parent?: Route | UntypedRoute) {
+  for (const route of routes) {
+    if (parent) {
+      (route as any).getParentRoute = () => parent as any;
+    }
+    (route as any).init?.();
+    if (route.children) {
+      initRoutes(route.children, route);
+    }
+  }
+}
+
+export function provideRouter(
+  routes: UntypedRoute[],
   ...features: RouterFeatures[]
 ): EnvironmentProviders {
+  initRoutes(routes);
   return makeEnvironmentProviders([
     provideUntypedRouter(
-      [route as UntypedRoute],
+      routes,
       withRouterConfig({
         paramsInheritanceStrategy: 'always',
       }),
@@ -519,33 +408,32 @@ export function provideRouter<TRootRoute extends AnyRoute>(
 }
 
 @Injectable({providedIn: 'root'})
-export class Router<TRouteTree extends AnyRoute> {
+export class Router<TRouteMap extends Record<string, Route>> {
   private router = inject(UntypedRouter);
-  routeTree = this.router.config[0] as TRouteTree;
 
-  navigate<TPath extends AllPaths<TRouteTree>>(
+  navigate<TPath extends keyof TRouteMap>(
     path: TPath,
-    params: TPath extends AllPaths<TRouteTree> ? ParamsForPath<TRouteTree, TPath> : never,
+    params: TPath extends keyof TRouteMap ? ParamsForPath<TRouteMap, TPath> : never,
     extras?: NavigationExtras,
   ): Promise<boolean>;
-  navigate<TFrom extends AllPaths<TRouteTree>, TTo extends string>(options: {
+  navigate<TFrom extends keyof TRouteMap, TTo extends string>(options: {
     to: TTo;
     from: TFrom;
     params:
-      | ParamsForPath<TRouteTree, ResolveRelativePath<TFrom, TTo> & AllPaths<TRouteTree>>
+      | ParamsForPath<TRouteMap, ResolveRelativePath<TFrom & string, TTo> & keyof TRouteMap>
       | ((
-          prev: ParamsForPath<TRouteTree, TFrom>,
-        ) => ParamsForPath<TRouteTree, ResolveRelativePath<TFrom, TTo> & AllPaths<TRouteTree>>);
+          prev: ParamsForPath<TRouteMap, TFrom>,
+        ) => ParamsForPath<TRouteMap, ResolveRelativePath<TFrom & string, TTo> & keyof TRouteMap>);
     extras?: NavigationExtras;
   }): Promise<boolean>;
-  navigate<TPath extends AllPaths<TRouteTree>>(options: {
+  navigate<TPath extends keyof TRouteMap>(options: {
     to: TPath;
-    params: ParamsForPath<TRouteTree, TPath>;
+    params: ParamsForPath<TRouteMap, TPath>;
     extras?: NavigationExtras;
   }): Promise<boolean>;
   navigate(
     pathOrOptions:
-      | AllPaths<TRouteTree>
+      | keyof TRouteMap
       | {
           to: string;
           from?: string;
@@ -560,11 +448,16 @@ export class Router<TRouteTree extends AnyRoute> {
     let navExtras: NavigationExtras | undefined;
 
     if (typeof pathOrOptions === 'string') {
-      path = pathOrOptions;
+      path = pathOrOptions as string;
       navParams = params;
       navExtras = extras;
     } else {
-      const {to, from, params: optionsParams, extras: optionsExtras} = pathOrOptions;
+      const {
+        to,
+        from,
+        params: optionsParams,
+        extras: optionsExtras,
+      } = pathOrOptions as Exclude<typeof pathOrOptions, string | number | symbol>;
       path = from ? resolvePath(from, to) : to;
       if (typeof optionsParams === 'function') {
         let currentSnapshot = this.router.routerState.snapshot.root;
@@ -593,14 +486,14 @@ export class Router<TRouteTree extends AnyRoute> {
     return this.router.navigate(commands, navExtras);
   }
 }
-export type AnyRouter = Router<AnyRoute>;
+export type AnyRouter = Router<Record<string, AnyRoute>>;
 
 export type SnapshotFromRoute<TRoute extends Route> = Omit<
   UntypedActivatedRouteSnapshot,
   'params' | 'data'
 > & {
   params: RouteParams<TRoute>;
-  data: TRoute extends Route<any, any, any, infer TParentData, any, infer TData, infer TResolved>
+  data: TRoute extends Route<any, any, any, infer TParentData, infer TData, infer TResolved>
     ? TParentData & TData & TResolved
     : Record<never, never>;
 };
@@ -638,41 +531,44 @@ export class ActivatedRoute<TRoute extends Route> {
 }
 
 export function injectRouter<
-  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
->(): Router<TRouteTree> {
-  return inject(Router<TRouteTree>);
+  TRouteMap extends Record<string, Route> = RegisteredRouteMap,
+>(): Router<TRouteMap> {
+  return inject(Router<TRouteMap>);
 }
 
 export function injectRoute<
-  TRouteTree extends Route = RegisteredRouter['routeTree'],
-  TPath extends AllPaths<TRouteTree> = AllPaths<TRouteTree>,
->(_path: TPath): ActivatedRoute<RouteForPath<TRouteTree, TPath>> {
+  TRouteMap extends Record<string, Route> = RegisteredRouteMap,
+  TPath extends AllPaths<TRouteMap> = AllPaths<TRouteMap>,
+>(_path: TPath): ActivatedRoute<RouteForPath<TRouteMap, TPath>> {
   const route = inject(UntypedActivatedRoute);
   return new ActivatedRoute(route);
 }
 
 export function injectNavigate<
-  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
->(): Router<TRouteTree>['navigate'];
+  TRouteMap extends Record<string, Route> = RegisteredRouteMap,
+>(): Router<TRouteMap>['navigate'];
 export function injectNavigate<
-  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
-  TFrom extends AllPaths<TRouteTree> = AllPaths<TRouteTree>,
+  TRouteMap extends Record<string, Route> = RegisteredRouteMap,
+  TFrom extends AllPaths<TRouteMap> = AllPaths<TRouteMap>,
 >(options: {
   from: TFrom;
 }): <TTo extends string>(options: {
   to: TTo;
   params:
-    | ParamsForPath<TRouteTree, ResolveRelativePath<TFrom, TTo> & AllPaths<TRouteTree>>
+    | ParamsForPath<TRouteMap, ResolveRelativePath<TFrom & string, TTo> & AllPaths<TRouteMap>>
     | ((
-        prev: ParamsForPath<TRouteTree, TFrom>,
-      ) => ParamsForPath<TRouteTree, ResolveRelativePath<TFrom, TTo> & AllPaths<TRouteTree>>);
+        prev: ParamsForPath<TRouteMap, TFrom>,
+      ) => ParamsForPath<
+        TRouteMap,
+        ResolveRelativePath<TFrom & string, TTo> & AllPaths<TRouteMap>
+      >);
   extras?: NavigationExtras;
 }) => Promise<boolean>;
 export function injectNavigate<
-  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
-  TFrom extends AllPaths<TRouteTree> = AllPaths<TRouteTree>,
+  TRouteMap extends Record<string, Route> = RegisteredRouteMap,
+  TFrom extends AllPaths<TRouteMap> = AllPaths<TRouteMap>,
 >(options?: {from: TFrom}) {
-  const router = injectRouter<TRouteTree>();
+  const router = injectRouter<TRouteMap>();
 
   if (options?.from) {
     const from = options.from;

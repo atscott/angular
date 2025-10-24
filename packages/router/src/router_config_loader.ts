@@ -23,6 +23,7 @@ import {DefaultExport, LoadedRouterConfig, Route, Routes} from './models';
 import {assertStandalone, validateConfig} from './utils/config';
 import {standardizeConfig} from './components/empty_outlet';
 import {wrapIntoPromise} from './utils/collection';
+import {initRoutes} from './typed_router';
 
 /**
  * The DI token for a router configuration.
@@ -153,6 +154,7 @@ export async function loadChildren(
     // for it's parent module instead.
     rawRoutes = injector.get(ROUTES, [], {optional: true, self: true}).flat();
   }
+  initRoutes(rawRoutes, route);
   const routes = rawRoutes.map(standardizeConfig);
   (typeof ngDevMode === 'undefined' || ngDevMode) &&
     validateConfig(routes, route.path, requireStandaloneComponents);
