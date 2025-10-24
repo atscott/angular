@@ -1215,7 +1215,6 @@ describe('FakeAsyncTestZoneSpec', () => {
             el.style.width = '100px'; // trigger mutation observer
           }, 10);
           setTimeout(() => {
-            debugger;
             log.push('timer B');
             resolve();
           }, 10);

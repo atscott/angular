@@ -305,18 +305,20 @@ export function navigationErrorsIntegrationSuite(browserAPI: 'navigation' | 'his
         }
       });
 
-      await router.navigateByUrl('/simple1');
-      await timeout(2);
+      router.navigateByUrl('/simple1');
+      await fixture.whenStable();
       const simple1NavStart = event!;
 
       await router.navigateByUrl('/throwing').catch(() => null);
-      await timeout(2);
+      await fixture.whenStable();
 
       await router.navigateByUrl('/simple2');
-      await timeout(2);
+      await fixture.whenStable();
 
       location.back();
-      await timeout(2);
+      // wait for event to trigger navigation
+      await timeout();
+      await fixture.whenStable();
 
       expect(event!.restoredState!.navigationId).toEqual(simple1NavStart.id);
     });

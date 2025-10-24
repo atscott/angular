@@ -258,7 +258,6 @@ export class FakeNavigation implements Navigation {
     if (intercepted) {
       return;
     }
-    debugger;
     this.updateNavigationEntriesForSameDocumentNavigation(this.navigateEvent!);
   }
 

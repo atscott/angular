@@ -21,21 +21,16 @@ import {
 } from '@angular/core';
 import {
   BehaviorSubject,
-  ReplaySubject,
-  combineLatest,
   EMPTY,
   from,
-  fromEvent,
   MonoTypeOperatorFunction,
   Observable,
-  ObservableInput,
   of,
   Subject,
 } from 'rxjs';
 import {
   catchError,
   concatMap,
-  defaultIfEmpty,
   filter,
   finalize,
   map,
@@ -321,11 +316,11 @@ export interface Navigation {
   readonly abort: () => void;
 
   /** @internal */
-  navigationStartHandled: Subject<void>;
+  navigationStartHandler: {deferredHandle?: Promise<void>};
   /** @internal */
-  routesRecognizeHandled: Subject<void>;
+  routesRecognizeHandler: {deferredHandle?: Promise<void>};
   /** @internal */
-  beforeActivateHandled: Subject<void>;
+  beforeActivateHandler: {deferredHandle?: Promise<void>};
 }
 
 const noop = () => {};
@@ -349,9 +344,9 @@ export interface NavigationTransition {
   targetRouterState: RouterState | null;
   guards: Checks;
   guardsResult: GuardResult | null;
-  navigationStartHandled: Subject<void>;
-  routesRecognizeHandled: Subject<void>;
-  beforeActivateHandled: Subject<void>;
+  navigationStartHandler: {deferredHandle?: Promise<void>};
+  routesRecognizeHandler: {deferredHandle?: Promise<void>};
+  beforeActivateHandler: {deferredHandle?: Promise<void>};
 }
 
 /**
@@ -464,9 +459,9 @@ export class NavigationTransitions {
         guards: {canActivateChecks: [], canDeactivateChecks: []},
         guardsResult: null,
         id,
-        routesRecognizeHandled: new ReplaySubject<void>(1),
-        navigationStartHandled: new ReplaySubject<void>(1),
-        beforeActivateHandled: new ReplaySubject<void>(1),
+        routesRecognizeHandler: {},
+        navigationStartHandler: {},
+        beforeActivateHandler: {},
       });
     });
   }
@@ -521,9 +516,9 @@ export class NavigationTransitions {
                     previousNavigation: null,
                   },
               abort: () => abortController.abort(),
-              navigationStartHandled: t.navigationStartHandled,
-              routesRecognizeHandled: t.routesRecognizeHandled,
-              beforeActivateHandled: t.beforeActivateHandled,
+              navigationStartHandler: t.navigationStartHandler,
+              routesRecognizeHandler: t.routesRecognizeHandler,
+              beforeActivateHandler: t.beforeActivateHandler,
             });
             const urlTransition =
               !router.navigated || this.isUpdatingInternalState() || this.isUpdatedBrowserUrl();
@@ -567,7 +562,7 @@ export class NavigationTransitions {
                   return Promise.resolve(t);
                 }),
 
-                waitFor(overallTransitionState.navigationStartHandled),
+                waitFor(overallTransitionState.navigationStartHandler),
 
                 // Recognize
                 recognize(
@@ -590,7 +585,7 @@ export class NavigationTransitions {
                   });
                   this.events.next(new BeforeRoutesRecognized());
                 }),
-                waitFor(overallTransitionState.routesRecognizeHandled),
+                waitFor(overallTransitionState.routesRecognizeHandler),
                 tap((t) => {
                   this.events.next(
                     new RoutesRecognized(
@@ -629,10 +624,7 @@ export class NavigationTransitions {
                 nav!.finalUrl = extractedUrl;
                 return nav;
               });
-              // TODO(atscott): This is a bit scary. what do we do with shouldProcessUrl: false in the navigation state manager?
-              // presumably another router is supposed to process it? So we should already have a NavigateEvent?
-              // Probably shouldn't do any rollbacks for it??
-              return of(overallTransitionState).pipe(waitFor(t.navigationStartHandled));
+              return of(overallTransitionState).pipe(waitFor(t.navigationStartHandler));
             } else {
               /* When neither the current or previous URL can be processed, do
                * nothing other than update router's internal reference to the
@@ -804,7 +796,7 @@ export class NavigationTransitions {
             this.events.next(new BeforeActivateRoutes());
           }),
 
-          waitFor(overallTransitionState.beforeActivateHandled),
+          waitFor(overallTransitionState.beforeActivateHandler),
 
           activateRoutes(
             this.rootContexts,
@@ -1049,15 +1041,6 @@ export function isBrowserTriggeredNavigation(source: NavigationTrigger) {
   return source !== IMPERATIVE_NAVIGATION;
 }
 
-/**
- * Pauses the RxJS pipeline until the given signal$ emits (or completes).
- * Use a ReplaySubject<void>(1) if you want late subscribers to proceed immediately.
- */
-export function waitFor<T>(signal$: Observable<any>): MonoTypeOperatorFunction<T> {
-  return concatMap((value) =>
-    signal$.pipe(
-      take(1),
-      map(() => value),
-    ),
-  );
+function waitFor<T>(signal$: {deferredHandle?: Promise<void>}): MonoTypeOperatorFunction<T> {
+  return concatMap((value) => from(signal$.deferredHandle ?? of(void 0)).pipe(map(() => value)));
 }

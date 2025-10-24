@@ -216,55 +216,61 @@ export class NavigationStateManager extends StateManager {
   ): Promise<void> {
     this.currentNavigation.routerTransition = transition;
     if (e instanceof NavigationStart) {
-      // Preserve the current router state before starting a new navigation.
-      this.updateStateMemento();
-      // If a `NavigateEvent` from the Navigation API isn't already associated with this router
-      // transition (i.e., this router navigation was initiated imperatively via `router.navigate`
-      // and not by an already intercepted browser navigation event), then we need to trigger one
-      // using `this.navigation.navigate()`.
-      if (!this.currentNavigation.navigateEvent && this.precommitHandlerSupported) {
-        await this.createNavigationForTransition(transition);
-      }
-      // A `NavigateEvent` already exists (e.g., user click intercepted), so just mark as handled.
-      transition.navigationStartHandled.next();
+      transition.navigationStartHandler.deferredHandle = new Promise<void>(async (resolve) => {
+        // Preserve the current router state before starting a new navigation.
+        this.updateStateMemento();
+        // If a `NavigateEvent` from the Navigation API isn't already associated with this router
+        // transition (i.e., this router navigation was initiated imperatively via `router.navigate`
+        // and not by an already intercepted browser navigation event), then we need to trigger one
+        // using `this.navigation.navigate()`.
+        if (!this.currentNavigation.navigateEvent && this.precommitHandlerSupported) {
+          await this.createNavigationForTransition(transition);
+        }
+        // A `NavigateEvent` already exists (e.g., user click intercepted), so just mark as handled.
+        resolve();
+      });
     } else if (e instanceof NavigationSkipped) {
       // Navigation was skipped (e.g., `UrlHandlingStrategy` decided not to process).
       // Finalize any pending Navigation API operations and commit the router state.
       this.finishNavigation();
       this.commitTransition(transition);
     } else if (e instanceof BeforeRoutesRecognized) {
-      // If URL update strategy is 'eager', commit the URL now.
-      if (this.urlUpdateStrategy === 'eager') {
-        try {
-          if (!this.currentNavigation.navigateEvent) {
-            await this.createNavigationForTransition(transition);
+      transition.routesRecognizeHandler.deferredHandle = new Promise<void>(async (resolve) => {
+        // If URL update strategy is 'eager', commit the URL now.
+        if (this.urlUpdateStrategy === 'eager') {
+          try {
+            if (!this.currentNavigation.navigateEvent) {
+              await this.createNavigationForTransition(transition);
+            }
+            // `commitUrl` will call `event.commit()` or `controller.redirect()` on the
+            // intercepted `NavigateEvent`.
+            await this.currentNavigation.commitUrl?.();
+          } catch {
+            // If commit fails (e.g., precommitHandler rejects), abort.
+            return;
           }
+        }
+        resolve();
+      });
+    } else if (e instanceof BeforeActivateRoutes) {
+      transition.beforeActivateHandler.deferredHandle = new Promise<void>(async (resolve) => {
+        // If URL update strategy is 'deferred', commit the URL now (before activation).
+        if (this.urlUpdateStrategy === 'deferred') {
           // `commitUrl` will call `event.commit()` or `controller.redirect()` on the
           // intercepted `NavigateEvent`.
-          await this.currentNavigation.commitUrl?.();
-        } catch {
-          // If commit fails (e.g., precommitHandler rejects), abort.
-          return;
-        }
-      }
-      transition.routesRecognizeHandled.next();
-    } else if (e instanceof BeforeActivateRoutes) {
-      // If URL update strategy is 'deferred', commit the URL now (before activation).
-      if (this.urlUpdateStrategy === 'deferred') {
-        // `commitUrl` will call `event.commit()` or `controller.redirect()` on the
-        // intercepted `NavigateEvent`.
-        try {
-          if (!this.currentNavigation.navigateEvent) {
-            await this.createNavigationForTransition(transition);
+          try {
+            if (!this.currentNavigation.navigateEvent) {
+              await this.createNavigationForTransition(transition);
+            }
+            await this.currentNavigation.commitUrl?.();
+          } catch {
+            return;
           }
-          await this.currentNavigation.commitUrl?.();
-        } catch {
-          return;
         }
-      }
-      // Commit the internal router state.
-      this.commitTransition(transition);
-      transition.beforeActivateHandled.next();
+        // Commit the internal router state.
+        this.commitTransition(transition);
+        resolve();
+      });
     } else if (e instanceof NavigationCancel || e instanceof NavigationError) {
       // Handle navigation cancellation or error.
       // If redirecting and the URL hasn't been committed yet (deferred mode),
@@ -368,7 +374,9 @@ export class NavigationStateManager extends StateManager {
     const isTraversalReset =
       this.canceledNavigationResolution === 'computed' &&
       this.navigation.currentEntry!.key !== this.activeHistoryEntry.key;
-    this.resetInternalState(transition, isTraversalReset);
+    if (!isTraversalReset) {
+      this.resetInternalState(transition);
+    }
 
     // Reject the precommit handler of the intercepted NavigateEvent, if it's still pending.
     // This prevents the URL from changing if it was deferred.
@@ -405,7 +413,9 @@ export class NavigationStateManager extends StateManager {
         this.navigation.traverseTo(this.activeHistoryEntry.key, {
           info: rollbackNavigationInfo, // Pass info to indicate this is a rollback.
         }),
-      );
+      ).committed.then(() => {
+        this.resetInternalState(transition, true);
+      });
     } else {
       // Replace the current history entry with the state of the last known good URL/state.
       const internalPath = this.urlSerializer.serialize(this.getCurrentUrlTree());
@@ -472,9 +482,11 @@ export class NavigationStateManager extends StateManager {
     this.currentNavigation.removeAbortListener = () =>
       event.signal.removeEventListener('abort', abortHandler);
 
+    let scroll = this.inMemoryScrollingEnabled
+      ? 'manual'
+      : (this.currentNavigation.routerTransition?.extras.scroll ?? 'after-transition');
     const interceptOptions: NavigationInterceptOptions = {
-      // focusReset: 'manual',
-      scroll: this.inMemoryScrollingEnabled ? 'manual' : 'after-transition',
+      scroll,
     };
     let redirect: // Function provided by `precommitHandler`'s controller to perform a redirect.
     ((url: string, options: {state: unknown; history?: 'push' | 'replace'}) => void) | null = null;

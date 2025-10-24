@@ -211,7 +211,6 @@ export class HistoryStateManager extends StateManager {
   override handleRouterEvent(e: Event | PrivateRouterEvents, currentTransition: Navigation): void {
     if (e instanceof NavigationStart) {
       this.updateStateMemento();
-      currentTransition.navigationStartHandled.next();
     } else if (e instanceof NavigationSkipped) {
       this.commitTransition(currentTransition);
     } else if (e instanceof BeforeRoutesRecognized) {
@@ -220,13 +219,11 @@ export class HistoryStateManager extends StateManager {
           this.setBrowserUrl(this.createBrowserPath(currentTransition), currentTransition);
         }
       }
-      currentTransition.routesRecognizeHandled.next();
     } else if (e instanceof BeforeActivateRoutes) {
       this.commitTransition(currentTransition);
       if (this.urlUpdateStrategy === 'deferred' && !currentTransition.extras.skipLocationChange) {
         this.setBrowserUrl(this.createBrowserPath(currentTransition), currentTransition);
       }
-      currentTransition.beforeActivateHandled.next();
     } else if (
       e instanceof NavigationCancel &&
       e.code !== NavigationCancellationCode.SupersededByNewNavigation &&
