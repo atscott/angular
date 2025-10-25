@@ -1,9 +1,12 @@
-load("//tools:defaults.bzl", "ts_project", "zoneless_jasmine_test", "zoneless_web_test_suite")
+load("//tools:defaults.bzl", "jasmine_test", "ts_project", "zoneless_jasmine_test", "zoneless_web_test_suite")
 
 ts_project(
     name = "test_lib",
     testonly = True,
-    srcs = glob(["**/*.ts"]),
+    srcs = glob(
+        ["**/*.ts"],
+        exclude = ["file_based_routing_spec.ts"],
+    ),
     # Visible to //:saucelabs_unit_tests_poc target
     visibility = ["//:__pkg__"],
     deps = [
@@ -32,5 +35,26 @@ zoneless_web_test_suite(
     name = "test_web",
     deps = [
         ":test_lib",
+    ],
+)
+
+ts_project(
+    name = "file_based_routing_test_lib",
+    testonly = True,
+    srcs = ["file_based_routing_spec.ts"],
+    deps = [
+        "//:node_modules/@types/mock-fs",
+        "//:node_modules/mock-fs",
+        "//packages/router/tools",
+    ],
+)
+
+jasmine_test(
+    name = "file_based_routing_test",
+    data = [
+        ":file_based_routing_test_lib",
+        "//packages/common",
+        "//packages/core",
+        "//packages/router",
     ],
 )

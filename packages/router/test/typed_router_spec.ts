@@ -12,6 +12,7 @@ import {
   provideRouter,
   Router,
   AnyRoute,
+  RouteParams,
 } from '../src/typed_router';
 
 @Component({
@@ -100,6 +101,16 @@ const userRouteWithResolver = createRoute({
     user: (route) => ({id: route.params.userId, name: 'Angular'}),
   },
 });
+// Type test for userRouteWithResolver
+{
+  type T = RouteParams<typeof userRouteWithResolver>;
+  const p: T = {userId: 'a'};
+  const k: keyof T = 'userId';
+  // @ts-expect-error
+  const p2: T = {};
+  // @ts-expect-error
+  const k2: keyof T = 'wrong';
+}
 const postsRouteWithResolver = createRoute({
   path: 'posts/:postId',
   getParentRoute: () => userRouteWithResolver,
@@ -107,10 +118,25 @@ const postsRouteWithResolver = createRoute({
   resolve: {
     post: (route) => {
       const user = route.data.user;
-      return {id: route.params.postId, title: `Post by ${user.name}`};
+      const postId: string = route.params.postId;
+      const userId: string = route.params.userId;
+      // @ts-expect-error
+      const nonExistent: string = route.params.nonExistent;
+      return {id: postId, title: `Post by ${user.name}`};
     },
   },
 });
+// Type test for postsRouteWithResolver
+{
+  type T = RouteParams<typeof postsRouteWithResolver>;
+  const p: T = {userId: 'a', postId: 'b'};
+  const k: keyof T = 'userId';
+  const k2: keyof T = 'postId';
+  // @ts-expect-error
+  const p2: T = {userId: 'a'};
+  // @ts-expect-error
+  const k3: keyof T = 'wrong';
+}
 userRouteWithResolver.children = [postsRouteWithResolver];
 
 const setResolversRoute = createRoute({
@@ -118,7 +144,12 @@ const setResolversRoute = createRoute({
   getParentRoute: () => rootRoute,
   component: SetResolversComponent,
 }).setResolvers({
-  user: (route) => ({id: route.params.userId, name: 'Set Angular'}),
+  user: (route) => {
+    const id: string = route.params.userId;
+    // @ts-expect-error
+    const nonExistent: string = route.params.nonExistent;
+    return {id, name: 'Set Angular'};
+  },
 });
 
 const appRoutes: Routes = [userRoute, userRouteWithResolver, setResolversRoute];
@@ -400,7 +431,7 @@ describe('TypedRouter', () => {
       }
       // This test is for compile-time type checking.
       createRoute({
-        path: 'deactivate',
+        path: 'deactivate/:id',
         data: {thing: '1'},
         resolve: {
           user: () => ({name: 'Angular'}),
@@ -420,6 +451,9 @@ describe('TypedRouter', () => {
             const y: number = route.data.user.name;
             // @ts-expect-error
             const z = route.data.user.age;
+            const id: string = route.params.id;
+            // @ts-expect-error
+            const nonExistent: string = route.params.nonExistent;
             return true;
           },
         ],

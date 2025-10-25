@@ -9,6 +9,7 @@ ng_project(
             "*.ts",
             "src/**/*.ts",
         ],
+        exclude = ["src/file_based_routing.ts"],
     ),
     deps = [
         "//:node_modules/rxjs",

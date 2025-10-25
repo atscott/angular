@@ -146,23 +146,23 @@ type RouteForPath<
 export interface Route<
   TPath extends string = string,
   TFullPath extends string = string,
-  TParentParams extends Record<string, unknown> = {},
-  TParentData extends Record<string, unknown> = {},
-  TData extends Record<string, unknown> = {},
-  TResolved extends Record<string, unknown> = {},
+  TParams extends Record<string, unknown> = Record<string, unknown>,
+  TParentData extends Record<string, unknown> = Record<string, unknown>,
+  TData extends Record<string, unknown> = Record<string, unknown>,
+  TResolved extends Record<string, unknown> = Record<string, unknown>,
 > extends UntypedRoute {
   fullPath: TFullPath;
   // Note: this is a branding, not a real property
   type?: {
     path: TPath;
     fullPath: TFullPath;
-    parentParams: TParentParams;
+    params: TParams;
     parentData: TParentData;
     data: TData;
     resolved: TResolved;
   };
 }
-export type AnyRoute = Route<string, string, any, any, any, any>;
+export type AnyRoute = Route<any, any, any, any, any, any>;
 
 export type PathParams<TPath extends string> =
   // Split the path by slashes
@@ -176,9 +176,7 @@ export type PathParams<TPath extends string> =
         Record<never, never>;
 
 export type RouteParams<T extends Route> =
-  T extends Route<infer TPath, any, infer TParentParams, any, any, any>
-    ? TParentParams & PathParams<TPath>
-    : {};
+  T extends Route<any, any, infer TParams, any, any, any> ? TParams : {};
 
 export type ResolvedData<T extends Route | undefined> =
   T extends Route<string, string, any, infer TParentData, infer TData, infer TResolved>
@@ -220,7 +218,7 @@ type CanDeactivateFn<
   nextState?: RouterStateSnapshot,
 ) => MaybeAsync<GuardResult>;
 
-type ResolverMap<
+export type ResolverMap<
   TParams extends Record<string, unknown>,
   TData extends Record<string, unknown>,
 > = Record<
@@ -228,37 +226,30 @@ type ResolverMap<
   (route: ActivatedRouteSnapshot<TParams, TData>, state: RouterStateSnapshot) => any
 >;
 
-class BaseRoute<
+export class BaseRoute<
   TPath extends string,
   TFullPath extends string,
-  TParentParams extends Record<string, unknown>,
+  TParams extends Record<string, unknown>,
   TParentData extends Record<string, unknown>,
   TData extends Record<string, unknown>,
   TResolve extends Record<string, unknown>,
-> implements Route<TPath, TFullPath, TParentParams, TParentData, TData, TResolve>
+> implements Route<TPath, TFullPath, TParams, TParentData, TData, TResolve>
 {
   public parent?: Route;
   public path: TPath;
   public fullPath!: TFullPath;
   public getParentRoute?: () => Route | undefined;
   public data?: TData;
-  public resolve?: ResolverMap<TParentParams & PathParams<TPath>, TParentData & TData>;
+  public resolve?: ResolverMap<TParams, TParentData & TData>;
   public children?: UntypedRoute[];
   public loadChildren?: LoadChildrenCallback;
-  public canActivate?: CanActivateFn<TParentParams & PathParams<TPath>, TParentData & TData>[];
-  public canActivateChild?: CanActivateChildFn<
-    TParentParams & PathParams<TPath>,
-    TParentData & TData
-  >[];
-  public canDeactivate?: CanDeactivateFn<
-    any,
-    TParentParams & PathParams<TPath>,
-    TParentData & TData
-  >[];
+  public canActivate?: CanActivateFn<TParams, TParentData & TData>[];
+  public canActivateChild?: CanActivateChildFn<TParams, TParentData & TData>[];
+  public canDeactivate?: CanDeactivateFn<any, TParams, TParentData & TData>[];
   type?: {
     path: TPath;
     fullPath: TFullPath;
-    parentParams: TParentParams;
+    params: TParams;
     parentData: TParentData;
     data: TData;
     resolved: TResolve;
@@ -284,20 +275,32 @@ class BaseRoute<
     this.fullPath = joinPaths(parentFullPath, this.path) as TFullPath;
   }
 
-  setResolvers<
-    const TNewResolvers extends ResolverMap<TParentParams & PathParams<TPath>, TParentData & TData>,
-  >(
+  setResolvers<const TNewResolvers extends ResolverMap<TParams, TParentData & TData>>(
     resolvers: TNewResolvers,
   ): BaseRoute<
     TPath,
     TFullPath,
-    TParentParams,
+    TParams,
     TParentData,
     TData,
     {[K in keyof TNewResolvers]: ReturnType<TNewResolvers[K]>}
   > {
     (this as Writable<this>).resolve = resolvers;
     return this as any;
+  }
+
+  addChildren(children: (Route | UntypedRoute)[]): this {
+    this.children = children;
+    initRoutes(children, this);
+    return this;
+  }
+
+  update(options: Partial<this>): this {
+    // This is a shallow clone.
+    const newRoute = Object.create(Object.getPrototypeOf(this));
+    Object.assign(newRoute, this);
+    Object.assign(newRoute, options);
+    return newRoute;
   }
 }
 
@@ -329,7 +332,7 @@ export function createRoute<
     >[];
     canDeactivate?: CanDeactivateFn<
       TComponent,
-      TParentRoute extends Route ? RouteParams<TParentRoute> : {},
+      (TParentRoute extends Route ? RouteParams<TParentRoute> : {}) & PathParams<TPath>,
       (TParentRoute extends Route ? ResolvedData<TParentRoute> : {}) &
         TData & {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}
     >[];
@@ -348,7 +351,7 @@ export function createRoute<
 ): BaseRoute<
   TPath,
   JoinPath<TParentRoute extends Route<any, infer P> ? P : '', TPath>,
-  TParentRoute extends Route ? RouteParams<TParentRoute> : {},
+  (TParentRoute extends Route ? RouteParams<TParentRoute> : {}) & PathParams<TPath>,
   TParentRoute extends Route ? ResolvedData<TParentRoute> : {},
   TData,
   {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}

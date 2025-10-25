@@ -1,0 +1,14 @@
+load("//tools:defaults.bzl", "ts_project")
+
+package(default_visibility = ["//visibility:public"])
+
+ts_project(
+    name = "tools",
+    srcs = glob(["**/*.ts"]),
+    tsconfig = ":tsconfig.json",
+    deps = [
+        "//:node_modules/@types/node",
+        "//packages/core",
+        "//packages/router",
+    ],
+)
