@@ -22,14 +22,24 @@ import * as path from 'path';
 
 export interface FileRoutesByPath {}
 
-type ParentRouteFromFilePath<
-  TPath extends keyof FileRoutesByPath,
-  TRouteMap extends FileRoutesByPath = FileRoutesByPath,
-> = TRouteMap[TPath] extends {parentRoute: infer P} ? P : AnyRoute;
+export type ParentRouteFromFilePath<
+  TPath extends string,
+  TRouteMap = FileRoutesByPath,
+> = TPath extends keyof TRouteMap
+  ? TRouteMap[TPath] extends {parentRoute: infer P}
+    ? P extends Route
+      ? P
+      : AnyRoute
+    : AnyRoute
+  : AnyRoute;
 
-export function createFileRoute<TPath extends keyof FileRoutesByPath & string>(path: TPath) {
+export function createFileRoute<
+  TFileRoutesByPath = FileRoutesByPath,
+  TPath extends string = string,
+>(path: TPath) {
+  type TParentRoute = ParentRouteFromFilePath<TPath, TFileRoutesByPath>;
+
   return <
-    TParentRoute extends Route = any,
     TData extends Record<string, unknown> = {},
     TResolvers extends ResolverMap<
       RouteParams<TParentRoute> & PathParams<TPath>,

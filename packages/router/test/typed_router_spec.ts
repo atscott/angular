@@ -15,162 +15,174 @@ import {
   RouteParams,
 } from '../src/typed_router';
 
-@Component({
-  standalone: true,
-  template: `
+describe('TypedRouter', () => {
+  @Component({
+    standalone: true,
+    template: `
     userId: {{ route.params().userId }}
     <router-outlet />`,
-  imports: [RouterOutlet],
-})
-class UserComponent {
-  route = injectRoute('/user/:userId');
-  constructor() {
-    this.route.params().userId;
-    // @ts-expect-error
-    this.route.params().nonExistent;
+    imports: [RouterOutlet],
+  })
+  class UserComponent {
+    route = injectTypedRoute('/user/:userId');
+    constructor() {
+      this.route.params().userId;
+      // @ts-expect-error
+      this.route.params().nonExistent;
+    }
   }
-}
 
-@Component({
-  standalone: true,
-  template: `userId: {{ route.params().userId }}, postId: {{ route.params().postId }}`,
-})
-class PostsComponent {
-  route = injectRoute('/user/:userId/posts/:postId');
-  constructor() {
-    this.route.params().userId;
-    this.route.params().postId;
-    // @ts-expect-error
-    this.route.params().nonExistent;
+  @Component({
+    standalone: true,
+    template: `userId: {{ route.params().userId }}, postId: {{ route.params().postId }}`,
+  })
+  class PostsComponent {
+    route = injectTypedRoute('/user/:userId/posts/:postId');
+    constructor() {
+      this.route.params().userId;
+      this.route.params().postId;
+      // @ts-expect-error
+      this.route.params().nonExistent;
+    }
   }
-}
 
-@Component({
-  standalone: true,
-  template: `user: {{ route.data().user.name }}, post: {{ route.data().post.title }}`,
-})
-class PostsWithDataComponent {
-  route = injectRoute(postsRouteWithResolver.fullPath);
-  constructor() {
-    this.route.params().userId;
-    this.route.params().postId;
-    // @ts-expect-error
-    this.route.params().nonExistent;
+  @Component({
+    standalone: true,
+    template: `user: {{ route.data().user.name }}, post: {{ route.data().post.title }}`,
+  })
+  class PostsWithDataComponent {
+    route = injectTypedRoute(postsRouteWithResolver.fullPath);
+    constructor() {
+      this.route.params().userId;
+      this.route.params().postId;
+      // @ts-expect-error
+      this.route.params().nonExistent;
+    }
   }
-}
 
-@Component({
-  standalone: true,
-  template: `user: {{ route.data().user.name }}`,
-})
-class SetResolversComponent {
-  route = injectRoute('/set-resolvers/:userId');
-}
+  @Component({
+    standalone: true,
+    template: `user: {{ route.data().user.name }}`,
+  })
+  class SetResolversComponent {
+    route = injectTypedRoute('/set-resolvers/:userId');
+  }
 
-@Component({
-  standalone: true,
-  template: `
+  @Component({
+    standalone: true,
+    template: `
     userId: {{ route.params().userId }}
     user name: {{ route.data().user.name }}
     <router-outlet />
       `,
-  imports: [RouterOutlet],
-})
-class UserWithDataComponent {
-  route = injectRoute('/user-with-resolver/:userId');
-}
+    imports: [RouterOutlet],
+  })
+  class UserWithDataComponent {
+    route = injectTypedRoute('/user-with-resolver/:userId');
+  }
 
-const rootRoute = createRootRoute();
-const postsRoute = createRoute({
-  path: 'posts/:postId',
-  getParentRoute: () => userRoute,
-  component: PostsComponent,
-});
-const userRoute = createRoute({
-  path: 'user/:userId',
-  getParentRoute: () => rootRoute,
-  component: UserComponent,
-});
-userRoute.children = [postsRoute];
+  const rootRoute = createRootRoute();
+  const postsRoute = createRoute({
+    path: 'posts/:postId',
+    getParentRoute: () => userRoute,
+    component: PostsComponent,
+  });
+  const userRoute = createRoute({
+    path: 'user/:userId',
+    getParentRoute: () => rootRoute,
+    component: UserComponent,
+  });
+  userRoute.children = [postsRoute];
 
-const userRouteWithResolver = createRoute({
-  path: 'user-with-resolver/:userId',
-  getParentRoute: () => rootRoute,
-  component: UserWithDataComponent,
-  resolve: {
-    user: (route) => ({id: route.params.userId, name: 'Angular'}),
-  },
-});
-// Type test for userRouteWithResolver
-{
-  type T = RouteParams<typeof userRouteWithResolver>;
-  const p: T = {userId: 'a'};
-  const k: keyof T = 'userId';
-  // @ts-expect-error
-  const p2: T = {};
-  // @ts-expect-error
-  const k2: keyof T = 'wrong';
-}
-const postsRouteWithResolver = createRoute({
-  path: 'posts/:postId',
-  getParentRoute: () => userRouteWithResolver,
-  component: PostsWithDataComponent,
-  resolve: {
-    post: (route) => {
-      const user = route.data.user;
-      const postId: string = route.params.postId;
-      const userId: string = route.params.userId;
+  const userRouteWithResolver = createRoute({
+    path: 'user-with-resolver/:userId',
+    getParentRoute: () => rootRoute,
+    component: UserWithDataComponent,
+    resolve: {
+      user: (route) => ({id: route.params.userId, name: 'Angular'}),
+    },
+  });
+  // Type test for userRouteWithResolver
+  {
+    type T = RouteParams<typeof userRouteWithResolver>;
+    const p: T = {userId: 'a'};
+    const k: keyof T = 'userId';
+    // @ts-expect-error
+    const p2: T = {};
+    // @ts-expect-error
+    const k2: keyof T = 'wrong';
+  }
+  const postsRouteWithResolver = createRoute({
+    path: 'posts/:postId',
+    getParentRoute: () => userRouteWithResolver,
+    component: PostsWithDataComponent,
+    resolve: {
+      post: (route) => {
+        const user = route.data.user;
+        const postId: string = route.params.postId;
+        const userId: string = route.params.userId;
+        // @ts-expect-error
+        const nonExistent: string = route.params.nonExistent;
+        return {id: postId, title: `Post by ${user.name}`};
+      },
+    },
+  });
+  // Type test for postsRouteWithResolver
+  {
+    type T = RouteParams<typeof postsRouteWithResolver>;
+    const p: T = {userId: 'a', postId: 'b'};
+    const k: keyof T = 'userId';
+    const k2: keyof T = 'postId';
+    // @ts-expect-error
+    const p2: T = {userId: 'a'};
+    // @ts-expect-error
+    const k3: keyof T = 'wrong';
+  }
+  userRouteWithResolver.children = [postsRouteWithResolver];
+
+  const setResolversRoute = createRoute({
+    path: 'set-resolvers/:userId',
+    getParentRoute: () => rootRoute,
+    component: SetResolversComponent,
+  }).setResolvers({
+    user: (route) => {
+      const id: string = route.params.userId;
       // @ts-expect-error
       const nonExistent: string = route.params.nonExistent;
-      return {id: postId, title: `Post by ${user.name}`};
+      return {id, name: 'Set Angular'};
     },
-  },
-});
-// Type test for postsRouteWithResolver
-{
-  type T = RouteParams<typeof postsRouteWithResolver>;
-  const p: T = {userId: 'a', postId: 'b'};
-  const k: keyof T = 'userId';
-  const k2: keyof T = 'postId';
-  // @ts-expect-error
-  const p2: T = {userId: 'a'};
-  // @ts-expect-error
-  const k3: keyof T = 'wrong';
-}
-userRouteWithResolver.children = [postsRouteWithResolver];
+  });
 
-const setResolversRoute = createRoute({
-  path: 'set-resolvers/:userId',
-  getParentRoute: () => rootRoute,
-  component: SetResolversComponent,
-}).setResolvers({
-  user: (route) => {
-    const id: string = route.params.userId;
-    // @ts-expect-error
-    const nonExistent: string = route.params.nonExistent;
-    return {id, name: 'Set Angular'};
-  },
-});
+  const appRoutes: Routes = [userRoute, userRouteWithResolver, setResolversRoute];
 
-const appRoutes: Routes = [userRoute, userRouteWithResolver, setResolversRoute];
+  const routeMap = {
+    '/user/:userId': userRoute,
+    '/user/:userId/posts/:postId': postsRoute,
+    '/user-with-resolver/:userId': userRouteWithResolver,
+    '/user-with-resolver/:userId/posts/:postId': postsRouteWithResolver,
+    '/set-resolvers/:userId': setResolversRoute,
+  } as const;
 
-const routeMap = {
-  '/user/:userId': userRoute,
-  '/user/:userId/posts/:postId': postsRoute,
-  '/user-with-resolver/:userId': userRouteWithResolver,
-  '/user-with-resolver/:userId/posts/:postId': postsRouteWithResolver,
-  '/set-resolvers/:userId': setResolversRoute,
-} as const;
+  type RouteMap = typeof routeMap;
 
-type RouteMap = typeof routeMap;
-
-declare module '../src/typed_router' {
-  interface Register {
-    routeMap: RouteMap;
+  /**
+   * Test-specific helper to call `injectRoute` with the local `RouteMap`.
+   * This avoids global declaration merging and TypeScript's partial inference issues
+   * (we would want to provide just the RouteMap generic to injectRoute, but that
+   * causes TypeScript to try to infer the TPath from the entire global map).
+   */
+  function injectTypedRoute<TPath extends AllPaths<RouteMap>>(path: TPath) {
+    return injectRoute<RouteMap, TPath>(path);
   }
-}
 
-describe('TypedRouter', () => {
+  /**
+   * Test-specific helper to call `injectNavigate` with the local `RouteMap`.
+   * This avoids global declaration merging and TypeScript's partial inference issues.
+   */
+  function injectTypedNavigate<TFrom extends AllPaths<RouteMap>>(options: {from: TFrom}) {
+    return injectNavigate<RouteMap, TFrom>(options);
+  }
+
   describe('type inference', () => {
     it('should infer params from path', async () => {
       TestBed.configureTestingModule({
@@ -258,9 +270,7 @@ describe('TypedRouter', () => {
       const router: Router<Record<string, AnyRoute>> = TestBed.inject(Router);
       await router.navigate('/some/unregistered/path', {id: 123, other: 'abc'});
 
-      const route = TestBed.runInInjectionContext(() =>
-        injectRoute<any>('/some/unregistered/path'),
-      );
+      const route = TestBed.runInInjectionContext(() => injectRoute('/some/unregistered/path'));
       route.data().anything;
       route.params().anything;
 
@@ -274,7 +284,7 @@ describe('TypedRouter', () => {
         providers: [provideRouter(appRoutes)],
       });
       const harness = await RouterTestingHarness.create('/');
-      const typedRouter = TestBed.runInInjectionContext(injectRouter);
+      const typedRouter = TestBed.runInInjectionContext(() => injectRouter<RouteMap>());
       await typedRouter.navigate('/user/:userId', {userId: '123'});
       harness.fixture.detectChanges();
       await harness.fixture.whenStable();
@@ -286,7 +296,7 @@ describe('TypedRouter', () => {
         providers: [provideRouter(appRoutes)],
       });
       const harness = await RouterTestingHarness.create('/');
-      const typedRouter = TestBed.runInInjectionContext(injectRouter);
+      const typedRouter = TestBed.runInInjectionContext(() => injectRouter<RouteMap>());
 
       await typedRouter.navigate('/user/:userId/posts/:postId', {
         userId: '123',
@@ -314,7 +324,7 @@ describe('TypedRouter', () => {
         providers: [provideRouter(appRoutes)],
       });
       const harness = await RouterTestingHarness.create('/');
-      const typedRouter = TestBed.runInInjectionContext(injectRouter);
+      const typedRouter = TestBed.runInInjectionContext(() => injectRouter<RouteMap>());
       await typedRouter.navigate({
         from: userRoute.fullPath,
         to: 'posts/:postId',
@@ -333,7 +343,7 @@ describe('TypedRouter', () => {
         providers: [provideRouter(appRoutes)],
       });
       const harness = await RouterTestingHarness.create('/user/123');
-      const typedRouter = TestBed.runInInjectionContext(injectRouter);
+      const typedRouter = TestBed.runInInjectionContext(() => injectRouter<RouteMap>());
       await typedRouter.navigate({
         from: '/user/:userId',
         to: '../user-with-resolver/:userId',
@@ -351,7 +361,7 @@ describe('TypedRouter', () => {
         providers: [provideRouter(appRoutes)],
       });
       const harness = await RouterTestingHarness.create('/user/123');
-      const typedRouter = TestBed.runInInjectionContext(injectRouter);
+      const typedRouter = TestBed.runInInjectionContext(() => injectRouter<RouteMap>());
       await typedRouter.navigate({
         from: '/user/:userId',
         to: '.',
@@ -367,7 +377,9 @@ describe('TypedRouter', () => {
 
     it('should navigate with injectNavigate', async () => {
       TestBed.configureTestingModule({providers: [provideRouter(appRoutes)]});
-      const navigate = TestBed.runInInjectionContext(() => injectNavigate({from: '/user/:userId'}));
+      const navigate = TestBed.runInInjectionContext(() =>
+        injectTypedNavigate({from: '/user/:userId'}),
+      );
       navigate({to: 'posts/:postId', params: {userId: 'abc', postId: 'def'}});
       navigate({to: './', params: {userId: 'abc'}});
       // @ts-expect-error

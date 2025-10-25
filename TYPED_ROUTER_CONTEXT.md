@@ -353,6 +353,39 @@ This feature represents a significant improvement in developer experience for im
     }
     ```
 
+### Isolated Testing without Global State
+
+The primary developer experience for the typed router relies on global declaration merging (`declare module`) to make the application's `RouteMap` available to injection functions. While this is ergonomic for application code, it is not ideal for unit tests, as it creates a dependency on global state.
+
+A naive attempt to solve this by passing the `RouteMap` as an explicit generic (e.g., `injectRoute<MyRouteMap>('/path')`) fails due to a quirk in TypeScript's inference. When the first generic argument is provided explicitly, TypeScript stops inferring subsequent generics from the function's value arguments, leading to incorrect types.
+
+The recommended pattern for isolated, self-contained unit tests is to create **test-specific helper functions** that wrap the production injection functions.
+
+```typescript
+// In a test file:
+
+// 1. Define the local route map for the test
+const testRouteMap = { /* ... */ } as const;
+type TestRouteMap = typeof testRouteMap;
+
+// 2. Create a helper that "bakes in" the local route map type
+function injectTypedRoute<TPath extends AllPaths<TestRouteMap>>(path: TPath) {
+  // The helper calls the *real* production function with the correct types
+  return injectRoute<TestRouteMap, TPath>(path);
+}
+
+// 3. Use the helper in test components
+class MyTestComponent {
+  // Type inference now works perfectly, with no globals
+  route = injectTypedRoute('/some/test/path');
+}
+```
+
+This approach has several advantages:
+-   **Test Isolation:** The test is fully self-contained and does not read from or write to any global state.
+-   **Correct Type Inference:** It solves the TypeScript inference problem, providing full type safety within the test.
+-   **No Runtime Divergence:** The helper is a compile-time-only wrapper. It calls the actual production `injectRoute` function, so the runtime behavior being tested is identical to the production code.
+
 ### Example Usage
 
 ```typescript

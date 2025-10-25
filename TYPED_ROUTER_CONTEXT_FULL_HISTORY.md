@@ -718,3 +718,62 @@ The simulation attempted to do both at once, which led to several incorrect assu
 -   **Testing is Paramount:** The test suite for the generator must be comprehensive, covering flat structures, deep nesting, layouts, implicit layouts, and dynamic parameters at various levels. The tests should validate both the generated runtime tree and the `tsTypeDeclarations` string.
 
 While the implementation attempts were unsuccessful, the process solidified the architectural design and clarified the exact requirements for a future build-time implementation. The `TYPED_ROUTER_CONTEXT.md` has been updated to reflect this detailed design, providing a clear blueprint for a future effort.
+
+## 15. Learnings from Test Isolation and Advanced Type Inference
+
+A significant refinement was made to the testing strategy for the typed router, driven by the goal of creating fully isolated unit tests that do not depend on global state. This process revealed a subtle but critical aspect of TypeScript's generic type inference.
+
+### The Goal: Removing Global Dependencies from Tests
+
+The primary developer experience for the typed router relies on TypeScript's declaration merging (`declare module '@angular/router' { ... }`) to make the application's `RouteMap` type globally available. While this is highly ergonomic for application code, it's a poor practice for unit tests, as it creates a dependency on global state that can make tests brittle and hard to reason about. The goal was to refactor the test suite to be completely self-contained.
+
+### The Initial (Failed) Approach and Diagnosis
+
+The seemingly obvious solution was to remove the global declaration and instead pass the test's local `RouteMap` type as an explicit generic argument to the injection functions, like so:
+
+```typescript
+// The attempted, but flawed, solution
+const router = injectRouter<RouteMap>();
+const route = injectRoute<RouteMap>('/some/path');
+```
+
+This approach failed with confusing type errors. The root cause was a subtle quirk in how TypeScript infers generic types. The signature for `injectRoute` was effectively: `injectRoute<TRouteMap, TPath extends AllPaths<TRouteMap>>(_path: TPath)`.
+
+When we called `injectRoute<RouteMap>('/some/path')`, we explicitly provided the *first* generic (`TRouteMap`). This caused TypeScript to stop using the function's arguments to infer the *rest* of the generics. Instead of inferring `TPath` as the specific literal type `'/some/path'`, it fell back to the generic's default constraint, which was `AllPaths<RouteMap>`. This is the **union of all possible paths**.
+
+As a result, the function returned a union of all possible route types, causing the compiler to complain that properties like `postId` didn't exist on every member of that union.
+
+### The Solution: Test-Specific Helper Functions
+
+The correct solution, which provides full isolation and perfect type inference, is to create small, test-specific helper functions.
+
+```typescript
+// In the test file:
+
+// The local route map for this test suite
+const routeMap = { /* ... */ } as const;
+type RouteMap = typeof routeMap;
+
+/**
+ * A helper that "bakes in" the local RouteMap type.
+ */
+function injectTypedRoute<TPath extends AllPaths<RouteMap>>(path: TPath) {
+  // It calls the REAL production function with both generics correctly specified.
+  return injectRoute<RouteMap, TPath>(path);
+}
+
+// A similar helper was created for injectNavigate
+function injectTypedNavigate<TFrom extends AllPaths<RouteMap>>(options: {from: TFrom}) {
+  return injectNavigate<RouteMap, TFrom>(options);
+}
+```
+
+This pattern works perfectly because:
+1.  The helper function (`injectTypedRoute`) only has one generic parameter, `TPath`.
+2.  When a component calls `injectTypedRoute('/user/:userId')`, TypeScript has no ambiguity. It infers `TPath` directly from the string literal argument, resulting in a specific, correct route type.
+
+### Ensuring No Implementation Divergence
+
+A concern was raised that this pattern could lead to the test implementation diverging from the production code's intended usage. This concern was addressed by recognizing that the helper is a **compile-time-only wrapper**, not a runtime mock. It contains no logic of its own and its only purpose is to call the *actual production function* with the correct types. This means the exact same runtime code is executed in the test, eliminating the risk of divergence.
+
+This helper function pattern is now the recommended best practice for writing isolated unit tests for the typed router, ensuring tests are robust, self-contained, and type-safe.
