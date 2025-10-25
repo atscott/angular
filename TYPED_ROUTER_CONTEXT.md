@@ -105,6 +105,145 @@ class MyComponent {
 
 This hybrid approach provides a highly performant and scalable solution for type-safe routing, preserving powerful type-inference features while aligning with familiar Angular patterns.
 
+## 3. File-Based Routing (Proposed Design)
+
+Building on the core typed API, file-based routing offers a zero-configuration experience by deriving the route structure from the file system. This design is heavily inspired by TanStack Router's file-based routing, which uses a two-stage process involving a build-time generator and a runtime library.
+
+### Overview: A Two-Stage Process
+
+1.  **Build-Time Generation**: A build tool plugin (e.g., for Vite or Bazel) scans the file system for route files. It analyzes the directory structure and file names to generate a single file (e.g., `routeTree.gen.ts`) that contains both the runtime route tree and the TypeScript types needed for inference.
+2.  **Runtime**: The Angular application imports the generated `routeTree` and provides it to the router. The developer experience within route files is fully type-safe, thanks to the generated types.
+
+### 1. The Build-Time Generator
+
+The generator is responsible for:
+-   **Scanning:** Watching a designated directory (e.g., `src/app/routes`) for files.
+-   **Interpreting Conventions:** Understanding file and folder naming conventions:
+    -   `_layout.ts`: Defines a parent layout route for a directory. It does not add a path segment.
+    -   `index.ts`: Defines the index route for a directory (e.g., `/posts/index.ts` becomes `/posts`).
+    -   `:param.ts`: Defines a dynamic route parameter (e.g., `posts/:postId.ts`).
+-   **Generating Code:** Creating a file that contains two key pieces:
+    1.  **The Runtime Route Tree:** Imports all user-defined `FileRoute` objects and assembles them into a tree structure by explicitly linking them with the `getParentRoute` property.
+    2.  **The Type Map (`FileRoutesByPath`):** Generates a `declare module` block that merges with the `@angular/router` module. This block defines the `FileRoutesByPath` interface, which acts as a "type phone book," mapping a route's full path string to the *type* of its parent route.
+
+### 2. The User's Role: Defining Route Files
+
+The developer defines routes by creating files in the routes directory. Each file exports a `Route` constant created with the `createFileRoute` factory function.
+
+```typescript
+// src/app/routes/posts/:postId.ts
+import { createFileRoute } from '@angular/router';
+import { PostsService } from '../posts.service';
+
+export const Route = createFileRoute('/posts/:postId')({
+  resolve: {
+    // `params` is fully typed here as { postId: string }
+    // because TypeScript has recursively looked up its parent's params.
+    post: (route) => inject(PostsService).getPost(route.params.postId),
+  },
+  component: PostComponent,
+});
+```
+The string `'/posts/:postId'` is the crucial key. It allows TypeScript to look up this route's entry in the generated `FileRoutesByPath` interface.
+
+### 3. How Type Inference Works: The `FileRoutesByPath` Interface
+
+The magic of parent-aware type inference comes from TypeScript's ability to perform recursive type lookups using the generated `FileRoutesByPath` interface.
+
+1.  **The Generated "Phone Book"**: The build tool generates this interface, which only contains type pointers, not final computed types.
+    ```typescript
+    // In routeTree.gen.ts (simplified)
+    declare module '@angular/router' {
+      interface FileRoutesByPath {
+        '/posts/:postId': {
+          parentRoute: typeof import('./routes/posts/_layout').Route
+        },
+        '/posts': { // from _layout.ts
+          parentRoute: typeof import('./routes/__root').Route
+        }
+      }
+    }
+    ```
+2.  **The `createFileRoute` Call**: When the developer calls `createFileRoute('/posts/:postId')`, TypeScript uses that key to look into the global `FileRoutesByPath` interface.
+3.  **Recursive Type Lookup**: TypeScript finds the `parentRoute` type pointer (`typeof import('./routes/posts/_layout').Route`). It then "jumps" to that file, analyzes its type, and finds *its* parent. This process repeats until the root is reached.
+4.  **Type Aggregation**: As TypeScript walks up the tree, it collects all the `params` and `data` types from each parent, making the aggregated types available to the child route's configuration.
+
+### Example Workflow
+
+**1. File Structure:**
+```
+src/app/routes/
+├── __root.ts         # Defines the root layout, component, etc.
+└── posts/
+    ├── _layout.ts    # Parent route for /posts
+    └── :postId.ts    # Child route: /posts/:postId
+```
+
+**2. User-Defined Route Files:**
+```typescript
+// src/app/routes/__root.ts
+import { createRootRoute, Outlet } from '@angular/router';
+
+export const Route = createRootRoute({
+  component: () => `<h1>Root Layout</h1><router-outlet />`,
+});
+```
+```typescript
+// src/app/routes/posts/_layout.ts
+import { createFileRoute, Outlet } from '@angular/router';
+
+export const Route = createFileRoute('/posts')({
+  // This path corresponds to the directory structure
+  component: () => `<h2>Posts Layout</h2><router-outlet />`,
+});
+```
+```typescript
+// src/app/routes/posts/:postId.ts
+import { createFileRoute } from '@angular/router';
+
+export const Route = createFileRoute('/posts/:postId')({
+  // `route.params.postId` is a typed string here!
+  resolve: { post: (route) => ({ id: route.params.postId }) },
+  component: PostComponent,
+});
+```
+
+**3. Generated `routeTree.gen.ts` (by the build tool):**
+```typescript
+// This file is generated and should not be edited manually.
+
+import { Route as rootRoute } from './routes/__root'
+import { Route as PostsLayoutImport } from './routes/posts/_layout'
+import { Route as PostsPostIdImport } from './routes/posts/:postId'
+
+const PostsLayoutRoute = PostsLayoutImport.update({
+  path: '/posts',
+  getParentRoute: () => rootRoute,
+} as any)
+
+const PostsPostIdRoute = PostsPostIdImport.update({
+  path: '/:postId',
+  getParentRoute: () => PostsLayoutRoute,
+} as any)
+
+export const routeTree = rootRoute.addChildren([
+  PostsLayoutRoute.addChildren([PostsPostIdRoute]),
+])
+
+// The generated type map that powers the type inference
+declare module '@angular/router' {
+  interface FileRoutesByPath {
+    '/posts': {
+      parentRoute: typeof rootRoute
+    },
+    '/posts/:postId': {
+      parentRoute: typeof PostsLayoutImport
+    }
+  }
+}
+```
+This two-stage system provides a powerful, type-safe, and configuration-free routing experience.
+
 ### Runtime Implementation
 
 -   **Deferred Initialization**: To support advanced routing patterns like file-based routing, parent-dependent properties (such as `fullPath`) are not calculated in the route's constructor. Instead, each route has an `init()` method that is called by its parent (specifically, within the `.addChildren()` method). This ensures that the parent is fully defined before the child's properties are computed.

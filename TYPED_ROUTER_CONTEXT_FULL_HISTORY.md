@@ -688,3 +688,33 @@ const appRoutes = [{ ...parentRoute, children: [childRoute] }];
 
 This pattern is a fundamental requirement for using the typed router and ensures the type inference engine works reliably.
 
+## 14. Learnings from File-Based Routing Implementation
+
+The attempt to implement a file-based routing generator, even as a simulation, provided critical insights into the complexity of the two-stage process and the subtleties of mimicking a build-time tool at runtime.
+
+### The Core Challenge: Build-Time vs. Runtime Simulation
+
+The fundamental difficulty was simulating a build-time code generator within a runtime-only context (i.e., a single function call). A true build-time tool has two distinct phases:
+1.  **Analysis:** It scans the file system and builds a model of the route tree. From this model, it generates the `FileRoutesByPath` type interface.
+2.  **Code Generation:** It writes a `.ts` file containing the runtime route tree, complete with `import` statements and explicit `getParentRoute` links.
+
+The simulation attempted to do both at once, which led to several incorrect assumptions and logical flaws.
+
+### Evolution of the Generator Logic
+
+1.  **Initial Single-Pass Attempt:** The first implementation tried to process a flat list of file paths in a single pass. It used a cache to look up parent routes as it iterated. This failed because it couldn't correctly handle implicit parent routes (directories without `_layout.ts` files) and complex nesting.
+
+2.  **Two-Stage `FileRoute.update()` Approach:** The next iteration correctly identified the need for a two-stage process. It introduced a `FileRoute` class with an `.update()` method. The generator would first create a file-system tree, then traverse it, calling `.update()` to link parents and children. This was architecturally closer to the target but still failed due to flawed tree-traversal logic, particularly in how it handled layout routes versus implicit directory routes.
+
+3.  **Recursive `processTree` Attempts:** Several recursive implementations were attempted to process the file-system tree. These repeatedly failed to correctly distinguish between a layout route (which should contain its siblings as children) and an implicit directory route (which should act as a parent for the files and folders within it). The logic for assigning children and returning the correct set of routes from the recursive calls was consistently incorrect.
+
+4.  **Final Iterative Approach:** The last attempt switched to a non-recursive, iterative approach. While this also failed, it highlighted the core issue: managing the parent cache and correctly identifying the immediate parent for any given file path is the most complex part of the problem.
+
+### Key Learnings and Future Direction
+
+-   **A True Generator is Necessary:** Simulating the generator at runtime is fraught with complexity. A robust solution requires a dedicated build tool (e.g., a Vite plugin or Bazel rule) that can perform static analysis and generate actual TypeScript code.
+-   **The `FileRoutesByPath` is Critical:** The entire type-safety model hinges on the generated `FileRoutesByPath` interface. The generator's primary role is to create this "type phone book" accurately.
+-   **Clear Conventions are Key:** The file-naming conventions (`_layout.ts`, `index.ts`, `:param.ts`) must be unambiguous and strictly enforced by the generator. The logic must correctly handle all combinations of these conventions.
+-   **Testing is Paramount:** The test suite for the generator must be comprehensive, covering flat structures, deep nesting, layouts, implicit layouts, and dynamic parameters at various levels. The tests should validate both the generated runtime tree and the `tsTypeDeclarations` string.
+
+While the implementation attempts were unsuccessful, the process solidified the architectural design and clarified the exact requirements for a future build-time implementation. The `TYPED_ROUTER_CONTEXT.md` has been updated to reflect this detailed design, providing a clear blueprint for a future effort.
