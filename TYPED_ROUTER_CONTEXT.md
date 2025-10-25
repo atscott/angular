@@ -27,7 +27,7 @@ The core of the global type-safety will be powered by a "flat map" of route path
 
 3.  **`.setResolvers()` method**: This method allows resolver functions to be attached to a route after its initial definition. This is a key feature for architectural modularity, as it allows resolvers to be defined in separate files from their routes, preventing circular module dependencies.
 
-4.  **`fullPath` property**: Each `RouteBuilder` instance will have a `fullPath` property. This property is not available at creation time but is calculated when the route tree is provided to the router. It provides a type-safe string that can be used for navigation and in `injectRoute`, avoiding "magic strings".
+4.  **`id` and `fullPath` properties**: Each `RouteBuilder` instance will have an `id` and a `fullPath` property. These properties are not available at creation time but are calculated when the route tree is provided to the router. The `fullPath` provides a type-safe string that can be used for navigation and in `injectRoute`, avoiding "magic strings". The `id` is a unique identifier for the route within the tree.
 
 5.  **Standard `children` and `loadChildren`**: The fluent `.addChildren()` method is removed. The `RouteBuilder` instances returned by `createRoute` are composed into a route tree using the familiar `children` and `loadChildren` properties.
 
@@ -39,7 +39,7 @@ The core of the global type-safety will be powered by a "flat map" of route path
 
 ### Runtime Initialization
 
-To support features like `fullPath`, the route tree undergoes an initialization step. When `provideRouter` is called, it traverses the entire route tree, establishes the parent-child relationships, and calls an internal `init()` method on each `RouteBuilder` instance. This `init()` method is responsible for calculating the `fullPath` based on the parent's path. This deferred initialization ensures that all properties are correctly configured before the router starts its first navigation.
+To support features like `fullPath` and `id`, the route tree undergoes an initialization step. When `provideRouter` is called, it traverses the entire route tree, establishes the parent-child relationships, and calls an internal `init()` method on each `RouteBuilder` instance. This `init()` method is responsible for calculating the `fullPath` and `id` based on the parent's properties. This deferred initialization ensures that all properties are correctly configured before the router starts its first navigation.
 
 ### Example of Manual Map Definition
 
@@ -124,7 +124,7 @@ The generator is responsible for:
     -   `:param.ts`: Defines a dynamic route parameter (e.g., `posts/:postId.ts`).
 -   **Generating Code:** Creating a file that contains two key pieces:
     1.  **The Runtime Route Tree:** Imports all user-defined `FileRoute` objects and assembles them into a tree structure by explicitly linking them with the `getParentRoute` property.
-    2.  **The Type Map (`FileRoutesByPath`):** Generates a `declare module` block that merges with the `@angular/router` module. This block defines the `FileRoutesByPath` interface, which acts as a "type phone book," mapping a route's full path string to the *type* of its parent route.
+    2.  **The Type Map (`FileRoutesByPath`):** Generates a `declare module` block that merges with the `@angular/router` module. This block defines the `FileRoutesByPath` interface, which acts as a "type phone book," mapping a route's unique **file-based ID** (e.g., `'/posts/$postId'`) to a rich object containing its `id`, `path`, `fullPath`, and the *type* of its parent route.
 
 ### 2. The User's Role: Defining Route Files
 
@@ -144,27 +144,33 @@ export const Route = createFileRoute('/posts/:postId')({
   component: PostComponent,
 });
 ```
-The string `'/posts/:postId'` is the crucial key. It allows TypeScript to look up this route's entry in the generated `FileRoutesByPath` interface.
+The string `'/posts/:postId'` is the crucial key. It is the route's file-based ID, derived from its location in the filesystem. It allows TypeScript to look up this route's entry in the generated `FileRoutesByPath` interface.
 
 ### 3. How Type Inference Works: The `FileRoutesByPath` Interface
 
 The magic of parent-aware type inference comes from TypeScript's ability to perform recursive type lookups using the generated `FileRoutesByPath` interface.
 
-1.  **The Generated "Phone Book"**: The build tool generates this interface, which only contains type pointers, not final computed types.
+1.  **The Generated "Phone Book"**: The build tool generates this interface, which contains rich type information for each route, keyed by its unique file-based ID.
     ```typescript
     // In routeTree.gen.ts (simplified)
     declare module '@angular/router' {
       interface FileRoutesByPath {
         '/posts/:postId': {
-          parentRoute: typeof import('./routes/posts/_layout').Route
+          id: '/posts/:postId';
+          path: ':postId';
+          fullPath: '/posts/:postId';
+          parentRoute: typeof import('./routes/posts/_layout').Route;
         },
         '/posts': { // from _layout.ts
-          parentRoute: typeof import('./routes/__root').Route
+          id: '/posts';
+          path: 'posts';
+          fullPath: '/posts';
+          parentRoute: typeof import('./routes/__root').Route;
         }
       }
     }
     ```
-2.  **The `createFileRoute` Call**: When the developer calls `createFileRoute('/posts/:postId')`, TypeScript uses that key to look into the global `FileRoutesByPath` interface.
+2.  **The `createFileRoute` Call**: When the developer calls `createFileRoute('/posts/$postId')`, TypeScript uses that key to look into the global `FileRoutesByPath` interface and retrieves the full type information.
 3.  **Recursive Type Lookup**: TypeScript finds the `parentRoute` type pointer (`typeof import('./routes/posts/_layout').Route`). It then "jumps" to that file, analyzes its type, and finds *its* parent. This process repeats until the root is reached.
 4.  **Type Aggregation**: As TypeScript walks up the tree, it collects all the `params` and `data` types from each parent, making the aggregated types available to the child route's configuration.
 
@@ -234,9 +240,15 @@ export const routeTree = rootRoute.addChildren([
 declare module '@angular/router' {
   interface FileRoutesByPath {
     '/posts': {
+      id: '/posts';
+      path: 'posts';
+      fullPath: '/posts';
       parentRoute: typeof rootRoute
     },
     '/posts/:postId': {
+      id: '/posts/:postId';
+      path: ':postId';
+      fullPath: '/posts/:postId';
       parentRoute: typeof PostsLayoutImport
     }
   }

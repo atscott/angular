@@ -10,6 +10,9 @@ import {Type} from '@angular/core';
 import {
   AnyRoute,
   BaseRoute,
+  CanActivateChildFn,
+  CanActivateFn,
+  CanDeactivateFn,
   ResolvedData,
   Route,
   RouteParams,
@@ -51,6 +54,19 @@ export function createFileRoute<
       data?: TData;
       resolve?: TResolvers;
       component?: Type<TComponent>;
+      canActivate?: CanActivateFn<
+        RouteParams<TParentRoute> & PathParams<TPath>,
+        ResolvedData<TParentRoute> & TData & {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}
+      >[];
+      canActivateChild?: CanActivateChildFn<
+        RouteParams<TParentRoute> & PathParams<TPath>,
+        ResolvedData<TParentRoute> & TData & {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}
+      >[];
+      canDeactivate?: CanDeactivateFn<
+        TComponent,
+        RouteParams<TParentRoute> & PathParams<TPath>,
+        ResolvedData<TParentRoute> & TData & {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}
+      >[];
     } & Omit<
       UntypedRoute,
       | 'path'
@@ -67,7 +83,8 @@ export function createFileRoute<
   ): BaseRoute<
     TPath,
     TPath,
-    RouteParams<TParentRoute>,
+    TPath,
+    RouteParams<TParentRoute> & PathParams<TPath>,
     ResolvedData<TParentRoute>,
     TData,
     {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}
@@ -78,6 +95,7 @@ export function createFileRoute<
 
 interface RouteNode {
   id: string;
+  fileId: string;
   filePath: string; // relative to routes dir
   variableName: string;
   importPath: string;
@@ -104,6 +122,16 @@ function findRouteFiles(dir: string, rootDir?: string): string[] {
 function createRouteNodes(files: string[], routesDir: string): RouteNode[] {
   return files.map((filePath) => {
     const filePathNoExt = filePath.substring(0, filePath.length - 3);
+
+    let fileId = `/${filePathNoExt}`;
+    if (fileId === '/__root') {
+      fileId = '/';
+    } else if (fileId.endsWith('/index')) {
+      fileId = fileId.slice(0, -'index'.length);
+    } else if (fileId === '/index') {
+      fileId = '/';
+    }
+
     const id = filePathNoExt.replace(/[^a-zA-Z0-9_]/g, '_');
     const variableName = `${id}Route`;
     // a/b/c -> a/b/c
@@ -118,6 +146,7 @@ function createRouteNodes(files: string[], routesDir: string): RouteNode[] {
 
     return {
       id,
+      fileId,
       filePath,
       variableName,
       importPath: `./${importPath}`,
@@ -214,7 +243,7 @@ function generateTypes(nodes: RouteNode[]): string {
     .filter((n) => n.filePath !== '__root.ts')
     .map(
       (n) =>
-        `    '${n.fullPath}': {\n      parentRoute: typeof ${n.parent!.variableName}Import\n    },`,
+        `    '${n.fileId}': {\n      parentRoute: typeof ${n.parent!.variableName}Import\n    },`,
     )
     .join('\n');
 

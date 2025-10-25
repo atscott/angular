@@ -777,3 +777,29 @@ This pattern works perfectly because:
 A concern was raised that this pattern could lead to the test implementation diverging from the production code's intended usage. This concern was addressed by recognizing that the helper is a **compile-time-only wrapper**, not a runtime mock. It contains no logic of its own and its only purpose is to call the *actual production function* with the correct types. This means the exact same runtime code is executed in the test, eliminating the risk of divergence.
 
 This helper function pattern is now the recommended best practice for writing isolated unit tests for the typed router, ensuring tests are robust, self-contained, and type-safe.
+
+## 16. Refining File-Based Routing and ID Generation
+
+A critical learning during the implementation phase was the refinement of how route IDs are generated and used, particularly for file-based routing. This brought the implementation much closer to the robust model used by TanStack Router and corrected several issues with type inference.
+
+### The Problem: Ambiguous Keys in the Type Map
+
+The initial design for file-based routing used the final, generated URL `fullPath` as the key in the `FileRoutesByPath` interface. This approach had a critical flaw: it was not guaranteed to be unique. For example, a layout route (e.g., `posts/_layout.ts`) and an index route (`posts/index.ts`) could both correspond to the same final URL (`/posts`), creating ambiguity in the type map and breaking type inference.
+
+### The Solution: Stable, File-Based IDs
+
+The solution was to adopt the pattern used by TanStack Router, which relies on a stable, unique ID derived directly from the file path.
+
+1.  **File-Based ID as the Key:** The `FileRoutesByPath` interface is now keyed by a unique ID generated from the route's file path (e.g., `'/posts/:postId'` for `posts/:postId.ts`). This key is predictable and guaranteed to be unique, providing a stable identifier for TypeScript's lookup mechanism.
+
+2.  **Richer Type Information:** The value in the `FileRoutesByPath` map was enhanced. Instead of only containing a pointer to the `parentRoute`, it now contains a rich object with all the necessary type information:
+    -   `id`: The route's own unique ID.
+    -   `path`: The path segment for this route.
+    -   `fullPath`: The full, composed URL path.
+    -   `parentRoute`: The type of the parent route.
+
+3.  **`createFileRoute` Update:** The `createFileRoute` function was updated to be called with this file-based ID. This allows it to perform a direct lookup into the `FileRoutesByPath` interface and extract all the necessary type information to correctly infer the generics for `TParentRoute`, `TPath`, `TFullPath`, and `TId`.
+
+4.  **`createRoute` Consistency:** To maintain consistency between manual and file-based routing, the `createRoute` function was also enhanced. It now accepts an optional `id` property (`TCustomId`) and uses a `ResolveId` type helper to compute the final `TId` by joining the parent's ID with the custom ID or path.
+
+This architectural refinement ensures that the type inference for file-based routing is robust, performant, and free from ambiguity. It aligns the internal mechanics of the typed router more closely with industry best practices and provides a solid foundation for building complex, type-safe routing configurations.

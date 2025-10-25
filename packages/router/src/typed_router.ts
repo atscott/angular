@@ -145,16 +145,19 @@ type RouteForPath<
 
 export interface Route<
   TPath extends string = string,
+  TId extends string = string,
   TFullPath extends string = string,
   TParams extends Record<string, unknown> = Record<string, unknown>,
   TParentData extends Record<string, unknown> = Record<string, unknown>,
   TData extends Record<string, unknown> = Record<string, unknown>,
   TResolved extends Record<string, unknown> = Record<string, unknown>,
 > extends UntypedRoute {
+  id: TId;
   fullPath: TFullPath;
   // Note: this is a branding, not a real property
   type?: {
     path: TPath;
+    id: TId;
     fullPath: TFullPath;
     params: TParams;
     parentData: TParentData;
@@ -162,7 +165,7 @@ export interface Route<
     resolved: TResolved;
   };
 }
-export type AnyRoute = Route<any, any, any, any, any, any>;
+export type AnyRoute = Route<any, any, any, any, any, any, any>;
 
 export type PathParams<TPath extends string> =
   // Split the path by slashes
@@ -176,10 +179,10 @@ export type PathParams<TPath extends string> =
         Record<never, never>;
 
 export type RouteParams<T extends Route> =
-  T extends Route<any, any, infer TParams, any, any, any> ? TParams : {};
+  T extends Route<any, any, any, infer TParams, any, any, any> ? TParams : {};
 
 export type ResolvedData<T extends Route | undefined> =
-  T extends Route<string, string, any, infer TParentData, infer TData, infer TResolved>
+  T extends Route<string, string, string, any, infer TParentData, infer TData, infer TResolved>
     ? TParentData & TData & TResolved
     : {};
 
@@ -191,7 +194,7 @@ export type ActivatedRouteSnapshot<
   data: TData;
 };
 
-type CanActivateFn<
+export type CanActivateFn<
   TParams extends Record<string, unknown>,
   TData extends Record<string, unknown>,
 > = (
@@ -199,7 +202,7 @@ type CanActivateFn<
   state: RouterStateSnapshot,
 ) => MaybeAsync<GuardResult>;
 
-type CanActivateChildFn<
+export type CanActivateChildFn<
   TParams extends Record<string, unknown>,
   TData extends Record<string, unknown>,
 > = (
@@ -207,7 +210,7 @@ type CanActivateChildFn<
   state: RouterStateSnapshot,
 ) => MaybeAsync<GuardResult>;
 
-type CanDeactivateFn<
+export type CanDeactivateFn<
   T,
   TParams extends Record<string, unknown>,
   TData extends Record<string, unknown>,
@@ -228,13 +231,15 @@ export type ResolverMap<
 
 export class BaseRoute<
   TPath extends string,
+  TId extends string,
   TFullPath extends string,
   TParams extends Record<string, unknown>,
   TParentData extends Record<string, unknown>,
   TData extends Record<string, unknown>,
   TResolve extends Record<string, unknown>,
-> implements Route<TPath, TFullPath, TParams, TParentData, TData, TResolve>
+> implements Route<TPath, TId, TFullPath, TParams, TParentData, TData, TResolve>
 {
+  public id!: TId;
   public parent?: Route;
   public path: TPath;
   public fullPath!: TFullPath;
@@ -248,6 +253,7 @@ export class BaseRoute<
   public canDeactivate?: CanDeactivateFn<any, TParams, TParentData & TData>[];
   type?: {
     path: TPath;
+    id: TId;
     fullPath: TFullPath;
     params: TParams;
     parentData: TParentData;
@@ -273,12 +279,22 @@ export class BaseRoute<
     this.parent = parent;
     const parentFullPath = parent?.fullPath ?? '';
     this.fullPath = joinPaths(parentFullPath, this.path) as TFullPath;
+
+    const isRoot = !parent;
+    if (isRoot) {
+      this.id = '/' as TId;
+    } else {
+      // This is a bit of a hack to get the custom id from the options.
+      const customId = (this as any).id ?? this.path;
+      this.id = joinPaths(parent.id, customId) as TId;
+    }
   }
 
   setResolvers<const TNewResolvers extends ResolverMap<TParams, TParentData & TData>>(
     resolvers: TNewResolvers,
   ): BaseRoute<
     TPath,
+    TId,
     TFullPath,
     TParams,
     TParentData,
@@ -304,6 +320,15 @@ export class BaseRoute<
   }
 }
 
+type ResolveId<
+  TParentRoute extends Route | undefined,
+  TCustomId extends string | undefined,
+  TPath extends string,
+> =
+  TParentRoute extends Route<any, infer TParentId, any, any, any, any, any>
+    ? JoinPath<TParentId, TCustomId extends string ? TCustomId : TPath>
+    : '/';
+
 export function createRoute<
   TPath extends string,
   TParentRoute extends Route | undefined,
@@ -313,9 +338,11 @@ export function createRoute<
     (TParentRoute extends Route ? ResolvedData<TParentRoute> : {}) & TData
   >,
   TComponent,
+  const TCustomId extends string | undefined = undefined,
 >(
   route: {
     path: TPath;
+    id?: TCustomId;
     getParentRoute?: () => TParentRoute;
     data?: TData;
     resolve?: TResolvers;
@@ -339,6 +366,7 @@ export function createRoute<
   } & Omit<
     UntypedRoute,
     | 'path'
+    | 'id'
     | 'data'
     | 'resolve'
     | 'children'
@@ -350,7 +378,8 @@ export function createRoute<
   >,
 ): BaseRoute<
   TPath,
-  JoinPath<TParentRoute extends Route<any, infer P> ? P : '', TPath>,
+  ResolveId<TParentRoute, TCustomId, TPath>,
+  JoinPath<TParentRoute extends Route<any, any, infer P> ? P : '', TPath>,
   (TParentRoute extends Route ? RouteParams<TParentRoute> : {}) & PathParams<TPath>,
   TParentRoute extends Route ? ResolvedData<TParentRoute> : {},
   TData,
@@ -375,7 +404,7 @@ export function createRootRoute<TData extends Record<string, unknown> = {}>(
   > & {
     data?: TData;
   } = {},
-): BaseRoute<'', '/', {}, {}, TData, {}> {
+): BaseRoute<'', '/', '/', {}, {}, TData, {}> {
   // The root route has an empty path.
   const newRoute = new BaseRoute({path: '', ...route});
   newRoute.init();
@@ -496,7 +525,7 @@ export type SnapshotFromRoute<TRoute extends Route> = Omit<
   'params' | 'data'
 > & {
   params: RouteParams<TRoute>;
-  data: TRoute extends Route<any, any, any, infer TParentData, infer TData, infer TResolved>
+  data: TRoute extends Route<any, any, any, any, infer TParentData, infer TData, infer TResolved>
     ? TParentData & TData & TResolved
     : Record<never, never>;
 };

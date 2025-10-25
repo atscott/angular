@@ -21,6 +21,7 @@ ts_project(
         "//packages/private/testing",
         "//packages/router",
         "//packages/router/testing",
+        "//packages/router/tools",
     ],
 )
 
