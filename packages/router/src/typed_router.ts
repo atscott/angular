@@ -329,6 +329,50 @@ type ResolveId<
     ? JoinPath<TParentId, TCustomId extends string ? TCustomId : TPath>
     : '/';
 
+export type CreateRouteOptions<
+  TParentRoute extends Route | undefined,
+  TPath extends string,
+  TData extends Record<string, unknown>,
+  TResolvers extends ResolverMap<
+    (TParentRoute extends Route ? RouteParams<TParentRoute> : {}) & PathParams<TPath>,
+    (TParentRoute extends Route ? ResolvedData<TParentRoute> : {}) & TData
+  >,
+  TComponent,
+> = {
+  data?: TData;
+  resolve?: TResolvers;
+  component?: Type<TComponent>;
+  canActivate?: CanActivateFn<
+    (TParentRoute extends Route ? RouteParams<TParentRoute> : {}) & PathParams<TPath>,
+    (TParentRoute extends Route ? ResolvedData<TParentRoute> : {}) &
+      TData & {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}
+  >[];
+  canActivateChild?: CanActivateChildFn<
+    (TParentRoute extends Route ? RouteParams<TParentRoute> : {}) & PathParams<TPath>,
+    (TParentRoute extends Route ? ResolvedData<TParentRoute> : {}) &
+      TData & {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}
+  >[];
+  canDeactivate?: CanDeactivateFn<
+    TComponent,
+    (TParentRoute extends Route ? RouteParams<TParentRoute> : {}) & PathParams<TPath>,
+    (TParentRoute extends Route ? ResolvedData<TParentRoute> : {}) &
+      TData & {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}
+  >[];
+} & Omit<
+  UntypedRoute,
+  | 'path'
+  | 'id'
+  | 'data'
+  | 'resolve'
+  | 'children'
+  | 'loadChildren'
+  | 'component'
+  | 'canActivate'
+  | 'canActivateChild'
+  | 'canDeactivate'
+  | 'getParentRoute'
+>;
+
 export function createRoute<
   TPath extends string,
   TParentRoute extends Route | undefined,
@@ -344,38 +388,7 @@ export function createRoute<
     path: TPath;
     id?: TCustomId;
     getParentRoute?: () => TParentRoute;
-    data?: TData;
-    resolve?: TResolvers;
-    component?: Type<TComponent>;
-    canActivate?: CanActivateFn<
-      (TParentRoute extends Route ? RouteParams<TParentRoute> : {}) & PathParams<TPath>,
-      (TParentRoute extends Route ? ResolvedData<TParentRoute> : {}) &
-        TData & {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}
-    >[];
-    canActivateChild?: CanActivateChildFn<
-      (TParentRoute extends Route ? RouteParams<TParentRoute> : {}) & PathParams<TPath>,
-      (TParentRoute extends Route ? ResolvedData<TParentRoute> : {}) &
-        TData & {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}
-    >[];
-    canDeactivate?: CanDeactivateFn<
-      TComponent,
-      (TParentRoute extends Route ? RouteParams<TParentRoute> : {}) & PathParams<TPath>,
-      (TParentRoute extends Route ? ResolvedData<TParentRoute> : {}) &
-        TData & {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}
-    >[];
-  } & Omit<
-    UntypedRoute,
-    | 'path'
-    | 'id'
-    | 'data'
-    | 'resolve'
-    | 'children'
-    | 'loadChildren'
-    | 'component'
-    | 'canActivate'
-    | 'canActivateChild'
-    | 'canDeactivate'
-  >,
+  } & CreateRouteOptions<TParentRoute, TPath, TData, TResolvers, TComponent>,
 ): BaseRoute<
   TPath,
   ResolveId<TParentRoute, TCustomId, TPath>,
@@ -389,20 +402,8 @@ export function createRoute<
 }
 
 export function createRootRoute<TData extends Record<string, unknown> = {}>(
-  route: Omit<
-    UntypedRoute,
-    | 'path'
-    | 'component'
-    | 'data'
-    | 'resolve'
-    | 'children'
-    | 'loadChildren'
-    | 'load'
-    | 'getParentRoute'
-    | 'pathMatch'
-    | 'matcher'
-  > & {
-    data?: TData;
+  route: Omit<CreateRouteOptions<undefined, '', TData, {}, unknown>, 'component'> & {
+    component?: Type<unknown>;
   } = {},
 ): BaseRoute<'', '/', '/', {}, {}, TData, {}> {
   // The root route has an empty path.

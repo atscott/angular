@@ -13,6 +13,7 @@ import {
   CanActivateChildFn,
   CanActivateFn,
   CanDeactivateFn,
+  CreateRouteOptions,
   ResolvedData,
   Route,
   RouteParams,
@@ -45,40 +46,17 @@ export function createFileRoute<
   return <
     TData extends Record<string, unknown> = {},
     TResolvers extends ResolverMap<
-      RouteParams<TParentRoute> & PathParams<TPath>,
-      ResolvedData<TParentRoute> & TData
+      (TParentRoute extends Route ? RouteParams<TParentRoute> : {}) & PathParams<TPath>,
+      (TParentRoute extends Route ? ResolvedData<TParentRoute> : {}) & TData
     > = {},
     TComponent = unknown,
   >(
-    options: {
-      data?: TData;
-      resolve?: TResolvers;
-      component?: Type<TComponent>;
-      canActivate?: CanActivateFn<
-        RouteParams<TParentRoute> & PathParams<TPath>,
-        ResolvedData<TParentRoute> & TData & {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}
-      >[];
-      canActivateChild?: CanActivateChildFn<
-        RouteParams<TParentRoute> & PathParams<TPath>,
-        ResolvedData<TParentRoute> & TData & {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}
-      >[];
-      canDeactivate?: CanDeactivateFn<
-        TComponent,
-        RouteParams<TParentRoute> & PathParams<TPath>,
-        ResolvedData<TParentRoute> & TData & {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}
-      >[];
-    } & Omit<
-      UntypedRoute,
-      | 'path'
-      | 'data'
-      | 'resolve'
-      | 'children'
-      | 'loadChildren'
-      | 'component'
-      | 'canActivate'
-      | 'canActivateChild'
-      | 'canDeactivate'
-      | 'getParentRoute'
+    options: CreateRouteOptions<
+      TParentRoute extends Route ? TParentRoute : undefined,
+      TPath,
+      TData,
+      TResolvers,
+      TComponent
     >,
   ): BaseRoute<
     TPath,

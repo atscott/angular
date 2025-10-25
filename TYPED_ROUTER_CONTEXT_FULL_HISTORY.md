@@ -803,3 +803,30 @@ The solution was to adopt the pattern used by TanStack Router, which relies on a
 4.  **`createRoute` Consistency:** To maintain consistency between manual and file-based routing, the `createRoute` function was also enhanced. It now accepts an optional `id` property (`TCustomId`) and uses a `ResolveId` type helper to compute the final `TId` by joining the parent's ID with the custom ID or path.
 
 This architectural refinement ensures that the type inference for file-based routing is robust, performant, and free from ambiguity. It aligns the internal mechanics of the typed router more closely with industry best practices and provides a solid foundation for building complex, type-safe routing configurations.
+## 17. Refactoring for Type Reusability: Sharing `CreateRouteOptions`
+
+A key principle of good software design is "Don't Repeat Yourself" (DRY), and this applies to types as much as it does to code. A final architectural refinement was made to address duplicated type definitions between the `createRoute` and `createFileRoute` functions.
+
+### The Problem: Duplicated Type Definitions
+
+The `createRoute` and `createFileRoute` functions both accept a similar set of options for defining a route's behavior, including `data`, `resolve`, `component`, and the various guards (`canActivate`, `canActivateChild`, `canDeactivate`). Initially, the types for these options were defined separately for each function. This created redundancy and a maintenance burden: any change to the options for one function would need to be manually replicated in the other.
+
+This was a deviation from the pattern seen in TanStack Router, where a common `RouteOptions` type is reused across different route creation functions, ensuring consistency and reducing duplication.
+
+### The Solution: A Shared `CreateRouteOptions` Type
+
+To address this, a refactoring was undertaken to centralize the common route options into a single, reusable type.
+
+1.  **`CreateRouteOptions` Type:** A new, shared `CreateRouteOptions` type was defined in `packages/router/src/typed_router.ts`. This type encapsulates all the common properties that can be passed when creating a route.
+
+2.  **Refactoring `createRoute` and `createFileRoute`:** Both `createRoute` and `createFileRoute` were refactored to use this new `CreateRouteOptions` type for their `options` parameter. This immediately eliminated the duplicated type definitions.
+
+3.  **Refactoring `createRootRoute`:** The `createRootRoute` function was also updated to use `CreateRouteOptions`, using `Omit` to exclude properties that are not applicable to a root route (like `path` and `getParentRoute`).
+
+### The Challenge: Navigating Complex Generics
+
+This refactoring was not without its challenges. The `CreateRouteOptions` type is heavily generic, with its properties depending on the route's parent, path, and other generics. When this was integrated into `createFileRoute`, which has its own complex generics for inferring types from the `FileRoutesByPath` interface, TypeScript's inference engine initially struggled to resolve the resulting types, leading to a series of build errors.
+
+Several attempts were made to solve this, including loosening the types to `any`, which broke the type safety of the test suite. The final, successful solution was to apply a more targeted fix. By adding a specific generic constraint to the `TParentRoute` type within `createFileRoute` (`TParentRoute extends Route ? TParentRoute : undefined`), the compiler was given enough information to correctly resolve the complex conditional types within `CreateRouteOptions` without sacrificing type safety.
+
+This process highlights the importance of a robust test suite. The tests, which used `@ts-expect-error` to assert that certain patterns *should* fail to compile, were critical in preventing a "solution" that would have compromised the very type safety the API was designed to provide. The final result is a cleaner, more maintainable, and DRY-er implementation that is correctly and strictly typed.
