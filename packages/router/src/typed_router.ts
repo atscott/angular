@@ -88,6 +88,9 @@ export type ResolveRelativePath<TFrom extends string, TTo = '.'> = string extend
           : never
         : never;
 
+/** Flattens an intersection of object types into a single object type. */
+type Simplify<T> = 0 extends 1 & T ? any : {[K in keyof T]: T[K]} & {};
+
 function resolvePath(from: string, to: string): string {
   if (to.startsWith('/')) {
     return to;
@@ -181,9 +184,27 @@ export type PathParams<TPath extends string> =
 export type RouteParams<T extends Route> =
   T extends Route<any, any, any, infer TParams, any, any, any> ? TParams : {};
 
+export type RouteParamsFor<TParentRoute extends Route | undefined, TPath extends string> = Simplify<
+  (TParentRoute extends Route ? RouteParams<TParentRoute> : {}) & PathParams<TPath>
+>;
+
+export type RouteDataFor<
+  TParentRoute extends Route | undefined,
+  TData extends Record<string, unknown>,
+  TResolvers extends ResolverMap<any, any>,
+> = Simplify<
+  (TParentRoute extends Route ? ResolvedData<TParentRoute> : {}) &
+    TData & {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}
+>;
+
+export type ResolverDataFor<
+  TParentRoute extends Route | undefined,
+  TData extends Record<string, unknown>,
+> = Simplify<(TParentRoute extends Route ? ResolvedData<TParentRoute> : {}) & TData>;
+
 export type ResolvedData<T extends Route | undefined> =
   T extends Route<string, string, string, any, infer TParentData, infer TData, infer TResolved>
-    ? TParentData & TData & TResolved
+    ? Simplify<TParentData & TData & TResolved>
     : {};
 
 export type ActivatedRouteSnapshot<
@@ -334,8 +355,8 @@ export type CreateRouteOptions<
   TPath extends string,
   TData extends Record<string, unknown>,
   TResolvers extends ResolverMap<
-    (TParentRoute extends Route ? RouteParams<TParentRoute> : {}) & PathParams<TPath>,
-    (TParentRoute extends Route ? ResolvedData<TParentRoute> : {}) & TData
+    RouteParamsFor<TParentRoute, TPath>,
+    ResolverDataFor<TParentRoute, TData>
   >,
   TComponent,
 > = {
@@ -343,20 +364,17 @@ export type CreateRouteOptions<
   resolve?: TResolvers;
   component?: Type<TComponent>;
   canActivate?: CanActivateFn<
-    (TParentRoute extends Route ? RouteParams<TParentRoute> : {}) & PathParams<TPath>,
-    (TParentRoute extends Route ? ResolvedData<TParentRoute> : {}) &
-      TData & {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}
+    RouteParamsFor<TParentRoute, TPath>,
+    RouteDataFor<TParentRoute, TData, TResolvers>
   >[];
   canActivateChild?: CanActivateChildFn<
-    (TParentRoute extends Route ? RouteParams<TParentRoute> : {}) & PathParams<TPath>,
-    (TParentRoute extends Route ? ResolvedData<TParentRoute> : {}) &
-      TData & {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}
+    RouteParamsFor<TParentRoute, TPath>,
+    RouteDataFor<TParentRoute, TData, TResolvers>
   >[];
   canDeactivate?: CanDeactivateFn<
     TComponent,
-    (TParentRoute extends Route ? RouteParams<TParentRoute> : {}) & PathParams<TPath>,
-    (TParentRoute extends Route ? ResolvedData<TParentRoute> : {}) &
-      TData & {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}
+    RouteParamsFor<TParentRoute, TPath>,
+    RouteDataFor<TParentRoute, TData, TResolvers>
   >[];
 } & Omit<
   UntypedRoute,
@@ -378,8 +396,8 @@ export function createRoute<
   TParentRoute extends Route | undefined,
   TData extends Record<string, unknown>,
   TResolvers extends ResolverMap<
-    (TParentRoute extends Route ? RouteParams<TParentRoute> : {}) & PathParams<TPath>,
-    (TParentRoute extends Route ? ResolvedData<TParentRoute> : {}) & TData
+    RouteParamsFor<TParentRoute, TPath>,
+    ResolverDataFor<TParentRoute, TData>
   >,
   TComponent,
   const TCustomId extends string | undefined = undefined,
@@ -393,7 +411,7 @@ export function createRoute<
   TPath,
   ResolveId<TParentRoute, TCustomId, TPath>,
   JoinPath<TParentRoute extends Route<any, any, infer P> ? P : '', TPath>,
-  (TParentRoute extends Route ? RouteParams<TParentRoute> : {}) & PathParams<TPath>,
+  RouteParamsFor<TParentRoute, TPath>,
   TParentRoute extends Route ? ResolvedData<TParentRoute> : {},
   TData,
   {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}
@@ -526,9 +544,7 @@ export type SnapshotFromRoute<TRoute extends Route> = Omit<
   'params' | 'data'
 > & {
   params: RouteParams<TRoute>;
-  data: TRoute extends Route<any, any, any, any, infer TParentData, infer TData, infer TResolved>
-    ? TParentData & TData & TResolved
-    : Record<never, never>;
+  data: ResolvedData<TRoute>;
 };
 
 export class ActivatedRoute<TRoute extends Route> {

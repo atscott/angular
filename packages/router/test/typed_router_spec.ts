@@ -156,11 +156,12 @@ describe('TypedRouter', () => {
   const appRoutes: Routes = [userRoute, userRouteWithResolver, setResolversRoute];
 
   const routeMap = {
-    '/user/:userId': userRoute,
-    '/user/:userId/posts/:postId': postsRoute,
-    '/user-with-resolver/:userId': userRouteWithResolver,
-    '/user-with-resolver/:userId/posts/:postId': postsRouteWithResolver,
-    '/set-resolvers/:userId': setResolversRoute,
+    [userRoute.fullPath]: userRoute,
+    // ^-- this could be the key to making this work in boq angular routes
+    [postsRoute.fullPath]: postsRoute,
+    [userRouteWithResolver.fullPath]: userRouteWithResolver,
+    [postsRouteWithResolver.fullPath]: postsRouteWithResolver,
+    [setResolversRoute.fullPath]: setResolversRoute,
   } as const;
 
   type RouteMap = typeof routeMap;

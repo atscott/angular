@@ -830,3 +830,31 @@ This refactoring was not without its challenges. The `CreateRouteOptions` type i
 Several attempts were made to solve this, including loosening the types to `any`, which broke the type safety of the test suite. The final, successful solution was to apply a more targeted fix. By adding a specific generic constraint to the `TParentRoute` type within `createFileRoute` (`TParentRoute extends Route ? TParentRoute : undefined`), the compiler was given enough information to correctly resolve the complex conditional types within `CreateRouteOptions` without sacrificing type safety.
 
 This process highlights the importance of a robust test suite. The tests, which used `@ts-expect-error` to assert that certain patterns *should* fail to compile, were critical in preventing a "solution" that would have compromised the very type safety the API was designed to provide. The final result is a cleaner, more maintainable, and DRY-er implementation that is correctly and strictly typed.
+
+## 18. Ergonomic Refinement: Simplifying Inferred Types
+
+A key aspect of developer experience for a type-safe API is the readability of the types themselves, especially in IDE tooltips and compiler error messages. During testing and usage, it was observed that the inferred types for a route's parameters and data were technically correct but ergonomically poor.
+
+### The Problem: Complex Intersection Types
+
+Because a child route inherits parameters and data from its entire chain of ancestors, TypeScript would represent the final type as a long intersection of objects. For example, the parameters for a `/users/:userId/posts/:postId` route would be inferred as a type like:
+
+`Record<never, never> & { userId: string } & { postId: string }`
+
+Similarly, resolved data would appear as an intersection of the parent's data, the current route's data, and the current route's resolved data. While correct, these types are verbose and difficult to read at a glance.
+
+### The Solution: The `Simplify<T>` Utility Type
+
+To address this, a small but powerful utility type, `Simplify<T>`, was introduced:
+
+```typescript
+type Simplify<T> = {[K in keyof T]: T[K]} & {};
+```
+
+This utility type effectively collapses an intersection of object types into a single, flat object type. By applying this utility to the final `params` and `data` types, the developer experience is significantly improved.
+
+The same parameter type from the example above is now displayed to the developer as:
+
+`{ userId: string; postId: string }`
+
+This is a purely cosmetic change at the type level—it does not alter the runtime behavior—but it has a major positive impact on the day-to-day usability of the API, making it more intuitive and easier to debug. A small refinement was also made to `Simplify<T>` to correctly handle the `any` type, ensuring that the `AnyRoute` fallback for testing remained permissive as intended.

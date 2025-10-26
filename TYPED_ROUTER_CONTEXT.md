@@ -270,6 +270,15 @@ To provide a more ergonomic and modern API, a new `injectRoute` function and `Ac
 -   **`ActivatedRoute`**: A strongly-typed wrapper around the standard `ActivatedRoute`. It exposes the route's observable-based properties (`params`, `data`, `queryParams`, etc.) as signals, using `@angular/core/rxjs-interop`.
 -   **`injectRoute`**: An injection function that takes a route's full path string (e.g. `/users/:userId`) and returns a fully-typed instance of `ActivatedRoute`. Using the `route.fullPath` property of a route definition is recommended to avoid magic strings. This eliminates the need for manual type casting of the `ActivatedRoute` or its snapshot.
 
+### Improving Type Readability
+
+To further enhance developer experience, the underlying types for route parameters and data have been refined. Previously, TypeScript would display these as a complex intersection of types inherited from parent routes (e.g., `{ userId: string } & { postId: string }`). This has been improved to show a single, flattened object type (e.g., `{ userId: string, postId: string }`), making tooltips and error messages significantly cleaner and easier to read. This is a purely cosmetic change at the type level that does not alter runtime behavior but greatly improves the usability of the API.
+
+```
+/** Flattens an intersection of object types into a single object type. */
+type Simplify<T> = 0 extends 1 & T ? any : {[K in keyof T]: T[K]} & {};
+```
+
 ### `AnyRoute` Fallback for Testing and Migration
 
 To facilitate easier unit testing and provide a smoother migration path from the traditional router, the typed router's API provides a fallback to `any` when a specific route tree is not provided or registered.
