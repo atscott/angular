@@ -27,78 +27,96 @@ The core of the global type-safety will be powered by a "flat map" of route path
 
 3.  **`.setResolvers()` method**: This method allows resolver functions to be attached to a route after its initial definition. This is a key feature for architectural modularity, as it allows resolvers to be defined in separate files from their routes, preventing circular module dependencies.
 
-4.  **`id` and `fullPath` properties**: Each `RouteBuilder` instance will have an `id` and a `fullPath` property. These properties are not available at creation time but are calculated when the route tree is provided to the router. The `fullPath` provides a type-safe string that can be used for navigation and in `injectRoute`, avoiding "magic strings". The `id` is a unique identifier for the route within the tree.
+4.  **`id` and `fullPath` properties**: Each `RouteBuilder` instance will have an `id` and a `fullPath` property. These properties are not available at creation time but are calculated when the route tree is provided to the router.
+    -   The `fullPath` provides a type-safe string that can be used for navigation, avoiding "magic strings". It represents the clean, human-readable URL path.
+    -   The `id` is a unique identifier for the route within the tree, used for type-safe injection with `injectRoute`. To solve ambiguity, index routes (those with an empty `path`) will have an `id` with a trailing slash (e.g., `/users/`) while their `fullPath` does not, ensuring the parent and child can be uniquely identified.
 
 5.  **Standard `children` and `loadChildren`**: The fluent `.addChildren()` method is removed. The `RouteBuilder` instances returned by `createRoute` are composed into a route tree using the familiar `children` and `loadChildren` properties.
 
-6.  **A Global Route Map**: For global type-safety to work, the API requires a flat map of full route paths to their corresponding route objects. This map will be manually defined in non-file-based routing environments.
+6.  **Type-Level Maps for Global Safety**: To enable global type-safety without runtime cost, the API relies on pure `type` aliases that are registered globally. This ensures all type-checking is fast, performant, and tree-shakeable.
+    -   **`NavigationMap` (for Navigation)**: A `type` that maps a route's `fullPath` string to its `typeof` definition. This is used by `router.navigate` for performant type-checking. It is written manually in code-based routing and generated in file-based routing. While a simpler union of path strings could be used to infer path parameters, the map is a crucial architectural choice. It creates a canonical link between a navigable path and its full route definition. This allows the `navigate` function to access the route's entire contract, making it possible to type-check not only path parameters but also **search (query) parameters** and other navigation-related properties defined on the route object. This makes the API more robust and extensible.
+    -   **`RouteMap` (for Injection Convenience)**: An optional `type` that maps a route's unique `id` string to its `typeof` definition. This map is only expected to be produced by file-based routing generators. Its presence "unlocks" a more convenient `injectRoute('/my/id')` signature.
 
-7.  **Global Type Safety with Declaration Merging**: The API leverages TypeScript's declaration merging via a `Register` interface. This allows you to register your final route map type once, making it available to `injectRouter` and `injectRoute` throughout your application.
+7.  **Map-Free Injection**: For manual, code-based routing, type-safe injection does not require a map. It is achieved by passing the route's type as a generic parameter: `injectRoute<typeof myRoute>()`. This provides the simplest developer experience and is perfectly tree-shakeable.
+
+8.  **Global Type Safety with Declaration Merging**: The API leverages TypeScript's declaration merging via a `Register` interface. This allows you to register your map types once, making them available throughout your application.
 
 > **Note on Route Definition**: For `getParentRoute`'s type inference to work correctly, parent and child routes must be defined as separate constants before being assembled into a tree. Defining a child route inline within a parent's `children` array will cause a TypeScript error, as the compiler cannot resolve the circular type dependency. The `loadChildren` property with a dynamic `import()` is the recommended way to break dependency cycles between route files.
+
+### The "Most Specific Route" Convention
+
+When creating the `NavigationMap` type by hand, you may encounter cases where multiple routes resolve to the same `fullPath` string. The most common example is a parent layout route (e.g., `/posts`) and its index child route (with `path: ''`, which also resolves to `/posts`).
+
+To resolve this ambiguity, the `NavigationMap` **must** provide the **most specific route** as the value for that key. The "most specific route" is the one that corresponds to the final, terminal component that will be rendered at that exact URL. In the parent/child case, this is always the **index route**.
+
+This convention ensures that type inference for navigation functions like `router.navigate` is always correct, using the parameter and search schemas from the actual destination route. It makes the developer's intent explicit and mirrors the logic that a file-based routing generator would use automatically.
 
 ### Runtime Initialization
 
 To support features like `fullPath` and `id`, the route tree undergoes an initialization step. When `provideRouter` is called, it traverses the entire route tree, establishes the parent-child relationships, and calls an internal `init()` method on each `RouteBuilder` instance. This `init()` method is responsible for calculating the `fullPath` and `id` based on the parent's properties. This deferred initialization ensures that all properties are correctly configured before the router starts its first navigation.
 
-### Example of Manual Map Definition
+### Example of Manual (Code-based) Routing
 
 ```typescript
-// 1. Define routes as standalone constants using createRoute for type safety
-const rootRoute = createRootRoute();
+// 1. Define routes as standalone constants
+import { createRoute, createRootRoute, Outlet } from '@angular/router';
 
-export const userRoute = createRoute({
-  path: 'user/:userId',
+const rootRoute = createRootRoute({ component: AppLayout });
+const postsLayoutRoute = createRoute({
+  path: 'posts',
   getParentRoute: () => rootRoute,
-  component: UserComponent,
-  resolve: {
-    user: (route) => ({ id: route.params.userId, name: 'Resolved User' }),
-  },
+  component: PostsLayoutComponent, // Renders an <outlet>
+});
+const postsIndexRoute = createRoute({
+  path: '', // Index route
+  getParentRoute: () => postsLayoutRoute,
+  component: PostsIndexComponent,
+});
+const postRoute = createRoute({
+  path: ':postId',
+  getParentRoute: () => postsLayoutRoute,
+  component: PostComponent,
 });
 
-export const postsRoute = createRoute({
-  path: 'posts/:postId',
-  getParentRoute: () => userRoute,
-  component: PostsComponent,
-  resolve: {
-    // `route.data.user` is fully typed here from the parent!
-    post: (route) => ({ id: route.params.postId, title: `Post by ${route.data.user.name}` }),
-  }
-});
-
-// 2. Assemble the final route array for the router provider using standard `children`
+// 2. Assemble the runtime route array
 export const appRoutes: Route[] = [
   {
-    ...userRoute,
+    ...rootRoute,
     children: [
-      postsRoute,
-    ]
-  }
+      {
+        ...postsLayoutRoute,
+        children: [postsIndexRoute, postRoute],
+      },
+    ],
+  },
 ];
 
-// 3. Create the flat map for type-safety, referencing the route constants
-export const routeMap = {
-  '/user/:userId': userRoute,
-  '/user/:userId/posts/:postId': postsRoute,
-} as const;
+// 3. Create the `NavigationMap` *type* for type-safe navigation.
+export type AppNavigationMap = {
+  // For the ambiguous '/posts' path, we follow the convention and
+  // provide the most specific route: the index route.
+  [postsLayoutRoute.fullPath]: typeof postsIndexRoute;
+  [postRoute.fullPath]: typeof postRoute;
+};
 
-// 4. Define the global type for the router
-export type AppRouteMap = typeof routeMap;
-
-// 5. Use declaration merging to register the type globally
+// 4. Use declaration merging to register the navigation map globally
 declare module '@angular/router' {
   interface Register {
-    routeMap: AppRouteMap;
+    navigationMap: AppNavigationMap;
   }
 }
 
-// 6. Now, injection functions are automatically typed
-class MyComponent {
-  private router = injectRouter();
+// 5. Now, `navigate` is type-safe, and `injectRoute` uses the map-free signature
+import { injectRouter, injectRoute } from '@angular/router';
 
-  navigateToPost() {
-    // Path and params are fully typed based on AppRouteMap
-    this.router.navigate('/user/:userId/posts/:postId', { userId: '123', postId: '456' });
+class SomeComponent {
+  private router = injectRouter();
+  // Injection is map-free and requires a type parameter
+  private route = injectRoute<typeof postRoute>();
+
+  navigateToPosts() {
+    // Navigation is type-safe against the performant NavigationMap
+    this.router.navigate('/posts', {});
   }
 }
 ```
@@ -123,8 +141,11 @@ The generator is responsible for:
     -   `index.ts`: Defines the index route for a directory (e.g., `/posts/index.ts` becomes `/posts`).
     -   `:param.ts`: Defines a dynamic route parameter (e.g., `posts/:postId.ts`).
 -   **Generating Code:** Creating a file that contains two key pieces:
-    1.  **The Runtime Route Tree:** Imports all user-defined `FileRoute` objects and assembles them into a tree structure by explicitly linking them with the `getParentRoute` property.
-    2.  **The Type Map (`FileRoutesByPath`):** Generates a `declare module` block that merges with the `@angular/router` module. This block defines the `FileRoutesByPath` interface, which acts as a "type phone book," mapping a route's unique **file-based ID** (e.g., `'/posts/$postId'`) to a rich object containing its `id`, `path`, `fullPath`, and the *type* of its parent route.
+    1.  **The Runtime Route Tree:** Imports all user-defined `FileRoute` objects and assembles them into a tree structure.
+    2.  **The Type Maps:** Generates `declare module` blocks that merge with `@angular/router`:
+        -   **`NavigationMap`**: A `fullPath`-keyed map used for fast, type-safe navigation.
+        -   **`RouteMap`**: An `id`-keyed map that provides a rich type source for the convenient `injectRoute('/my/id')` signature.
+        -   **`FileRoutesByPath`**: The legacy "phone book" used for inferring parent types within route files.
 
 ### 2. The User's Role: Defining Route Files
 
@@ -268,7 +289,9 @@ This two-stage system provides a powerful, type-safe, and configuration-free rou
 To provide a more ergonomic and modern API, a new `injectRoute` function and `ActivatedRoute` class were introduced.
 
 -   **`ActivatedRoute`**: A strongly-typed wrapper around the standard `ActivatedRoute`. It exposes the route's observable-based properties (`params`, `data`, `queryParams`, etc.) as signals, using `@angular/core/rxjs-interop`.
--   **`injectRoute`**: An injection function that takes a route's full path string (e.g. `/users/:userId`) and returns a fully-typed instance of `ActivatedRoute`. Using the `route.fullPath` property of a route definition is recommended to avoid magic strings. This eliminates the need for manual type casting of the `ActivatedRoute` or its snapshot.
+-   **`injectRoute`**: An injection function that returns a fully-typed, signal-based instance of `ActivatedRoute`. It is overloaded to provide the best developer experience for both manual and generated routing:
+    -   **With File-Based Routing**, a generator produces a global `RouteMap`. This enables a convenient signature where you pass the route's unique ID string: `injectRoute('/posts/:postId')`.
+    -   **With Manual Routing**, no `RouteMap` is present. The function is map-free and requires a type parameter to identify the route: `injectRoute<typeof postsRoute>()`.
 
 ### Improving Type Readability
 
@@ -455,7 +478,7 @@ bootstrapApplication(AppComponent, {
 })
 class PostsComponent {
   // The route is fully typed and signal-based
-  route = injectRoute(postsRoute.fullPath);
+  route = injectRoute(postsRoute.id);
 }
 
 // 5. Use the Router for navigation
@@ -463,7 +486,7 @@ class MyComponent {
   private router = inject(Router);
 
   navigateToPost() {
-    // This navigation is fully type-checked
+    // Navigation uses the clean `fullPath`
     this.router.navigate(postsRoute.fullPath, { userId: '123', postId: '456' });
   }
 }

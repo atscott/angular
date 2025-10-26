@@ -15,8 +15,10 @@ import {
   CanDeactivateFn,
   CreateRouteOptions,
   ResolvedData,
+  ResolverDataFor,
   Route,
   RouteParams,
+  RouteParamsFor,
   ResolverMap,
   PathParams,
 } from '../src/typed_router';
@@ -46,8 +48,8 @@ export function createFileRoute<
   return <
     TData extends Record<string, unknown> = {},
     TResolvers extends ResolverMap<
-      (TParentRoute extends Route ? RouteParams<TParentRoute> : {}) & PathParams<TPath>,
-      (TParentRoute extends Route ? ResolvedData<TParentRoute> : {}) & TData
+      RouteParamsFor<TParentRoute, TPath>,
+      ResolverDataFor<TParentRoute, TData>
     > = {},
     TComponent = unknown,
   >(
@@ -62,7 +64,7 @@ export function createFileRoute<
     TPath,
     TPath,
     TPath,
-    RouteParams<TParentRoute> & PathParams<TPath>,
+    RouteParamsFor<TParentRoute, TPath>,
     ResolvedData<TParentRoute>,
     TData,
     {[K in keyof TResolvers]: ReturnType<TResolvers[K]>}

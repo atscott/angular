@@ -24,7 +24,7 @@ describe('TypedRouter', () => {
     imports: [RouterOutlet],
   })
   class UserComponent {
-    route = injectTypedRoute('/user/:userId');
+    route = injectRoute<typeof userRoute>();
     constructor() {
       this.route.params().userId;
       // @ts-expect-error
@@ -37,7 +37,7 @@ describe('TypedRouter', () => {
     template: `userId: {{ route.params().userId }}, postId: {{ route.params().postId }}`,
   })
   class PostsComponent {
-    route = injectTypedRoute('/user/:userId/posts/:postId');
+    route = injectRoute<typeof postsRoute>();
     constructor() {
       this.route.params().userId;
       this.route.params().postId;
@@ -51,7 +51,7 @@ describe('TypedRouter', () => {
     template: `user: {{ route.data().user.name }}, post: {{ route.data().post.title }}`,
   })
   class PostsWithDataComponent {
-    route = injectTypedRoute(postsRouteWithResolver.fullPath);
+    route = injectRoute<typeof postsRouteWithResolver>();
     constructor() {
       this.route.params().userId;
       this.route.params().postId;
@@ -65,7 +65,7 @@ describe('TypedRouter', () => {
     template: `user: {{ route.data().user.name }}`,
   })
   class SetResolversComponent {
-    route = injectTypedRoute('/set-resolvers/:userId');
+    route = injectRoute<typeof setResolversRoute>();
   }
 
   @Component({
@@ -78,7 +78,7 @@ describe('TypedRouter', () => {
     imports: [RouterOutlet],
   })
   class UserWithDataComponent {
-    route = injectTypedRoute('/user-with-resolver/:userId');
+    route = injectRoute<typeof userRouteWithResolver>();
   }
 
   const rootRoute = createRootRoute();
@@ -155,26 +155,13 @@ describe('TypedRouter', () => {
 
   const appRoutes: Routes = [userRoute, userRouteWithResolver, setResolversRoute];
 
-  const routeMap = {
-    [userRoute.fullPath]: userRoute,
-    // ^-- this could be the key to making this work in boq angular routes
-    [postsRoute.fullPath]: postsRoute,
-    [userRouteWithResolver.fullPath]: userRouteWithResolver,
-    [postsRouteWithResolver.fullPath]: postsRouteWithResolver,
-    [setResolversRoute.fullPath]: setResolversRoute,
-  } as const;
-
-  type RouteMap = typeof routeMap;
-
-  /**
-   * Test-specific helper to call `injectRoute` with the local `RouteMap`.
-   * This avoids global declaration merging and TypeScript's partial inference issues
-   * (we would want to provide just the RouteMap generic to injectRoute, but that
-   * causes TypeScript to try to infer the TPath from the entire global map).
-   */
-  function injectTypedRoute<TPath extends AllPaths<RouteMap>>(path: TPath) {
-    return injectRoute<RouteMap, TPath>(path);
-  }
+  type RouteMap = {
+    [userRoute.fullPath]: typeof userRoute;
+    [postsRoute.fullPath]: typeof postsRoute;
+    [userRouteWithResolver.fullPath]: typeof userRouteWithResolver;
+    [postsRouteWithResolver.fullPath]: typeof postsRouteWithResolver;
+    [setResolversRoute.fullPath]: typeof setResolversRoute;
+  };
 
   /**
    * Test-specific helper to call `injectNavigate` with the local `RouteMap`.
@@ -236,14 +223,14 @@ describe('TypedRouter', () => {
           component: UntypedComponent,
         },
       ];
-      const mixedMap = {'/typed': typedRoute};
+      type mixedMap = {'/typed': typeof typedRoute};
 
       // @ts-expect-error: '/untyped' should not be in the type map
-      const x: AllPaths<typeof mixedMap> = '/untyped';
+      const x: AllPaths<mixedMap> = '/untyped';
       void x;
 
       // The typed path should be present
-      const y: AllPaths<typeof mixedMap> = '/typed';
+      const y: AllPaths<mixedMap> = '/typed';
       void y;
 
       expect().nothing();
@@ -286,7 +273,7 @@ describe('TypedRouter', () => {
       });
       const harness = await RouterTestingHarness.create('/');
       const typedRouter = TestBed.runInInjectionContext(() => injectRouter<RouteMap>());
-      await typedRouter.navigate('/user/:userId', {userId: '123'});
+      await typedRouter.navigate(userRoute.fullPath, {userId: '123'});
       harness.fixture.detectChanges();
       await harness.fixture.whenStable();
       expect(harness.fixture.nativeElement.innerHTML).toContain('userId: 123');
@@ -299,7 +286,7 @@ describe('TypedRouter', () => {
       const harness = await RouterTestingHarness.create('/');
       const typedRouter = TestBed.runInInjectionContext(() => injectRouter<RouteMap>());
 
-      await typedRouter.navigate('/user/:userId/posts/:postId', {
+      await typedRouter.navigate(postsRoute.fullPath, {
         userId: '123',
         postId: '456',
       });

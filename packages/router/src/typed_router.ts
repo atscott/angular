@@ -115,7 +115,32 @@ function resolvePath(from: string, to: string): string {
   return '/' + fromParts.join('/');
 }
 
-export interface Register {}
+function joinIds(parentId: string, childPathOrId: string): string {
+  if (childPathOrId === '') {
+    // An index route.
+    // If parent is root ('/'), the ID is still '/'.
+    // Otherwise, ensure a trailing slash.
+    if (parentId === '/') return '/';
+    return parentId.endsWith('/') ? parentId : `${parentId}/`;
+  }
+
+  if (parentId === '/') {
+    return `/${childPathOrId}`;
+  }
+
+  return `${parentId}/${childPathOrId}`;
+}
+
+export interface Register {
+  navigationMap?: Record<string, Route>;
+  routeMap?: Record<string, Route>;
+}
+export type RegisteredNavigationMap<TRegister = Register> = TRegister extends {
+  navigationMap: infer TRouteMap;
+}
+  ? TRouteMap
+  : Record<string, AnyRoute>;
+
 export type RegisteredRouteMap<TRegister = Register> = TRegister extends {
   routeMap: infer TRouteMap;
 }
@@ -140,11 +165,6 @@ export type ParamsForPath<
   TRouteMap extends Record<string, Route>,
   TPath extends keyof TRouteMap,
 > = AnyRoute extends TRouteMap[TPath] ? Record<string, any> : RouteParams<TRouteMap[TPath]>;
-
-type RouteForPath<
-  TRouteMap extends Record<string, Route>,
-  TPath extends keyof TRouteMap,
-> = AnyRoute extends TRouteMap[TPath] ? AnyRoute : TRouteMap[TPath];
 
 export interface Route<
   TPath extends string = string,
@@ -307,7 +327,7 @@ export class BaseRoute<
     } else {
       // This is a bit of a hack to get the custom id from the options.
       const customId = (this as any).id ?? this.path;
-      this.id = joinPaths(parent.id, customId) as TId;
+      this.id = joinIds(parent.id, customId) as TId;
     }
   }
 
@@ -347,8 +367,18 @@ type ResolveId<
   TPath extends string,
 > =
   TParentRoute extends Route<any, infer TParentId, any, any, any, any, any>
-    ? JoinPath<TParentId, TCustomId extends string ? TCustomId : TPath>
+    ? JoinIdPaths<TParentId, TCustomId extends string ? TCustomId : TPath>
     : '/';
+
+type JoinIdPaths<TLeft extends string, TRight extends string> = TRight extends ''
+  ? TLeft extends '/'
+    ? '/'
+    : TLeft extends `${string}/`
+      ? TLeft
+      : `${TLeft}/`
+  : TLeft extends '/'
+    ? `/${TRight}`
+    : `${TLeft}/${TRight}`;
 
 export type CreateRouteOptions<
   TParentRoute extends Route | undefined,
@@ -462,29 +492,32 @@ export function provideRouter(
 export class Router<TRouteMap extends Record<string, Route>> {
   private router = inject(UntypedRouter);
 
-  navigate<TPath extends keyof TRouteMap>(
+  navigate<TPath extends AllPaths<TRouteMap>>(
     path: TPath,
-    params: TPath extends keyof TRouteMap ? ParamsForPath<TRouteMap, TPath> : never,
+    params: ParamsForPath<TRouteMap, TPath>,
     extras?: NavigationExtras,
   ): Promise<boolean>;
-  navigate<TFrom extends keyof TRouteMap, TTo extends string>(options: {
+  navigate<TFrom extends AllPaths<TRouteMap>, TTo extends string>(options: {
     to: TTo;
     from: TFrom;
     params:
-      | ParamsForPath<TRouteMap, ResolveRelativePath<TFrom & string, TTo> & keyof TRouteMap>
+      | ParamsForPath<TRouteMap, ResolveRelativePath<TFrom & string, TTo> & AllPaths<TRouteMap>>
       | ((
           prev: ParamsForPath<TRouteMap, TFrom>,
-        ) => ParamsForPath<TRouteMap, ResolveRelativePath<TFrom & string, TTo> & keyof TRouteMap>);
+        ) => ParamsForPath<
+          TRouteMap,
+          ResolveRelativePath<TFrom & string, TTo> & AllPaths<TRouteMap>
+        >);
     extras?: NavigationExtras;
   }): Promise<boolean>;
-  navigate<TPath extends keyof TRouteMap>(options: {
+  navigate<TPath extends AllPaths<TRouteMap>>(options: {
     to: TPath;
     params: ParamsForPath<TRouteMap, TPath>;
     extras?: NavigationExtras;
   }): Promise<boolean>;
   navigate(
     pathOrOptions:
-      | keyof TRouteMap
+      | AllPaths<TRouteMap>
       | {
           to: string;
           from?: string;
@@ -580,24 +613,28 @@ export class ActivatedRoute<TRoute extends Route> {
 }
 
 export function injectRouter<
-  TRouteMap extends Record<string, Route> = RegisteredRouteMap,
+  TRouteMap extends Record<string, Route> = RegisteredNavigationMap,
 >(): Router<TRouteMap> {
   return inject(Router<TRouteMap>);
 }
 
+export function injectRoute<TRoute extends AnyRoute>(): ActivatedRoute<TRoute>;
 export function injectRoute<
   TRouteMap extends Record<string, Route> = RegisteredRouteMap,
-  TPath extends AllPaths<TRouteMap> = AllPaths<TRouteMap>,
->(_path: TPath): ActivatedRoute<RouteForPath<TRouteMap, TPath>> {
+  TId extends keyof TRouteMap = keyof TRouteMap,
+>(id: TId): ActivatedRoute<TRouteMap[TId]>;
+export function injectRoute<TRoute extends AnyRoute>(
+  _id?: string,
+): ActivatedRoute<TRoute | AnyRoute> {
   const route = inject(UntypedActivatedRoute);
   return new ActivatedRoute(route);
 }
 
 export function injectNavigate<
-  TRouteMap extends Record<string, Route> = RegisteredRouteMap,
+  TRouteMap extends Record<string, Route> = RegisteredNavigationMap,
 >(): Router<TRouteMap>['navigate'];
 export function injectNavigate<
-  TRouteMap extends Record<string, Route> = RegisteredRouteMap,
+  TRouteMap extends Record<string, Route> = RegisteredNavigationMap,
   TFrom extends AllPaths<TRouteMap> = AllPaths<TRouteMap>,
 >(options: {
   from: TFrom;
@@ -614,7 +651,7 @@ export function injectNavigate<
   extras?: NavigationExtras;
 }) => Promise<boolean>;
 export function injectNavigate<
-  TRouteMap extends Record<string, Route> = RegisteredRouteMap,
+  TRouteMap extends Record<string, Route> = RegisteredNavigationMap,
   TFrom extends AllPaths<TRouteMap> = AllPaths<TRouteMap>,
 >(options?: {from: TFrom}) {
   const router = injectRouter<TRouteMap>();
