@@ -958,6 +958,42 @@ describe('recognize', () => {
       await expectAsync(recognizer('foo/bar')).toBeRejected();
     });
   });
+
+  describe('mid-segment parameters', () => {
+    it('should support mid-segment parameters', async () => {
+      const s = await recognize(
+        [{path: 'a-prefix{:id}a-suffix', component: ComponentA}],
+        'a-prefix123a-suffix',
+      );
+      checkActivatedRoute(s.root.firstChild!, 'a-prefix123a-suffix', {id: '123'}, ComponentA);
+    });
+
+    it('should support multiple mid-segment parameters', async () => {
+      const s = await recognize(
+        [{path: 'a-prefix{:id}a-suffix{:name}', component: ComponentA}],
+        'a-prefix123a-suffix-foo',
+      );
+      checkActivatedRoute(
+        s.root.firstChild!,
+        'a-prefix123a-suffix-foo',
+        {id: '123', name: '-foo'},
+        ComponentA,
+      );
+    });
+
+    it('should support mid-segment parameters with matrix params', async () => {
+      const s = await recognize(
+        [{path: 'a-prefix{:id}a-suffix', component: ComponentA}],
+        'a-prefix123a-suffix;p=1',
+      );
+      checkActivatedRoute(
+        s.root.firstChild!,
+        'a-prefix123a-suffix',
+        {id: '123', p: '1'},
+        ComponentA,
+      );
+    });
+  });
 });
 
 async function recognize(

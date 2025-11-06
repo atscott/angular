@@ -22,7 +22,7 @@ export interface MatchResult {
   consumedSegments: UrlSegment[];
   remainingSegments: UrlSegment[];
   parameters: {[k: string]: string};
-  positionalParamSegments: {[k: string]: UrlSegment};
+  positionalParamSegments: {[k: string]: UrlSegment | string};
 }
 
 const noMatch: MatchResult = {
@@ -79,7 +79,11 @@ export function match(
 
   const posParams: {[n: string]: string} = {};
   Object.entries(res.posParams ?? {}).forEach(([k, v]) => {
-    posParams[k] = v.path;
+    if (v instanceof UrlSegment) {
+      posParams[k] = v.path;
+    } else {
+      posParams[k] = v;
+    }
   });
   const parameters =
     res.consumed.length > 0

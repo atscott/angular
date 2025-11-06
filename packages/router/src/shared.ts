@@ -120,14 +120,27 @@ export function convertToParamMap(params: Params): ParamMap {
 function matchParts(
   routeParts: string[],
   urlSegments: UrlSegment[],
-  posParams: {[key: string]: UrlSegment},
+  posParams: {[key: string]: UrlSegment | string},
 ): boolean {
   for (let i = 0; i < routeParts.length; i++) {
     const part = routeParts[i];
     const segment = urlSegments[i];
-    const isParameter = part[0] === ':';
-    if (isParameter) {
+    const isParameter = part.startsWith(':');
+    const isMidSegmentParam = part.includes('{:');
+
+    if (isParameter && !isMidSegmentParam) {
       posParams[part.substring(1)] = segment;
+    } else if (isMidSegmentParam) {
+      const regex = new RegExp(
+        '^' + part.replace(/{:(\w+)}/g, (_, paramName) => `(?<${paramName}>[^;]*)`) + '$',
+      );
+      const match = segment.path.match(regex);
+      if (!match) {
+        return false;
+      }
+      for (const [key, value] of Object.entries(match.groups ?? {})) {
+        posParams[key] = value;
+      }
     } else if (part !== segment.path) {
       return false;
     }
@@ -172,7 +185,7 @@ export function defaultUrlMatcher(
       return null;
     }
 
-    const posParams: {[key: string]: UrlSegment} = {};
+    const posParams: {[key: string]: UrlSegment | string} = {};
     const consumed = segments.slice(0, parts.length);
     if (!matchParts(parts, consumed, posParams)) {
       return null;
@@ -199,7 +212,7 @@ export function defaultUrlMatcher(
     return null;
   }
 
-  const posParams: {[key: string]: UrlSegment} = {};
+  const posParams: {[key: string]: UrlSegment | string} = {};
 
   // Match the segments before the wildcard
   if (!matchParts(pre, segments.slice(0, pre.length), posParams)) {

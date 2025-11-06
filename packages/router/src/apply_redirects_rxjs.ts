@@ -87,7 +87,7 @@ export class ApplyRedirects {
   applyRedirectCommands(
     segments: UrlSegment[],
     redirectTo: string | RedirectFunction,
-    posParams: {[k: string]: UrlSegment},
+    posParams: {[k: string]: UrlSegment | string},
     currentSnapshot: ActivatedRouteSnapshot,
     injector: Injector,
   ): Observable<UrlTree> {
@@ -116,7 +116,7 @@ export class ApplyRedirects {
     redirectTo: string,
     urlTree: UrlTree,
     segments: UrlSegment[],
-    posParams: {[k: string]: UrlSegment},
+    posParams: {[k: string]: UrlSegment | string},
   ): UrlTree {
     const newRoot = this.createSegmentGroup(redirectTo, urlTree.root, segments, posParams);
     return new UrlTree(
@@ -144,7 +144,7 @@ export class ApplyRedirects {
     redirectTo: string,
     group: UrlSegmentGroup,
     segments: UrlSegment[],
-    posParams: {[k: string]: UrlSegment},
+    posParams: {[k: string]: UrlSegment | string},
   ): UrlSegmentGroup {
     const updatedSegments = this.createSegments(redirectTo, group.segments, segments, posParams);
 
@@ -160,7 +160,7 @@ export class ApplyRedirects {
     redirectTo: string,
     redirectToSegments: UrlSegment[],
     actualSegments: UrlSegment[],
-    posParams: {[k: string]: UrlSegment},
+    posParams: {[k: string]: UrlSegment | string},
   ): UrlSegment[] {
     return redirectToSegments.map((s) =>
       s.path[0] === ':'
@@ -172,7 +172,7 @@ export class ApplyRedirects {
   findPosParam(
     redirectTo: string,
     redirectToUrlSegment: UrlSegment,
-    posParams: {[k: string]: UrlSegment},
+    posParams: {[k: string]: UrlSegment | string},
   ): UrlSegment {
     const pos = posParams[redirectToUrlSegment.path.substring(1)];
     if (!pos)
@@ -181,7 +181,10 @@ export class ApplyRedirects {
         (typeof ngDevMode === 'undefined' || ngDevMode) &&
           `Cannot redirect to '${redirectTo}'. Cannot find '${redirectToUrlSegment.path}'.`,
       );
-    return pos;
+    if (pos instanceof UrlSegment) {
+      return pos;
+    }
+    return new UrlSegment(pos, {});
   }
 
   findOrReturn(redirectToUrlSegment: UrlSegment, actualSegments: UrlSegment[]): UrlSegment {
