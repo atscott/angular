@@ -162,25 +162,34 @@ export class ApplyRedirects {
     actualSegments: UrlSegment[],
     posParams: {[k: string]: UrlSegment | string},
   ): UrlSegment[] {
-    return redirectToSegments.map((s) =>
-      s.path[0] === ':'
-        ? this.findPosParam(redirectTo, s, posParams)
-        : this.findOrReturn(s, actualSegments),
-    );
+    return redirectToSegments.map((s) => {
+      if (s.path[0] === ':') {
+        return this.findPosParam(redirectTo, s.path.substring(1), posParams);
+      } else if (s.path.includes('{:')) {
+        const newPath = s.path.replace(/{:(\w+)}/g, (_, paramName) => {
+          const pos = this.findPosParam(redirectTo, paramName, posParams);
+          return pos.path;
+        });
+        return new UrlSegment(newPath, s.parameters);
+      } else {
+        return this.findOrReturn(s, actualSegments);
+      }
+    });
   }
 
   findPosParam(
     redirectTo: string,
-    redirectToUrlSegment: UrlSegment,
+    paramName: string,
     posParams: {[k: string]: UrlSegment | string},
   ): UrlSegment {
-    const pos = posParams[redirectToUrlSegment.path.substring(1)];
-    if (!pos)
+    const pos = posParams[paramName];
+    if (!pos) {
       throw new RuntimeError(
         RuntimeErrorCode.MISSING_REDIRECT,
         (typeof ngDevMode === 'undefined' || ngDevMode) &&
-          `Cannot redirect to '${redirectTo}'. Cannot find '${redirectToUrlSegment.path}'.`,
+          `Cannot redirect to '${redirectTo}'. Cannot find ':${paramName}'.`,
       );
+    }
     if (pos instanceof UrlSegment) {
       return pos;
     }

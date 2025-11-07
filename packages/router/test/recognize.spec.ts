@@ -993,6 +993,17 @@ describe('recognize', () => {
         ComponentA,
       );
     });
+
+    it('should support mid-segment parameters in redirectTo', async () => {
+      const s = await recognize(
+        [
+          {path: 'a-prefix{:id}a-suffix', redirectTo: 'b-prefix{:id}b-suffix'},
+          {path: 'b-prefix123b-suffix', component: ComponentA},
+        ],
+        'a-prefix123a-suffix',
+      );
+      checkActivatedRoute(s.root.firstChild!, 'b-prefix123b-suffix', {}, ComponentA);
+    });
   });
 });
 
