@@ -1004,6 +1004,117 @@ describe('recognize', () => {
       );
       checkActivatedRoute(s.root.firstChild!, 'b-prefix123b-suffix', {}, ComponentA);
     });
+
+    it('should support optional mid-segment parameters that are present', async () => {
+      const s = await recognize(
+        [{path: 'a-prefix{-:id}a-suffix', component: ComponentA}],
+        'a-prefix123a-suffix',
+      );
+      checkActivatedRoute(s.root.firstChild!, 'a-prefix123a-suffix', {id: '123'}, ComponentA);
+    });
+
+    it('should support optional mid-segment parameters that are not present', async () => {
+      const s = await recognize(
+        [{path: 'a-prefix{-:id}a-suffix', component: ComponentA}],
+        'a-prefixa-suffix',
+      );
+      checkActivatedRoute(s.root.firstChild!, 'a-prefixa-suffix', {}, ComponentA);
+    });
+
+    it('should support optional mid-segment parameters with only a prefix', async () => {
+      const s = await recognize([{path: 'a-prefix{-:id}', component: ComponentA}], 'a-prefix123');
+      checkActivatedRoute(s.root.firstChild!, 'a-prefix123', {id: '123'}, ComponentA);
+    });
+
+    it('should support optional mid-segment parameters with only a prefix when not present', async () => {
+      const s = await recognize([{path: 'a-prefix{-:id}', component: ComponentA}], 'a-prefix');
+      checkActivatedRoute(s.root.firstChild!, 'a-prefix', {}, ComponentA);
+    });
+
+    it('should support optional mid-segment parameters with only a suffix', async () => {
+      const s = await recognize([{path: '{-:id}a-suffix', component: ComponentA}], '123a-suffix');
+      checkActivatedRoute(s.root.firstChild!, '123a-suffix', {id: '123'}, ComponentA);
+    });
+
+    it('should support optional mid-segment parameters with only a suffix when not present', async () => {
+      const s = await recognize([{path: '{-:id}a-suffix', component: ComponentA}], 'a-suffix');
+      checkActivatedRoute(s.root.firstChild!, 'a-suffix', {}, ComponentA);
+    });
+
+    it('should support a mix of optional and required mid-segment parameters', async () => {
+      const s = await recognize(
+        [{path: 'a-prefix{-:id}b-suffix{:name}', component: ComponentA}],
+        'a-prefixb-suffix-foo',
+      );
+      checkActivatedRoute(s.root.firstChild!, 'a-prefixb-suffix-foo', {name: '-foo'}, ComponentA);
+    });
+
+    it('should support a mix of optional and required mid-segment parameters when optional is present', async () => {
+      const s = await recognize(
+        [{path: 'a-prefix{-:id}b-suffix{:name}', component: ComponentA}],
+        'a-prefix123b-suffix-foo',
+      );
+      checkActivatedRoute(
+        s.root.firstChild!,
+        'a-prefix123b-suffix-foo',
+        {id: '123', name: '-foo'},
+        ComponentA,
+      );
+    });
+
+    it('should not match when optional param is the whole segment', async () => {
+      await expectAsync(recognize([{path: '{-:id}', component: ComponentA}], '123')).toBeRejected();
+    });
+
+    it('should support multiple segments with optional parameters present', async () => {
+      const s = await recognize(
+        [{path: '{-:opt1}anchor1/anchor2{-:opt2}', component: ComponentA}],
+        'fooanchor1/anchor2bar',
+      );
+      checkActivatedRoute(
+        s.root.firstChild!,
+        'fooanchor1/anchor2bar',
+        {opt1: 'foo', opt2: 'bar'},
+        ComponentA,
+      );
+    });
+
+    it('should support multiple segments with optional parameters not present', async () => {
+      const s = await recognize(
+        [{path: '{-:opt1}anchor1/anchor2{-:opt2}', component: ComponentA}],
+        'anchor1/anchor2',
+      );
+      checkActivatedRoute(s.root.firstChild!, 'anchor1/anchor2', {}, ComponentA);
+    });
+
+    it('should support optional parameter with a wildcard and a suffix when present', async () => {
+      const s = await recognize(
+        [{path: '{-:opt1}anchor/**/bar', component: ComponentA}],
+        'fooanchor/a/b/bar',
+      );
+      checkActivatedRoute(s.root.firstChild!, 'fooanchor/a/b/bar', {opt1: 'foo'}, ComponentA);
+    });
+
+    it('should support optional parameter with a wildcard and a suffix when not present', async () => {
+      const s = await recognize(
+        [{path: '{-:opt1}anchor/**/bar', component: ComponentA}],
+        'anchor/a/b/bar',
+      );
+      checkActivatedRoute(s.root.firstChild!, 'anchor/a/b/bar', {}, ComponentA);
+    });
+
+    it('should support optional parameter with a wildcard when present', async () => {
+      const s = await recognize(
+        [{path: '{-:opt1}anchor/**', component: ComponentA}],
+        'fooanchor/a/b',
+      );
+      checkActivatedRoute(s.root.firstChild!, 'fooanchor/a/b', {opt1: 'foo'}, ComponentA);
+    });
+
+    it('should support optional parameter with a wildcard when not present', async () => {
+      const s = await recognize([{path: '{-:opt1}anchor/**', component: ComponentA}], 'anchor/a/b');
+      checkActivatedRoute(s.root.firstChild!, 'anchor/a/b', {}, ComponentA);
+    });
   });
 });
 

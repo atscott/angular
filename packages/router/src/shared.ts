@@ -120,26 +120,36 @@ export function convertToParamMap(params: Params): ParamMap {
 function matchParts(
   routeParts: string[],
   urlSegments: UrlSegment[],
-  posParams: {[key: string]: UrlSegment | string},
+  posParams: {[key: string]: UrlSegment | string | undefined},
 ): boolean {
   for (let i = 0; i < routeParts.length; i++) {
     const part = routeParts[i];
     const segment = urlSegments[i];
     const isParameter = part.startsWith(':');
     const isMidSegmentParam = part.includes('{:');
+    const isOptionalMidSegmentParam = part.includes('{-:');
 
-    if (isParameter && !isMidSegmentParam) {
+    if (isParameter && !isMidSegmentParam && !isOptionalMidSegmentParam) {
       posParams[part.substring(1)] = segment;
-    } else if (isMidSegmentParam) {
+    } else if (isMidSegmentParam || isOptionalMidSegmentParam) {
+      if (isOptionalMidSegmentParam && part.replace(/{-\:(\w+)}/g, '').length === 0) {
+        return false;
+      }
       const regex = new RegExp(
-        '^' + part.replace(/{:(\w+)}/g, (_, paramName) => `(?<${paramName}>[^;]*)`) + '$',
+        '^' +
+          part
+            .replace(/{-:(\w+)}/g, (_, paramName) => `(?<${paramName}>[^;]*)?`)
+            .replace(/{:(\w+)}/g, (_, paramName) => `(?<${paramName}>[^;]*)`) +
+          '$',
       );
       const match = segment.path.match(regex);
       if (!match) {
         return false;
       }
       for (const [key, value] of Object.entries(match.groups ?? {})) {
-        posParams[key] = value;
+        if (value !== undefined) {
+          posParams[key] = value;
+        }
       }
     } else if (part !== segment.path) {
       return false;
