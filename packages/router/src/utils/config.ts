@@ -162,6 +162,13 @@ function validateNode(route: Route, fullPath: string, requireStandaloneComponent
             `Redirects happen before guards are executed.`,
         );
       }
+      if (route.resources) {
+        throw new RuntimeError(
+          RuntimeErrorCode.INVALID_ROUTE_CONFIG,
+          `Invalid configuration of route '${fullPath}': redirectTo and resources cannot be used together.` +
+            `Redirects happen before resources are executed.`,
+        );
+      }
     }
 
     if (route.path && route.matcher) {

@@ -17,11 +17,25 @@ import {
   WritableResource,
   Resource,
   ResourceRef,
-  ResourceStreamingLoader,
-  StreamingResourceOptions,
   ResourceStreamItem,
   ResourceLoaderParams,
+  ResourceLoader,
+  ResourceStreamingLoader,
+  StreamingResourceOptions,
 } from './api';
+
+export {
+  ResourceOptions,
+  ResourceStatus,
+  WritableResource,
+  Resource,
+  ResourceRef,
+  ResourceStreamItem,
+  ResourceLoaderParams,
+  ResourceLoader,
+  ResourceStreamingLoader,
+  StreamingResourceOptions,
+};
 
 import {Injector} from '../di/injector';
 import {assertInInjectionContext} from '../di/contextual';
@@ -78,30 +92,30 @@ export function resource<T, R>(options: ResourceOptions<T, R>): ResourceRef<T | 
   );
 }
 
-type ResourceInternalStatus = 'idle' | 'loading' | 'resolved' | 'local';
+export type ResourceInternalStatus = 'idle' | 'loading' | 'resolved' | 'local';
 
 /**
  * Internal state of a resource.
  */
-interface ResourceProtoState<T> {
-  extRequest: WrappedRequest;
+export interface ResourceProtoState<T, R = unknown> {
+  extRequest: WrappedRequest<R>;
 
   // For simplicity, status is internally tracked as a subset of the public status enum.
   // Reloading and Error statuses are projected from Loading and Resolved based on other state.
   status: ResourceInternalStatus;
 }
 
-interface ResourceState<T> extends ResourceProtoState<T> {
+export interface ResourceState<T, R = unknown> extends ResourceProtoState<T, R> {
   previousStatus: ResourceStatus;
   stream: Signal<ResourceStreamItem<T>> | undefined;
 }
 
-type WrappedRequest = {request: unknown; reload: number};
+export type WrappedRequest<R = unknown> = {request: R; reload: number};
 
 /**
  * Base class which implements `.value` as a `WritableSignal` by delegating `.set` and `.update`.
  */
-abstract class BaseWritableResource<T> implements WritableResource<T> {
+export abstract class BaseWritableResource<T> implements WritableResource<T> {
   readonly value: WritableSignal<T>;
   abstract readonly status: Signal<ResourceStatus>;
   abstract readonly error: Signal<Error | undefined>;
@@ -151,34 +165,165 @@ abstract class BaseWritableResource<T> implements WritableResource<T> {
 }
 
 /**
+ * A kernel that handles the loading logic for a resource.
+ *
+ * It manages the `extRequest` signal, the `loadEffect`, and the `reload` method.
+ * It delegates state updates to the provided `delegate`.
+ */
+export class ResourceKernel<T, R> {
+  readonly extRequest: WritableSignal<WrappedRequest<R>>;
+  readonly state: WritableSignal<ResourceState<T, R>>;
+  private readonly effectRef: EffectRef;
+  private pendingController: AbortController | undefined;
+  private resolvePendingTask: (() => void) | undefined = undefined;
+  private readonly unregisterOnDestroy: () => void;
+  destroyed = false;
+
+  constructor(
+    request: () => R,
+    private readonly loaderFn: ResourceStreamingLoader<T, R>,
+    private readonly injector: Injector,
+  ) {
+    this.extRequest = linkedSignal({
+      source: request,
+      computation: (req, previous) => {
+        // If the request is the same as the previous one, keep the reload count.
+        // Otherwise, reset the reload count to 0.
+        // Note: We don't use the equality function from the options here because we want to track
+        // the actual request object changes for reloading purposes.
+        const reload = previous && previous.value.request === req ? previous.value.reload : 0;
+        return {request: req, reload};
+      },
+    });
+
+    this.state = createResourceState(this.extRequest);
+
+    this.effectRef = effect(
+      () => {
+        const extRequest = this.extRequest();
+        // We only want to track the `extRequest` signal. The body of the effect should be untracked
+        // to avoid accidental dependencies on other signals accessed during the load.
+        untracked(() => this.loadEffect(extRequest));
+      },
+      {injector, manualCleanup: true},
+    );
+
+    this.unregisterOnDestroy = injector.get(DestroyRef).onDestroy(() => this.destroy());
+  }
+
+  private async loadEffect(extRequest: WrappedRequest<R>): Promise<void> {
+    const previousStatus = this.state().previousStatus;
+
+    // If the request is undefined, we don't load anything.
+    if (extRequest.request === undefined) {
+      this.abortInProgressLoad();
+      return;
+    }
+
+    // If the delegate determines we shouldn't load (e.g. because we are in a local state), return.
+    if (this.state().status !== 'loading') {
+      return;
+    }
+
+    // Cancel any pending load.
+    this.abortInProgressLoad();
+
+    const {signal: abortSignal} = (this.pendingController = new AbortController());
+
+    // If we have a pending task, resolve it.
+    // This shouldn't happen if we correctly cleaned up, but just in case.
+    this.resolvePendingTask?.();
+    this.resolvePendingTask = undefined;
+
+    // Add a pending task to keep the app stable while loading.
+    const pendingTasks = this.injector.get(PendingTasks);
+    this.resolvePendingTask = pendingTasks.add();
+
+    try {
+      const stream = await untracked(() => {
+        return this.loaderFn({
+          params: extRequest.request as Exclude<R, undefined>,
+          request: extRequest.request as Exclude<R, undefined>,
+          abortSignal,
+          previous: {
+            status: previousStatus,
+          },
+        } as ResourceLoaderParams<R>);
+      });
+
+      if (abortSignal.aborted || untracked(this.extRequest) !== extRequest) {
+        return;
+      }
+
+      this.state.update((s) => ({
+        ...s,
+        status: 'resolved',
+        stream,
+      }));
+    } catch (err) {
+      if (abortSignal.aborted || untracked(this.extRequest) !== extRequest) {
+        return;
+      }
+      this.state.update((s) => ({
+        ...s,
+        status: 'resolved',
+        stream: signal({error: encapsulateResourceError(err)}),
+      }));
+    } finally {
+      if (!abortSignal.aborted) {
+        this.resolvePendingTask?.();
+        this.resolvePendingTask = undefined;
+        this.pendingController = undefined;
+      }
+    }
+  }
+
+  reload(): boolean {
+    this.extRequest.update((s) => ({...s, reload: s.reload + 1}));
+    return true;
+  }
+
+  abortInProgressLoad(): void {
+    untracked(() => this.pendingController?.abort());
+    this.pendingController = undefined;
+    this.resolvePendingTask?.();
+    this.resolvePendingTask = undefined;
+  }
+
+  destroy(): void {
+    this.destroyed = true;
+    this.unregisterOnDestroy();
+    this.effectRef.destroy();
+    this.abortInProgressLoad();
+    this.state.set({
+      extRequest: {request: undefined as any, reload: 0},
+      status: 'idle',
+      previousStatus: 'idle',
+      stream: undefined,
+    });
+  }
+}
+
+/**
  * Implementation for `resource()` which uses a `linkedSignal` to manage the resource's state.
  */
 export class ResourceImpl<T, R> extends BaseWritableResource<T> implements ResourceRef<T> {
-  private readonly pendingTasks: PendingTasks;
-
   /**
    * The current state of the resource. Status, value, and error are derived from this.
    */
-  private readonly state: WritableSignal<ResourceState<T>>;
-
   /**
-   * Combines the current request with a reload counter which allows the resource to be reloaded on
-   * imperative command.
+   * The current state of the resource. Status, value, and error are derived from this.
    */
-  protected readonly extRequest: WritableSignal<WrappedRequest>;
-  private readonly effectRef: EffectRef;
-
-  private pendingController: AbortController | undefined;
-  private resolvePendingTask: (() => void) | undefined = undefined;
-  private destroyed = false;
-  private unregisterOnDestroy: () => void;
-
+  private get state(): WritableSignal<ResourceState<T>> {
+    return this.kernel.state;
+  }
+  private readonly kernel: ResourceKernel<T, R>;
   override readonly status: Signal<ResourceStatus>;
   override readonly error: Signal<Error | undefined>;
 
   constructor(
     request: () => R,
-    private readonly loaderFn: ResourceStreamingLoader<T, R>,
+    loaderFn: ResourceStreamingLoader<T, R>,
     defaultValue: T,
     private readonly equal: ValueEqualityFn<T> | undefined,
     private readonly debugName: string | undefined,
@@ -211,54 +356,7 @@ export class ResourceImpl<T, R> extends BaseWritableResource<T> implements Resou
       debugName,
     );
 
-    // Extend `request()` to include a writable reload signal.
-    this.extRequest = linkedSignal({
-      source: request,
-      computation: (request) => ({request, reload: 0}),
-      ...(ngDevMode ? createDebugNameObject(debugName, 'extRequest') : undefined),
-    });
-
-    // The main resource state is managed in a `linkedSignal`, which allows the resource to change
-    // state instantaneously when the request signal changes.
-    this.state = linkedSignal<WrappedRequest, ResourceState<T>>({
-      // Whenever the request changes,
-      source: this.extRequest,
-      // Compute the state of the resource given a change in status.
-      computation: (extRequest, previous) => {
-        const status = extRequest.request === undefined ? 'idle' : 'loading';
-        if (!previous) {
-          return {
-            extRequest,
-            status,
-            previousStatus: 'idle',
-            stream: undefined,
-          };
-        } else {
-          return {
-            extRequest,
-            status,
-            previousStatus: projectStatusOfState(previous.value),
-            // If the request hasn't changed, keep the previous stream.
-            stream:
-              previous.value.extRequest.request === extRequest.request
-                ? previous.value.stream
-                : undefined,
-          };
-        }
-      },
-      ...(ngDevMode ? createDebugNameObject(debugName, 'state') : undefined),
-    });
-
-    this.effectRef = effect(this.loadEffect.bind(this), {
-      injector,
-      manualCleanup: true,
-      ...(ngDevMode ? createDebugNameObject(debugName, 'loadEffect') : undefined),
-    });
-
-    this.pendingTasks = injector.get(PendingTasks);
-
-    // Cancel any pending request when the resource itself is destroyed.
-    this.unregisterOnDestroy = injector.get(DestroyRef).onDestroy(() => this.destroy());
+    this.kernel = new ResourceKernel(request, loaderFn, injector);
 
     this.status = computed(
       () => projectStatusOfState(this.state()),
@@ -274,14 +372,17 @@ export class ResourceImpl<T, R> extends BaseWritableResource<T> implements Resou
     );
   }
 
+  protected get extRequest(): WritableSignal<WrappedRequest> {
+    return this.kernel.extRequest;
+  }
+
   /**
    * Called either directly via `WritableResource.set` or via `.value.set()`.
    */
   override set(value: T): void {
-    if (this.destroyed) {
+    if (this.kernel.destroyed) {
       return;
     }
-
     const error = untracked(this.error);
     const state = untracked(this.state);
 
@@ -308,7 +409,7 @@ export class ResourceImpl<T, R> extends BaseWritableResource<T> implements Resou
 
     // We're departing from whatever state the resource was in previously, so cancel any in-progress
     // loading operations.
-    this.abortInProgressLoad();
+    this.kernel.abortInProgressLoad();
   }
 
   override reload(): boolean {
@@ -318,114 +419,11 @@ export class ResourceImpl<T, R> extends BaseWritableResource<T> implements Resou
       return false;
     }
 
-    // Increment the request reload to trigger the `state` linked signal to switch us to `Reload`
-    this.extRequest.update(({request, reload}) => ({request, reload: reload + 1}));
-    return true;
+    return this.kernel.reload();
   }
 
   destroy(): void {
-    this.destroyed = true;
-    this.unregisterOnDestroy();
-    this.effectRef.destroy();
-    this.abortInProgressLoad();
-
-    // Destroyed resources enter Idle state.
-    this.state.set({
-      extRequest: {request: undefined, reload: 0},
-      status: 'idle',
-      previousStatus: 'idle',
-      stream: undefined,
-    });
-  }
-
-  private async loadEffect(): Promise<void> {
-    const extRequest = this.extRequest();
-
-    // Capture the previous status before any state transitions. Note that this is `untracked` since
-    // we do not want the effect to depend on the state of the resource, only on the request.
-    const {status: currentStatus, previousStatus} = untracked(this.state);
-
-    if (extRequest.request === undefined) {
-      // Nothing to load (and we should already be in a non-loading state).
-      return;
-    } else if (currentStatus !== 'loading') {
-      // We're not in a loading or reloading state, so this loading request is stale.
-      return;
-    }
-
-    // Cancel any previous loading attempts.
-    this.abortInProgressLoad();
-
-    // Capturing _this_ load's pending task in a local variable is important here. We may attempt to
-    // resolve it twice:
-    //
-    //  1. when the loading function promise resolves/rejects
-    //  2. when cancelling the loading operation
-    //
-    // After the loading operation is cancelled, `this.resolvePendingTask` no longer represents this
-    // particular task, but this `await` may eventually resolve/reject. Thus, when we cancel in
-    // response to (1) below, we need to cancel the locally saved task.
-    let resolvePendingTask: (() => void) | undefined = (this.resolvePendingTask =
-      this.pendingTasks.add());
-
-    const {signal: abortSignal} = (this.pendingController = new AbortController());
-
-    try {
-      // The actual loading is run through `untracked` - only the request side of `resource` is
-      // reactive. This avoids any confusion with signals tracking or not tracking depending on
-      // which side of the `await` they are.
-      const stream = await untracked(() => {
-        return this.loaderFn({
-          params: extRequest.request as Exclude<R, undefined>,
-          // TODO(alxhub): cleanup after g3 removal of `request` alias.
-          request: extRequest.request as Exclude<R, undefined>,
-          abortSignal,
-          previous: {
-            status: previousStatus,
-          },
-        } as ResourceLoaderParams<R>);
-      });
-
-      // If this request has been aborted, or the current request no longer
-      // matches this load, then we should ignore this resolution.
-      if (abortSignal.aborted || untracked(this.extRequest) !== extRequest) {
-        return;
-      }
-
-      this.state.set({
-        extRequest,
-        status: 'resolved',
-        previousStatus: 'resolved',
-        stream,
-      });
-    } catch (err) {
-      if (abortSignal.aborted || untracked(this.extRequest) !== extRequest) {
-        return;
-      }
-
-      this.state.set({
-        extRequest,
-        status: 'resolved',
-        previousStatus: 'error',
-        stream: signal(
-          {error: encapsulateResourceError(err)},
-          ngDevMode ? createDebugNameObject(this.debugName, 'stream') : undefined,
-        ),
-      });
-    } finally {
-      // Resolve the pending task now that the resource has a value.
-      resolvePendingTask?.();
-      resolvePendingTask = undefined;
-    }
-  }
-
-  private abortInProgressLoad(): void {
-    untracked(() => this.pendingController?.abort());
-    this.pendingController = undefined;
-
-    // Once the load is aborted, we no longer want to block stability on its resolution.
-    this.resolvePendingTask?.();
-    this.resolvePendingTask = undefined;
+    this.kernel.destroy();
   }
 }
 
@@ -436,7 +434,7 @@ function wrapEqualityFn<T>(equal: ValueEqualityFn<T>): ValueEqualityFn<T | undef
   return (a, b) => (a === undefined || b === undefined ? a === b : equal(a, b));
 }
 
-function getLoader<T, R>(options: ResourceOptions<T, R>): ResourceStreamingLoader<T, R> {
+export function getLoader<T, R>(options: ResourceOptions<T, R>): ResourceStreamingLoader<T, R> {
   if (isStreamingResourceOptions(options)) {
     return options.stream;
   }
@@ -465,7 +463,7 @@ function isStreamingResourceOptions<T, R>(
 /**
  * Project from a state with `ResourceInternalStatus` to the user-facing `ResourceStatus`
  */
-function projectStatusOfState(state: ResourceState<unknown>): ResourceStatus {
+export function projectStatusOfState(state: ResourceState<unknown>): ResourceStatus {
   switch (state.status) {
     case 'loading':
       return state.extRequest.reload === 0 ? 'loading' : 'reloading';
@@ -520,4 +518,32 @@ class ResourceWrappedError extends Error {
       {cause: error},
     );
   }
+}
+
+export function createResourceState<T, R>(
+  source: Signal<WrappedRequest<R>>,
+): WritableSignal<ResourceState<T, R>> {
+  return linkedSignal<WrappedRequest<R>, ResourceState<T, R>>({
+    source,
+    computation: (extRequest, previous) => {
+      const status = extRequest.request === undefined ? 'idle' : 'loading';
+      if (!previous) {
+        return {
+          extRequest,
+          status,
+          previousStatus: 'idle',
+          stream: undefined,
+        };
+      }
+      return {
+        extRequest,
+        status,
+        previousStatus: projectStatusOfState(previous.value),
+        stream:
+          previous.value.extRequest.request === extRequest.request
+            ? previous.value.stream
+            : undefined,
+      };
+    },
+  });
 }

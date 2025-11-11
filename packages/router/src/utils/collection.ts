@@ -18,10 +18,10 @@ export function shallowEqualArrays(a: readonly any[], b: readonly any[]): boolea
   return true;
 }
 
-export function shallowEqual(
-  a: {[key: string | symbol]: any},
-  b: {[key: string | symbol]: any},
-): boolean {
+export function shallowEqual(a: any, b: any): boolean {
+  if (a === b) return true;
+  if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false;
+
   // While `undefined` should never be possible, it would sometimes be the case in IE 11
   // and pre-chromium Edge. The check below accounts for this edge case.
   const k1 = a ? getDataKeys(a) : undefined;
@@ -37,6 +37,35 @@ export function shallowEqual(
     }
   }
   return true;
+}
+
+export function deepEqual(valA: any, valB: any): boolean {
+  if (valA === valB) return true;
+
+  if (valA && valB && typeof valA === 'object' && typeof valB === 'object') {
+    if (Array.isArray(valA) !== Array.isArray(valB)) return false;
+
+    if (Array.isArray(valA)) {
+      if (valA.length !== valB.length) return false;
+      for (let i = 0; i < valA.length; i++) {
+        if (!deepEqual(valA[i], valB[i])) return false;
+      }
+      return true;
+    }
+
+    const keysA = getDataKeys(valA);
+    const keysB = getDataKeys(valB);
+    if (keysA.length !== keysB.length) return false;
+
+    for (const key of keysA) {
+      if (!keysB.includes(key) || !deepEqual(valA[key], valB[key])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  return valA === valB;
 }
 
 /**

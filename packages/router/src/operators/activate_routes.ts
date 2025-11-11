@@ -161,6 +161,7 @@ export class ActivateRoutes {
       context.attachRef = null;
       context.route = null;
     }
+    route.value._resourceInjector?.destroy();
   }
 
   private activateChildRoutes(
