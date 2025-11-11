@@ -46,6 +46,7 @@ describe('create router state', () => {
         'a(left:b//right:c)',
       ),
       emptyState(),
+      new Set(),
     );
 
     checkActivatedRoute(state.root, RootComponent);
@@ -67,12 +68,14 @@ describe('create router state', () => {
       reuseStrategy,
       await createState(config, 'a(left:b)'),
       emptyState(),
+      new Set(),
     );
     advanceState(prevState);
     const state = createRouterState(
       reuseStrategy,
       await createState(config, 'a(left:c)'),
       prevState,
+      new Set(),
     );
 
     expect(prevState.root).toBe(state.root);
@@ -99,12 +102,14 @@ describe('create router state', () => {
       reuseStrategy,
       await createState(config, 'a/1;p=11/(b//right:c)'),
       emptyState(),
+      new Set(),
     );
     advanceState(prevState);
     const state = createRouterState(
       reuseStrategy,
       await createState(config, 'a/2;p=22/(b//right:c)'),
       prevState,
+      new Set(),
     );
 
     expect(prevState.root).toBe(state.root);
@@ -127,15 +132,15 @@ describe('create router state', () => {
       {path: 'b', component: ComponentB, outlet: 'left'},
       {path: 'c', component: ComponentC, outlet: 'left'},
     ];
-    spyOn(reuseStrategy, 'retrieve');
-
+    spyOn(reuseStrategy, 'retrieve').and.callThrough();
     const prevState = createRouterState(
       reuseStrategy,
       await createState(config, 'a(left:b)'),
       emptyState(),
+      new Set(),
     );
     advanceState(prevState);
-    createRouterState(reuseStrategy, await createState(config, 'a(left:c)'), prevState);
+    createRouterState(reuseStrategy, await createState(config, 'a(left:c)'), prevState, new Set());
     expect(reuseStrategy.retrieve).not.toHaveBeenCalled();
   });
 
@@ -149,11 +154,17 @@ describe('create router state', () => {
       reuseStrategy,
       await createState(config, ''),
       emptyState(),
+      new Set(),
     );
     advanceState(previousState);
     (reuseStrategy.shouldReuseRoute as jasmine.Spy).calls.reset();
 
-    createRouterState(reuseStrategy, await createState(config, 'product/30'), previousState);
+    createRouterState(
+      reuseStrategy,
+      await createState(config, 'product/30'),
+      previousState,
+      new Set(),
+    );
 
     // One call for the root and one call for each of the children
     expect(reuseStrategy.shouldReuseRoute).toHaveBeenCalledTimes(2);

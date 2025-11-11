@@ -167,7 +167,13 @@ export {
 } from './profiler';
 export {
   ResourceImpl as ɵResourceImpl,
+  BaseWritableResource as ɵBaseWritableResource,
   encapsulateResourceError as ɵencapsulateResourceError,
+  getLoader as ɵgetLoader,
+  ResourceKernel as ɵResourceKernel,
+  ResourceState as ɵResourceState,
+  WrappedRequest as ɵWrappedRequest,
+  projectStatusOfState as ɵprojectStatusOfState,
 } from './resource/resource';
 export {getClosestComponentName as ɵgetClosestComponentName} from './internal/get_closest_component_name';
 export {getComponentDef as ɵgetComponentDef} from './render3/def_getters';

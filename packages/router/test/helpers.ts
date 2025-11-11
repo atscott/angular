@@ -60,6 +60,7 @@ export async function timeout(ms?: number): Promise<void> {
 export function useAutoTick() {
   beforeEach(() => {
     jasmine.clock().install();
+    jasmine.clock().mockDate(new Date(0));
     jasmine.clock().autoTick();
   });
   afterEach(() => {

@@ -34,6 +34,32 @@ export type DetachedRouteHandleInternal = {
 /**
  * @description
  *
+ * Destroys the component associated with a `DetachedRouteHandle`.
+ *
+ * This function should be used when a `RouteReuseStrategy` decides to drop a stored handle
+ * and wants to ensure that the component is destroyed.
+ *
+ * @param handle The detached route handle to destroy.
+ *
+ * @publicApi
+ */
+export function destroyDetachedRouteHandle(handle: DetachedRouteHandle): void {
+  const internalHandle = handle as DetachedRouteHandleInternal;
+  if (internalHandle && internalHandle.componentRef) {
+    internalHandle.componentRef.destroy();
+  }
+  if (internalHandle && internalHandle.route) {
+    const traverse = (node: TreeNode<ActivatedRoute>) => {
+      node.value._resourceInjector?.destroy();
+      node.children.forEach(traverse);
+    };
+    traverse(internalHandle.route);
+  }
+}
+
+/**
+ * @description
+ *
  * Provides a way to customize when activated routes get reused.
  *
  * @publicApi

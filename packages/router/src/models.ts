@@ -12,12 +12,26 @@ import {
   NgModuleFactory,
   Provider,
   ProviderToken,
+  Signal,
   Type,
 } from '@angular/core';
 import {Observable} from 'rxjs';
 
+import {RouterResource} from './router_resource';
 import type {ActivatedRouteSnapshot, RouterStateSnapshot} from './router_state';
+import {Params} from './shared';
 import type {UrlSegment, UrlSegmentGroup, UrlTree} from './url_tree';
+
+export type ResourceResult = {
+  [key: string]: RouterResource<any, any>;
+};
+
+export interface ResourceContext {
+  params: Signal<Params>;
+  queryParams: Signal<Params>;
+  fragment: Signal<string | null>;
+  data: Signal<Record<string, any>>;
+}
 
 /**
  * How to handle a navigation request to the current URL. One of:
@@ -731,6 +745,11 @@ export interface Route {
    * @see [Resolve](guide/routing/data-resolvers#what-are-data-resolvers)
    */
   resolve?: ResolveData;
+  /**
+   * A function that returns a map of resources.
+   * This function is executed during the Main Loading Phase of a navigation.
+   */
+  resources?: (ctx: ResourceContext) => ResourceResult | Promise<ResourceResult>;
   /**
    * An array of child `Route` objects that specifies a nested route
    * configuration.

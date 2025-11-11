@@ -100,6 +100,7 @@ export {
 export {
   BaseRouteReuseStrategy,
   DetachedRouteHandle,
+  destroyDetachedRouteHandle,
   RouteReuseStrategy,
 } from './route_reuse_strategy';
 export {Router} from './router';
@@ -143,6 +144,8 @@ export {
   mapToResolve,
 } from './utils/functional_guards';
 export {VERSION} from './version';
+
+export {routerResource} from './router_resource';
 
 export * from './private_export';
 import './router_devtools';

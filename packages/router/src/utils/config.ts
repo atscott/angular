@@ -162,6 +162,13 @@ function validateNode(route: Route, fullPath: string, requireStandaloneComponent
             `Redirects happen before guards are executed.`,
         );
       }
+      if (route.resources) {
+        throw new RuntimeError(
+          RuntimeErrorCode.INVALID_ROUTE_CONFIG,
+          `Invalid configuration of route '${fullPath}': redirectTo and resources cannot be used together.` +
+            `Redirects happen before resources are executed.`,
+        );
+      }
     }
 
     if (route.path && route.matcher) {
@@ -238,4 +245,17 @@ export function sortByMatchingOutlets(routes: Routes, outletName: string): Route
   const sortedConfig = routes.filter((r) => getOutlet(r) === outletName);
   sortedConfig.push(...routes.filter((r) => getOutlet(r) !== outletName));
   return sortedConfig;
+}
+
+export function getClosestRouteInjector(
+  snapshot: ActivatedRouteSnapshot,
+): EnvironmentInjector | undefined {
+  let current: ActivatedRouteSnapshot | null = snapshot;
+  while (current) {
+    if (current._environmentInjector) {
+      return current._environmentInjector;
+    }
+    current = current.parent;
+  }
+  return undefined;
 }
