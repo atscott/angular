@@ -217,6 +217,14 @@ export class UrlTree {
     public queryParams: Params = {},
     /** The fragment of the URL */
     public fragment: string | null = null,
+    /**
+     * Whether the URL has a trailing slash.
+     *
+     * This is used to preserve the presence of a trailing slash in the URL during serialization
+     * without creating an empty path segment in the tree, which would otherwise interfere with
+     * route matching.
+     */
+    public hasTrailingSlash: boolean = false,
   ) {
     if (typeof ngDevMode === 'undefined' || ngDevMode) {
       if (root.segments.length > 0) {
@@ -393,11 +401,70 @@ export abstract class UrlSerializer {
  *
  * @publicApi
  */
+
+/**
+ * Options that can be used to configure the `DefaultUrlSerializer`.
+ *
+ * @publicApi
+ */
+export interface UrlSerializerOptions {
+  /**
+   * Configures how the `DefaultUrlSerializer` handles trailing slashes in URLs.
+   *
+   * - 'always': Forces a trailing slash on all URLs.
+   * - 'never': Removes trailing slashes from all URLs.
+   * - 'preserve': Keeps the trailing slash if present, and omits it if not.
+   */
+  trailingSlash?: 'always' | 'never' | 'preserve';
+}
+
+/**
+ * @description
+ *
+ * A default implementation of the `UrlSerializer`.
+ *
+ * Example URLs:
+ *
+ * ```
+ * /inbox/33(popup:compose)
+ * /inbox/33;open=true/messages/44
+ * ```
+ *
+ * DefaultUrlSerializer uses parentheses to serialize secondary segments (e.g., popup:compose), the
+ * colon syntax to specify the outlet, and the ';parameter=value' syntax (e.g., open=true) to
+ * specify route specific parameters.
+ *
+ * A custom `DefaultUrlSerializer` can be provided to include other characters in the URL that are not
+ * encoded by default.
+ *
+ * @publicApi
+ */
 export class DefaultUrlSerializer implements UrlSerializer {
+  constructor(
+    /**
+     * Configures how to handle trailing slashes in URLs.
+     *
+     * - 'always': Forces a trailing slash on all URLs.
+     * - 'never': Removes trailing slashes from all URLs.
+     * - 'preserve': Keeps the trailing slash if present, and omits it if not.
+     */
+    private readonly trailingSlash?: 'always' | 'never' | 'preserve',
+  ) {}
   /** Parses a url into a `UrlTree` */
   parse(url: string): UrlTree {
     const p = new UrlParser(url);
-    return new UrlTree(p.parseRootSegment(), p.parseQueryParams(), p.parseFragment());
+    const tree = new UrlTree(
+      p.parseRootSegment(),
+      p.parseQueryParams(),
+      p.parseFragment(),
+      p.hasTrailingSlash,
+    );
+    if (this.trailingSlash === 'always') {
+      tree.hasTrailingSlash = true;
+    } else if (this.trailingSlash === 'never') {
+      tree.hasTrailingSlash = false;
+    }
+    return tree;
   }
 
   /** Converts a `UrlTree` into a url */
@@ -407,7 +474,14 @@ export class DefaultUrlSerializer implements UrlSerializer {
     const fragment =
       typeof tree.fragment === `string` ? `#${encodeUriFragment(tree.fragment)}` : '';
 
-    return `${segment}${query}${fragment}`;
+    // Enforce strategy during serialization as well for locally created trees
+    if (this.trailingSlash === 'always') {
+      tree.hasTrailingSlash = true;
+    } else if (this.trailingSlash === 'never') {
+      tree.hasTrailingSlash = false;
+    }
+
+    return `${segment}${tree.hasTrailingSlash ? '/' : ''}${query}${fragment}`;
   }
 }
 
@@ -558,6 +632,7 @@ function matchUrlQueryParamValue(str: string): string {
 
 class UrlParser {
   private remaining: string;
+  public hasTrailingSlash = false;
 
   constructor(private url: string) {
     this.remaining = url;
@@ -605,9 +680,10 @@ class UrlParser {
 
     while (this.peekStartsWith('/') && !this.peekStartsWith('//') && !this.peekStartsWith('/(')) {
       this.capture('/');
-      const segment = this.parseSegment();
-      if (segment.path.length > 0) {
-        segments.push(segment);
+      if (this.remaining === '' || this.peekStartsWith('?') || this.peekStartsWith('#')) {
+        this.hasTrailingSlash = true;
+      } else {
+        segments.push(this.parseSegment());
       }
     }
 

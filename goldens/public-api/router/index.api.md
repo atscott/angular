@@ -237,6 +237,8 @@ export function defaultUrlMatcher(segments: UrlSegment[], segmentGroup: UrlSegme
 
 // @public
 export class DefaultUrlSerializer implements UrlSerializer {
+    constructor(
+    trailingSlash?: "always" | "never" | "preserve" | undefined);
     parse(url: string): UrlTree;
     serialize(tree: UrlTree): string;
 }
@@ -756,6 +758,7 @@ export interface RouterConfigOptions {
     onSameUrlNavigation?: OnSameUrlNavigation;
     paramsInheritanceStrategy?: 'emptyOnly' | 'always';
     resolveNavigationPromiseOnError?: boolean;
+    trailingSlash?: 'always' | 'never' | 'preserve';
     urlUpdateStrategy?: 'deferred' | 'eager';
 }
 
@@ -1092,8 +1095,10 @@ export class UrlTree {
     constructor(
     root?: UrlSegmentGroup,
     queryParams?: Params,
-    fragment?: string | null);
+    fragment?: string | null,
+    hasTrailingSlash?: boolean);
     fragment: string | null;
+    hasTrailingSlash: boolean;
     // (undocumented)
     get queryParamMap(): ParamMap;
     queryParams: Params;

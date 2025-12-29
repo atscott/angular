@@ -11,6 +11,7 @@ import {
   Location,
   LocationStrategy,
   PathLocationStrategy,
+  REMOVE_TRAILING_SLASH,
   ViewportScroller,
 } from '@angular/common';
 import {
@@ -68,7 +69,11 @@ export const ROUTER_FORROOT_GUARD = new InjectionToken<void>(
 // change in a major version.
 export const ROUTER_PROVIDERS: Provider[] = [
   Location,
-  {provide: UrlSerializer, useClass: DefaultUrlSerializer},
+  {
+    provide: UrlSerializer,
+    useFactory: () =>
+      new DefaultUrlSerializer(inject(ROUTER_CONFIGURATION, {optional: true})?.trailingSlash),
+  },
   Router,
   ChildrenOutletContexts,
   {provide: ActivatedRoute, useFactory: rootRoute},
@@ -154,6 +159,10 @@ export class RouterModule {
             }
           : [],
         {provide: ROUTER_CONFIGURATION, useValue: config ? config : {}},
+        {
+          provide: REMOVE_TRAILING_SLASH,
+          useValue: config?.trailingSlash !== 'always' && config?.trailingSlash !== 'preserve',
+        },
         config?.useHash ? provideHashLocationStrategy() : providePathLocationStrategy(),
         provideRouterScroller(),
         config?.preloadingStrategy ? withPreloading(config.preloadingStrategy).ɵproviders : [],

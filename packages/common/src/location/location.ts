@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 
-import {Injectable, OnDestroy, ɵɵinject} from '@angular/core';
+import {inject, Injectable, InjectionToken, OnDestroy, ɵɵinject} from '@angular/core';
 import {Subject, SubscriptionLike} from 'rxjs';
 
 import {LocationStrategy} from './location_strategy';
@@ -47,6 +47,25 @@ export interface PopStateEvent {
  *
  * @publicApi
  */
+/**
+ * @publicApi
+ *
+ * A token that configures whether the `Location` service should strip trailing slashes from normalized URLs.
+ *
+ * If `true`, `Location` strips trailing slashes (e.g. `/foo/` becomes `/foo`).
+ * If `false`, `Location` preserves trailing slashes (e.g. `/foo/` remains `/foo/`).
+ *
+ * The default value is `true` for backward compatibility.
+ * However, when using `provideRouter` with `withRouterConfig({ trailingSlash: 'always' | 'preserve' })`,
+ * this token is automatically configured to `false`.
+ */
+export const REMOVE_TRAILING_SLASH = new InjectionToken<boolean>(
+  typeof ngDevMode !== 'undefined' && ngDevMode ? 'REMOVE_TRAILING_SLASH' : '',
+  {
+    factory: () => true,
+  },
+);
+
 @Injectable({
   providedIn: 'root',
   // See #23917
@@ -63,8 +82,11 @@ export class Location implements OnDestroy {
   _urlChangeListeners: ((url: string, state: unknown) => void)[] = [];
   /** @internal */
   _urlChangeSubscription: SubscriptionLike | null = null;
+  /** @internal */
+  private _removeTrailingSlash: boolean;
 
   constructor(locationStrategy: LocationStrategy) {
+    this._removeTrailingSlash = inject(REMOVE_TRAILING_SLASH, {optional: true}) ?? true;
     this._locationStrategy = locationStrategy;
     const baseHref = this._locationStrategy.getBaseHref();
     // Note: This class's interaction with base HREF does not fully follow the rules
@@ -132,7 +154,8 @@ export class Location implements OnDestroy {
    * @returns The normalized URL string.
    */
   normalize(url: string): string {
-    return Location.stripTrailingSlash(_stripBasePath(this._basePath, _stripIndexHtml(url)));
+    const stripped = _stripBasePath(this._basePath, _stripIndexHtml(url));
+    return this._removeTrailingSlash ? Location.stripTrailingSlash(stripped) : stripped;
   }
 
   /**

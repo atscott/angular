@@ -123,6 +123,20 @@ provideRouter(routes, withRouterConfig({defaultQueryParamsHandling: 'merge'}));
 
 This is especially helpful for search and filter pages to automatically retain existing filters when additional parameters are provided.
 
+### Trailing slash strategy
+
+`trailingSlash` configures how the Router handles trailing slashes in URLs.
+
+- `'always'` forces a trailing slash on all URLs (e.g. `/foo/`)
+- `'never'` removes trailing slashes from all URLs (the default)
+- `'preserve'` keeps the trailing slash if present in the input, and omits it if not
+
+```ts
+provideRouter(routes, withRouterConfig({trailingSlash: 'always'}));
+```
+
+This is useful for ensuring consistency in URL structure across your application, which can be important for some server configurations.
+
 Angular Router exposes four main areas for customization:
 
   <docs-pill-row>

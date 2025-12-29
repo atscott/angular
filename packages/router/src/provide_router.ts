@@ -12,6 +12,7 @@ import {
   LocationStrategy,
   ViewportScroller,
   Location,
+  REMOVE_TRAILING_SLASH,
   ɵNavigationAdapterForLocation,
 } from '@angular/common';
 import {
@@ -108,6 +109,13 @@ export function provideRouter(routes: Routes, ...features: RouterFeatures[]): En
       : [],
     {provide: ActivatedRoute, useFactory: rootRoute},
     {provide: APP_BOOTSTRAP_LISTENER, multi: true, useFactory: getBootstrapListener},
+    {
+      provide: REMOVE_TRAILING_SLASH,
+      useFactory: () => {
+        const config = inject(ROUTER_CONFIGURATION, {optional: true});
+        return config?.trailingSlash !== 'always' && config?.trailingSlash !== 'preserve';
+      },
+    },
     features.map((feature) => feature.ɵproviders),
   ]);
 }

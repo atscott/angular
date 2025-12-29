@@ -136,6 +136,16 @@ export interface RouterConfigOptions {
    * if an error occurs.
    */
   resolveNavigationPromiseOnError?: boolean;
+  /**
+   * Configures how the Router handles trailing slashes in URLs.
+   *
+   * - 'always': Forces a trailing slash on all URLs.
+   * - 'never': Removes trailing slashes from all URLs.
+   * - 'preserve': Keeps the trailing slash if present, and omits it if not.
+   *
+   * @see [Trailing slash strategy](guide/routing/customizing-route-behavior#trailing-slash-strategy)
+   */
+  trailingSlash?: 'always' | 'never' | 'preserve';
 }
 
 /**
