@@ -41,6 +41,30 @@ describe('UrlTree', () => {
       expect(router.serializeUrl(p)).toBe(serialized);
     });
 
+    it('should normalize double slash at start to single slash', () => {
+      const tree = serializer.parse('//a');
+      // PRIMARY_OUTLET needs to be imported if I use it here, but it looks like it is not imported in this file?
+      // Wait, line 11 says `import {containsTree, DefaultUrlSerializer} from '../src/url_tree';`
+      // It does NOT import PRIMARY_OUTLET.
+      // However, line 38 uses `createUrlTree`.
+      // I can check `tree.root.children['primary']` or import `PRIMARY_OUTLET`.
+      // Or checking lines 305 in valid UsageNotes: `const g: UrlSegmentGroup = tree.root.children[PRIMARY_OUTLET];`
+      // I should check imports.
+      // Line 12 in `url_tree.ts` imports PRIMARY_OUTLET.
+      // In `url_tree.spec.ts`:
+      // Line 10: `import {exactMatchOptions, Router, subsetMatchOptions} from '../src/router';`
+      // I don't see PRIMARY_OUTLET imported in `url_tree.spec.ts`.
+      // But line 38 uses `outlets: {a: ...}`.
+      // I will assume `primary` string works or I should check `tree.root.children['primary']`.
+      // Actually, strictly speaking `PRIMARY_OUTLET` is 'primary'.
+      // I'll use 'primary' string to be safe/simple without adding import if not needed, OR add import.
+      // To be clean, I should add import if I use the constant.
+      // But I can't easily add import to top of file with `replace_file_content` unless I replace imports block.
+      // Use 'primary' for now.
+      const primary = tree.root.children['primary'];
+      expect(primary.segments.map((s) => s.path)).toEqual(['a']);
+    });
+
     it('should work with named outlet with primary and immediate named siblings', () => {
       const router = TestBed.inject(Router);
       const tree = router.createUrlTree([

@@ -597,12 +597,18 @@ class UrlParser {
 
     const segments: UrlSegment[] = [];
     if (!this.peekStartsWith('(')) {
-      segments.push(this.parseSegment());
+      const segment = this.parseSegment();
+      if (segment.path.length > 0) {
+        segments.push(segment);
+      }
     }
 
     while (this.peekStartsWith('/') && !this.peekStartsWith('//') && !this.peekStartsWith('/(')) {
       this.capture('/');
-      segments.push(this.parseSegment());
+      const segment = this.parseSegment();
+      if (segment.path.length > 0) {
+        segments.push(segment);
+      }
     }
 
     let children: {[outlet: string]: UrlSegmentGroup} = {};
