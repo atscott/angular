@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "module": "es2022",
+    "target": "es2022",
+    "moduleResolution": "node",
+    "skipLibCheck": true,
+    "strict": true,
+    "rootDir": "output",
+    "outDir": "dist-output",
+    "types": [],
+    "declaration": true
+  },
+  "include": ["output/**/*.ts"]
+}

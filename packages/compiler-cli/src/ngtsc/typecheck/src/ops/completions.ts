@@ -26,11 +26,11 @@ export class TcbComponentContextCompletionOp extends TcbOp {
   override readonly optional = false;
 
   override execute(): null {
-    const ctx = ts.factory.createThis();
-    const ctxDot = ts.factory.createPropertyAccessExpression(ctx, '');
-    markIgnoreDiagnostics(ctxDot);
-    addExpressionIdentifier(ctxDot, ExpressionIdentifier.COMPONENT_COMPLETION);
-    this.scope.addStatement(ts.factory.createExpressionStatement(ctxDot));
+    // const ctx = ts.factory.createThis();
+    // const ctxDot = ts.factory.createPropertyAccessExpression(ctx, '');
+    // markIgnoreDiagnostics(ctxDot);
+    // addExpressionIdentifier(ctxDot, ExpressionIdentifier.COMPONENT_COMPLETION);
+    // this.scope.addStatement(ts.factory.createExpressionStatement(ctxDot));
     return null;
   }
 }

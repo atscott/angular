@@ -18,6 +18,7 @@ import {
 import {
   absoluteFromSourceFile,
   dirname,
+  getFileSystem,
   LogicalFileSystem,
   LogicalProjectPath,
   relative,
@@ -508,10 +509,13 @@ export class RelativePathStrategy implements ReferenceEmitStrategy {
 
   emit(ref: Reference, context: ts.SourceFile): ReferenceEmitResult | null {
     const destSf = getSourceFile(ref.node);
-    const relativePath = relative(
-      dirname(absoluteFromSourceFile(context)),
-      absoluteFromSourceFile(destSf),
-    );
+    let absContext = absoluteFromSourceFile(context);
+    let absDest = absoluteFromSourceFile(destSf);
+    if (!getFileSystem().isCaseSensitive()) {
+      absContext = absContext.toLowerCase() as typeof absContext;
+      absDest = absDest.toLowerCase() as typeof absDest;
+    }
+    const relativePath = relative(dirname(absContext), absDest);
     const moduleName = toRelativeImport(stripExtension(relativePath));
 
     const name = findExportedNameOfNode(ref.node, destSf, this.reflector);

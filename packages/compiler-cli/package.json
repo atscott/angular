@@ -5,7 +5,8 @@
   "typings": "index.d.ts",
   "bin": {
     "ngc": "./bundles/src/bin/ngc.js",
-    "ng-xi18n": "./bundles/src/bin/ng_xi18n.js"
+    "ng-xi18n": "./bundles/src/bin/ng_xi18n.js",
+    "ng-dump-sources": "./bundles/src/bin/dump_sources.js"
   },
   "type": "module",
   "exports": {

@@ -836,6 +836,7 @@ export class NgCompiler {
         compilation.isCore,
         this.closureCompilerEnabled,
         this.emitDeclarationOnly,
+        compilation.refEmitter,
       ),
       aliasTransformFactory(compilation.traitCompiler.exportStatements),
       defaultImportTracker.importPreservingTransformer(),

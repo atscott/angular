@@ -13,6 +13,7 @@ import {
   DefaultImportTracker,
   ImportRewriter,
   LocalCompilationExtraImportsTracker,
+  ReferenceEmitter,
 } from '../../imports';
 import {getDefaultImportDeclaration} from '../../imports/src/default';
 import {PerfPhase, PerfRecorder} from '../../perf';
@@ -23,6 +24,7 @@ import {
   RecordWrappedNodeFn,
   translateExpression,
   translateStatement,
+  translateType,
   TranslatorOptions,
 } from '../../translator';
 import {visit, VisitListEntryResult, Visitor} from '../../util/src/visitor';
@@ -53,6 +55,7 @@ export function ivyTransformFactory(
   isCore: boolean,
   isClosureCompilerEnabled: boolean,
   emitDeclarationOnly: boolean,
+  referenceEmitter: ReferenceEmitter,
 ): ts.TransformerFactory<ts.SourceFile> {
   const recordWrappedNode = createRecorderFn(defaultImportTracker);
   return (context: ts.TransformationContext): ts.Transformer<ts.SourceFile> => {
@@ -69,6 +72,7 @@ export function ivyTransformFactory(
           isClosureCompilerEnabled,
           emitDeclarationOnly,
           recordWrappedNode,
+          referenceEmitter,
         ),
       );
     };
@@ -129,6 +133,7 @@ class IvyTransformationVisitor extends Visitor {
     private isClosureCompilerEnabled: boolean,
     private isCore: boolean,
     private deferrableImports: Set<ts.ImportDeclaration>,
+    private referenceEmitter: ReferenceEmitter,
   ) {
     super();
   }
@@ -173,13 +178,20 @@ class IvyTransformationVisitor extends Visitor {
         this.importManager,
         translateOptions,
       );
+      const typeRef = translateType(
+        field.type,
+        original.getSourceFile(),
+        this.reflector,
+        this.referenceEmitter,
+        this.importManager,
+      );
 
       // Create a static property declaration for the new field.
       const property = ts.factory.createPropertyDeclaration(
         [ts.factory.createToken(ts.SyntaxKind.StaticKeyword)],
         field.name,
         undefined,
-        undefined,
+        typeRef,
         exprNode,
       );
 
@@ -377,6 +389,7 @@ function transformIvySourceFile(
   isClosureCompilerEnabled: boolean,
   emitDeclarationOnly: boolean,
   recordWrappedNode: RecordWrappedNodeFn<ts.Expression>,
+  referenceEmitter: ReferenceEmitter,
 ): ts.SourceFile {
   const constantPool = new ConstantPool(isClosureCompilerEnabled);
   const importManager = new ImportManager({
@@ -414,6 +427,7 @@ function transformIvySourceFile(
     isClosureCompilerEnabled,
     isCore,
     compilationVisitor.deferrableImports,
+    referenceEmitter,
   );
   let sf = visit(file, transformationVisitor, context);
 

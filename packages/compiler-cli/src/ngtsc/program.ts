@@ -340,8 +340,8 @@ export class NgtscProgram implements api.Program {
 
       const emitResults: CbEmitRes[] = [];
 
-      for (const targetSourceFile of this.tsProgram.getSourceFiles()) {
-        if (targetSourceFile.isDeclarationFile || ignoreFiles.has(targetSourceFile)) {
+      for (const targetSourceFile of this.compiler.getCurrentProgram().getSourceFiles()) {
+        if (targetSourceFile.isDeclarationFile /*|| ignoreFiles.has(targetSourceFile)*/) {
           continue;
         }
 

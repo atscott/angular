@@ -171,7 +171,15 @@ export class TypeScriptAstFactory implements AstFactory<ts.Statement, ts.Express
       undefined,
       functionName,
       undefined,
-      parameters.map((param) => ts.factory.createParameterDeclaration(undefined, undefined, param)),
+      parameters.map((param) =>
+        ts.factory.createParameterDeclaration(
+          undefined,
+          undefined,
+          param,
+          undefined,
+          ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+        ),
+      ),
       undefined,
       body,
     );
@@ -190,7 +198,15 @@ export class TypeScriptAstFactory implements AstFactory<ts.Statement, ts.Express
       undefined,
       functionName ?? undefined,
       undefined,
-      parameters.map((param) => ts.factory.createParameterDeclaration(undefined, undefined, param)),
+      parameters.map((param) =>
+        ts.factory.createParameterDeclaration(
+          undefined,
+          undefined,
+          param,
+          undefined,
+          ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+        ),
+      ),
       undefined,
       body,
     );
@@ -207,7 +223,15 @@ export class TypeScriptAstFactory implements AstFactory<ts.Statement, ts.Express
     return ts.factory.createArrowFunction(
       undefined,
       undefined,
-      parameters.map((param) => ts.factory.createParameterDeclaration(undefined, undefined, param)),
+      parameters.map((param) =>
+        ts.factory.createParameterDeclaration(
+          undefined,
+          undefined,
+          param,
+          undefined,
+          ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+        ),
+      ),
       undefined,
       undefined,
       body,
