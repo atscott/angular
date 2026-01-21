@@ -261,7 +261,8 @@
   },
   "dependencies": {
     "@angular/language-service": "workspace:*",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "@typescript/native-preview": "*"
   },
   "devDependencies": {
     "@types/jasmine": "~5.1.9",

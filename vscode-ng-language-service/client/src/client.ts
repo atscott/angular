@@ -27,15 +27,11 @@ import {
 import {NodeModule, resolve, Version} from '../../common/resolver';
 
 import {isInsideStringLiteral, isNotTypescriptOrSupportedDecoratorField} from './embedded_support';
-
-interface GetTcbResponse {
-  uri: vscode.Uri;
-  content: string;
-  selections: vscode.Range[];
-}
+import {createOrchestrationMiddleware, TcbResponse} from './middleware';
 
 export class AngularLanguageClient implements vscode.Disposable {
   private client: lsp.LanguageClient | null = null;
+  private ts7Client: lsp.LanguageClient | null = null;
   private readonly disposables: vscode.Disposable[] = [];
   private readonly outputChannel: vscode.OutputChannel;
   private readonly clientOptions: lsp.LanguageClientOptions;
@@ -50,6 +46,36 @@ export class AngularLanguageClient implements vscode.Disposable {
         return this.virtualDocumentContents.get(uri.toString());
       },
     });
+
+    const serverPath = context.asAbsolutePath(
+      path.join('node_modules', '@typescript/native-preview', 'node_modules', '.bin', 'tsgo'),
+    );
+
+    const serverOptions: lsp.ServerOptions = {
+      command: serverPath,
+      args: ['--lsp', '--stdio'],
+    };
+
+    const clientOptions: lsp.LanguageClientOptions = {
+      documentSelector: [{scheme: 'file', language: 'typescript'}],
+      synchronize: {
+        fileEvents: vscode.workspace.createFileSystemWatcher('**/*.ts'),
+      },
+    };
+
+    this.ts7Client = new lsp.LanguageClient(
+      'ng-ts-server',
+      'Angular TS 7 Server',
+      serverOptions,
+      clientOptions,
+    );
+    this.ts7Client.start();
+
+    const orchestrationMiddleware = createOrchestrationMiddleware(
+      (doc, pos) => this.getTcb(doc, pos),
+      (doc) => this.isInAngularProject(doc),
+      this.ts7Client!,
+    );
 
     this.outputChannel = vscode.window.createOutputChannel(this.name);
     // Options to control the language client
@@ -74,6 +100,7 @@ export class AngularLanguageClient implements vscode.Disposable {
         isTrusted: true,
       },
       middleware: {
+        ...orchestrationMiddleware,
         provideCodeActions: async (
           document: vscode.TextDocument,
           range: vscode.Range,
@@ -107,19 +134,6 @@ export class AngularLanguageClient implements vscode.Disposable {
             return next(document, position, token);
           }
         },
-        provideDefinition: async (
-          document: vscode.TextDocument,
-          position: vscode.Position,
-          token: vscode.CancellationToken,
-          next: lsp.ProvideDefinitionSignature,
-        ) => {
-          if (
-            (await this.isInAngularProject(document)) &&
-            isNotTypescriptOrSupportedDecoratorField(document, position)
-          ) {
-            return next(document, position, token);
-          }
-        },
         provideTypeDefinition: async (
           document: vscode.TextDocument,
           position: vscode.Position,
@@ -132,39 +146,6 @@ export class AngularLanguageClient implements vscode.Disposable {
           ) {
             return next(document, position, token);
           }
-        },
-        provideHover: async (
-          document: vscode.TextDocument,
-          position: vscode.Position,
-          token: vscode.CancellationToken,
-          next: lsp.ProvideHoverSignature,
-        ) => {
-          if (
-            !(await this.isInAngularProject(document)) ||
-            !isNotTypescriptOrSupportedDecoratorField(document, position)
-          ) {
-            return;
-          }
-
-          const angularResultsPromise = next(document, position, token);
-
-          // Include results for inline HTML via virtual document and native html providers.
-          if (document.languageId === 'typescript') {
-            const vdocUri = this.createVirtualHtmlDoc(document);
-            const htmlProviderResultsPromise = vscode.commands.executeCommand<vscode.Hover[]>(
-              'vscode.executeHoverProvider',
-              vdocUri,
-              position,
-            );
-
-            const [angularResults, htmlProviderResults] = await Promise.all([
-              angularResultsPromise,
-              htmlProviderResultsPromise,
-            ]);
-            return angularResults ?? htmlProviderResults?.[0];
-          }
-
-          return angularResultsPromise;
         },
         provideSignatureHelp: async (
           document: vscode.TextDocument,
@@ -179,45 +160,6 @@ export class AngularLanguageClient implements vscode.Disposable {
           ) {
             return next(document, position, context, token);
           }
-        },
-        provideCompletionItem: async (
-          document: vscode.TextDocument,
-          position: vscode.Position,
-          context: vscode.CompletionContext,
-          token: vscode.CancellationToken,
-          next: lsp.ProvideCompletionItemsSignature,
-        ) => {
-          // If not in inline template, do not perform request forwarding
-          if (
-            !(await this.isInAngularProject(document)) ||
-            !isNotTypescriptOrSupportedDecoratorField(document, position)
-          ) {
-            return;
-          }
-          const angularCompletionsPromise = next(document, position, context, token) as Promise<
-            vscode.CompletionItem[] | null | undefined
-          >;
-
-          // Include results for inline HTML via virtual document and native html providers.
-          if (document.languageId === 'typescript') {
-            const vdocUri = this.createVirtualHtmlDoc(document);
-            // This will not include angular stuff because the vdoc is not associated with an
-            // angular component
-            const htmlProviderCompletionsPromise =
-              vscode.commands.executeCommand<vscode.CompletionList>(
-                'vscode.executeCompletionItemProvider',
-                vdocUri,
-                position,
-                context.triggerCharacter,
-              );
-            const [angularCompletions, htmlProviderCompletions] = await Promise.all([
-              angularCompletionsPromise,
-              htmlProviderCompletionsPromise,
-            ]);
-            return [...(angularCompletions ?? []), ...(htmlProviderCompletions?.items ?? [])];
-          }
-
-          return angularCompletionsPromise;
         },
         provideFoldingRanges: async (
           document: vscode.TextDocument,
@@ -458,11 +400,34 @@ export class AngularLanguageClient implements vscode.Disposable {
     this.virtualDocumentContents.clear();
   }
 
+  async getTcb(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+  ): Promise<TcbResponse | undefined> {
+    if (this.client === null) {
+      return undefined;
+    }
+    const c2pConverter = this.client.code2ProtocolConverter;
+    const response = await this.client.sendRequest(GetTcbRequest, {
+      textDocument: c2pConverter.asTextDocumentIdentifier(document),
+      position: c2pConverter.asPosition(position),
+    });
+    if (response === null) {
+      return undefined;
+    }
+    const p2cConverter = this.client.protocol2CodeConverter;
+    return {
+      uri: p2cConverter.asUri(response.uri),
+      content: response.content,
+      selections: p2cConverter.asRanges(response.selections),
+    };
+  }
+
   /**
    * Requests a template typecheck block at the current cursor location in the
    * specified editor.
    */
-  async getTcbUnderCursor(textEditor: vscode.TextEditor): Promise<GetTcbResponse | undefined> {
+  async getTcbUnderCursor(textEditor: vscode.TextEditor): Promise<TcbResponse | undefined> {
     if (this.client === null) {
       return undefined;
     }

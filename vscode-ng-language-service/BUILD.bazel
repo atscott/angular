@@ -58,6 +58,7 @@ npm_package(
         # //:npm npm_package where the vsce build takes place.
         ":node_modules/@angular/language-service",
         ":node_modules/typescript",
+        ":node_modules/@typescript/native-preview",
     ],
     exclude_srcs_patterns = [
         "*.map",

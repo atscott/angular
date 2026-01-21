@@ -11,7 +11,7 @@ import * as vscode from 'vscode';
 import {AngularLanguageClient} from './client';
 import {registerCommands} from './commands';
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   const client = new AngularLanguageClient(context);
 
   // Push the disposable to the context's subscriptions so that the

@@ -8,7 +8,7 @@
       "name": "VSCE: Launch Dev Client",
       "runtimeExecutable": "${execPath}",
       "args": [
-        "--disable-extensions",
+        // "--disable-extensions",
         "--extensionDevelopmentPath=${workspaceFolder}/vscode-ng-language-service"
       ],
       "preLaunchTask": "VSCE: watch bundles"
@@ -19,7 +19,7 @@
       "name": "VSCE: Launch Prod Client",
       "runtimeExecutable": "${execPath}",
       "args": [
-        "--disable-extensions",
+        // "--disable-extensions",
         "--extensionDevelopmentPath=${workspaceFolder}/dist/bin/vscode-ng-language-service/development_package"
       ],
       "preLaunchTask": "VSCE: package"

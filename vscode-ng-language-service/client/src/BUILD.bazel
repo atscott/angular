@@ -8,6 +8,7 @@ ts_project(
     ],
     deps = [
         "//vscode-ng-language-service:node_modules/@types/node",
+        "//vscode-ng-language-service:node_modules/@typescript/native-preview",
         "//vscode-ng-language-service:node_modules/@types/vscode",
         "//vscode-ng-language-service:node_modules/typescript",
         "//vscode-ng-language-service:node_modules/vscode-languageclient",

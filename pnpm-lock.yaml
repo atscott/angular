@@ -337,7 +337,7 @@ importers:
         version: 7.0.0
       '@angular/ng-dev':
         specifier: https://github.com/angular/dev-infra-private-ng-dev-builds.git#370b6f7b49470d16721272715642d0ba2ef99556
-        version: https://codeload.github.com/angular/dev-infra-private-ng-dev-builds/tar.gz/370b6f7b49470d16721272715642d0ba2ef99556(@modelcontextprotocol/sdk@1.25.2(zod@4.3.5))
+        version: https://codeload.github.com/angular/dev-infra-private-ng-dev-builds/tar.gz/370b6f7b49470d16721272715642d0ba2ef99556(@modelcontextprotocol/sdk@1.25.2)
       '@babel/plugin-proposal-async-generator-functions':
         specifier: 7.20.7
         version: 7.20.7(@babel/core@7.28.6)
@@ -1319,6 +1319,9 @@ importers:
       '@angular/language-service':
         specifier: workspace:*
         version: link:../packages/language-service
+      '@typescript/native-preview':
+        specifier: latest
+        version: 7.0.0-dev.20260120.1
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -3664,7 +3667,6 @@ packages:
     engines: {node: '>=18'}
     peerDependencies:
       '@cfworker/json-schema': ^4.1.1
-      zod: ^3.25 || ^4.0
     peerDependenciesMeta:
       '@cfworker/json-schema':
         optional: true
@@ -5106,8 +5108,18 @@ packages:
     cpu: [arm64]
     os: [darwin]
 
+  '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260120.1':
+    resolution: {integrity: sha512-r3pWFuR2H7mn6ScwpH5jJljKQqKto0npVuJSk6pRwFwexpTyxOGmJTZJ1V0AWiisaNxU2+CNAqWFJSJYIE/QTg==}
+    cpu: [arm64]
+    os: [darwin]
+
   '@typescript/native-preview-darwin-x64@7.0.0-dev.20260119.1':
     resolution: {integrity: sha512-ivqxCrbLXUqZU1OMojVRCnVx5gC/twgi7gKzBXMBLGOgfTkhajbHk/71J3OQhJwzR3T2ISG6FTfXKHhQMtgkkg==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@typescript/native-preview-darwin-x64@7.0.0-dev.20260120.1':
+    resolution: {integrity: sha512-cuC1+wLbUP+Ip2UT94G134fqRdp5w3b3dhcCO6/FQ4yXxvRNyv/WK+upHBUFDaeSOeHgDTyO9/QFYUWwC4If1A==}
     cpu: [x64]
     os: [darwin]
 
@@ -5116,8 +5128,18 @@ packages:
     cpu: [arm64]
     os: [linux]
 
+  '@typescript/native-preview-linux-arm64@7.0.0-dev.20260120.1':
+    resolution: {integrity: sha512-zZGvEGY7wcHYefMZ87KNmvjN3NLIhsCMHEpHZiGCS3khKf+8z6ZsanrzCjOTodvL01VPyBzHxV1EtkSxAcLiQg==}
+    cpu: [arm64]
+    os: [linux]
+
   '@typescript/native-preview-linux-arm@7.0.0-dev.20260119.1':
     resolution: {integrity: sha512-Bev1d6NCgCmcGOgmdFG514tWRt2lNUSFjQ9RVnN86tSm+bl5p9Lv6TQjc38Ow9vY11J71IZs9HNN1AKWfBCj2Q==}
+    cpu: [arm]
+    os: [linux]
+
+  '@typescript/native-preview-linux-arm@7.0.0-dev.20260120.1':
+    resolution: {integrity: sha512-vN6OYVySol/kQZjJGmAzd6L30SyVlCgmCXS8WjUYtE5clN0YrzQHop16RK29fYZHMxpkOniVBtRPxUYQANZBlQ==}
     cpu: [arm]
     os: [linux]
 
@@ -5126,8 +5148,18 @@ packages:
     cpu: [x64]
     os: [linux]
 
+  '@typescript/native-preview-linux-x64@7.0.0-dev.20260120.1':
+    resolution: {integrity: sha512-JBfNhWd/asd5MDeS3VgRvE24pGKBkmvLub6tsux6ypr+Yhy+o0WaAEzVpmlRYZUqss2ai5tvOu4dzPBXzZAtFw==}
+    cpu: [x64]
+    os: [linux]
+
   '@typescript/native-preview-win32-arm64@7.0.0-dev.20260119.1':
     resolution: {integrity: sha512-463QnUaRCUhY/Flj/XinORTbBYuxoMthgJiBU1vu7mipLo2Yaipkkgn1ArGHkV9mjWBa7QIPCWg/V2KIEoVdcA==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@typescript/native-preview-win32-arm64@7.0.0-dev.20260120.1':
+    resolution: {integrity: sha512-tTndRtYCq2xwgE0VkTi9ACNiJaV43+PqvBqCxk8ceYi3X36Ve+CCnwlZfZJ4k9NxZthtrAwF/kUmpC9iIYbq1w==}
     cpu: [arm64]
     os: [win32]
 
@@ -5136,8 +5168,17 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@typescript/native-preview-win32-x64@7.0.0-dev.20260120.1':
+    resolution: {integrity: sha512-oZia7hFL6k9pVepfonuPI86Jmyz6WlJKR57tWCDwRNmpA7odxuTq1PbvcYgy1z4+wHF1nnKKJY0PMAiq6ac18w==}
+    cpu: [x64]
+    os: [win32]
+
   '@typescript/native-preview@7.0.0-dev.20260119.1':
     resolution: {integrity: sha512-Tf74TdJVJlLRMN0W9VXK8jc0Gor9+wFRm40qTLt2JeHiPpSF5TEN/pHPjlf4Id1wDSJXH9p5/U1wFS3s5TS2PQ==}
+    hasBin: true
+
+  '@typescript/native-preview@7.0.0-dev.20260120.1':
+    resolution: {integrity: sha512-nnEf37C9ue7OBRnF2zmV/OCBmV5Y7T/K4mCHa+nxgiXcF/1w8sA0cgdFl+gHQ0mysqUJ+Bu5btAMeWgpLyjrgg==}
     hasBin: true
 
   '@typescript/vfs@1.6.2':
@@ -13240,7 +13281,7 @@ snapshots:
       beasties: 0.3.5
       browserslist: 4.28.1
       esbuild: 0.27.2
-      https-proxy-agent: 7.0.6
+      https-proxy-agent: 7.0.6(supports-color@10.2.2)
       istanbul-lib-instrument: 6.0.3
       jsonc-parser: 3.3.1
       listr2: 9.0.5
@@ -13299,7 +13340,7 @@ snapshots:
       beasties: 0.3.5
       browserslist: 4.28.1
       esbuild: 0.27.2
-      https-proxy-agent: 7.0.6
+      https-proxy-agent: 7.0.6(supports-color@10.2.2)
       istanbul-lib-instrument: 6.0.3
       jsonc-parser: 3.3.1
       listr2: 9.0.5
@@ -13358,7 +13399,7 @@ snapshots:
       beasties: 0.3.5
       browserslist: 4.28.1
       esbuild: 0.27.2
-      https-proxy-agent: 7.0.6
+      https-proxy-agent: 7.0.6(supports-color@10.2.2)
       istanbul-lib-instrument: 6.0.3
       jsonc-parser: 3.3.1
       listr2: 9.0.5
@@ -13419,7 +13460,7 @@ snapshots:
       '@angular-devkit/schematics': 21.1.0-rc.0(chokidar@5.0.0)
       '@inquirer/prompts': 7.10.1(@types/node@20.19.30)
       '@listr2/prompt-adapter-inquirer': 3.0.5(@inquirer/prompts@7.10.1(@types/node@20.19.30))(@types/node@20.19.30)(listr2@9.0.5)
-      '@modelcontextprotocol/sdk': 1.25.2(zod@4.3.5)
+      '@modelcontextprotocol/sdk': 1.25.2
       '@schematics/angular': 21.1.0-rc.0(chokidar@5.0.0)
       '@yarnpkg/lockfile': 1.1.0
       algoliasearch: 5.46.2
@@ -13447,7 +13488,7 @@ snapshots:
       '@angular-devkit/schematics': 21.1.0-rc.0(chokidar@5.0.0)
       '@inquirer/prompts': 7.10.1(@types/node@24.10.8)
       '@listr2/prompt-adapter-inquirer': 3.0.5(@inquirer/prompts@7.10.1(@types/node@24.10.8))(@types/node@24.10.8)(listr2@9.0.5)
-      '@modelcontextprotocol/sdk': 1.25.2(zod@4.3.5)
+      '@modelcontextprotocol/sdk': 1.25.2
       '@schematics/angular': 21.1.0-rc.0(chokidar@5.0.0)
       '@yarnpkg/lockfile': 1.1.0
       algoliasearch: 5.46.2
@@ -13488,11 +13529,11 @@ snapshots:
       rxjs: 7.8.2
       tslib: 2.8.1
 
-  '@angular/ng-dev@https://codeload.github.com/angular/dev-infra-private-ng-dev-builds/tar.gz/370b6f7b49470d16721272715642d0ba2ef99556(@modelcontextprotocol/sdk@1.25.2(zod@4.3.5))':
+  '@angular/ng-dev@https://codeload.github.com/angular/dev-infra-private-ng-dev-builds/tar.gz/370b6f7b49470d16721272715642d0ba2ef99556(@modelcontextprotocol/sdk@1.25.2)':
     dependencies:
       '@actions/core': 2.0.2
       '@google-cloud/spanner': 8.0.0(supports-color@10.2.2)
-      '@google/genai': 1.35.0(@modelcontextprotocol/sdk@1.25.2(zod@4.3.5))(bufferutil@4.1.0)(supports-color@10.2.2)(utf-8-validate@6.0.6)
+      '@google/genai': 1.35.0(@modelcontextprotocol/sdk@1.25.2)(bufferutil@4.1.0)(supports-color@10.2.2)(utf-8-validate@6.0.6)
       '@inquirer/prompts': 8.2.0(@types/node@24.10.8)
       '@inquirer/type': 4.0.3(@types/node@24.10.8)
       '@octokit/auth-app': 8.1.2
@@ -13737,7 +13778,7 @@ snapshots:
       '@babel/traverse': 7.28.6
       '@babel/types': 7.28.6
       convert-source-map: 2.0.0
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       gensync: 1.0.0-beta.2
       json5: 2.2.3
       semver: 6.3.1
@@ -13757,7 +13798,7 @@ snapshots:
       '@babel/types': 7.28.6
       '@jridgewell/remapping': 2.3.5
       convert-source-map: 2.0.0
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       gensync: 1.0.0-beta.2
       json5: 2.2.3
       semver: 6.3.1
@@ -13777,7 +13818,7 @@ snapshots:
       '@babel/types': 7.28.6
       '@jridgewell/remapping': 2.3.5
       convert-source-map: 2.0.0
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       gensync: 1.0.0-beta.2
       json5: 2.2.3
       semver: 6.3.1
@@ -13837,7 +13878,7 @@ snapshots:
       '@babel/core': 7.28.5
       '@babel/helper-compilation-targets': 7.28.6
       '@babel/helper-plugin-utils': 7.28.6
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       lodash.debounce: 4.0.8
       resolve: 1.22.11
     transitivePeerDependencies:
@@ -14569,7 +14610,7 @@ snapshots:
       '@babel/parser': 7.28.6
       '@babel/template': 7.28.6
       '@babel/types': 7.28.6
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -15231,8 +15272,8 @@ snapshots:
   '@google-cloud/cloud-sql-connector@1.9.0':
     dependencies:
       '@googleapis/sqladmin': 35.0.0
-      gaxios: 7.1.3
-      google-auth-library: 10.5.0
+      gaxios: 7.1.3(supports-color@10.2.2)
+      google-auth-library: 10.5.0(supports-color@10.2.2)
       p-throttle: 7.0.0
     transitivePeerDependencies:
       - supports-color
@@ -15276,8 +15317,8 @@ snapshots:
       '@opentelemetry/semantic-conventions': 1.34.0
       arrify: 2.0.1
       extend: 3.0.2
-      google-auth-library: 10.5.0
-      google-gax: 5.0.6
+      google-auth-library: 10.5.0(supports-color@10.2.2)
+      google-gax: 5.0.6(supports-color@10.2.2)
       heap-js: 2.7.1
       is-stream-ended: 0.1.4
       lodash.snakecase: 4.1.1
@@ -15320,12 +15361,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@google/genai@1.35.0(@modelcontextprotocol/sdk@1.25.2(zod@4.3.5))(bufferutil@4.1.0)(supports-color@10.2.2)(utf-8-validate@6.0.6)':
+  '@google/genai@1.35.0(@modelcontextprotocol/sdk@1.25.2)(bufferutil@4.1.0)(supports-color@10.2.2)(utf-8-validate@6.0.6)':
     dependencies:
       google-auth-library: 10.5.0(supports-color@10.2.2)
       ws: 8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
     optionalDependencies:
-      '@modelcontextprotocol/sdk': 1.25.2(zod@4.3.5)
+      '@modelcontextprotocol/sdk': 1.25.2
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -16299,29 +16340,7 @@ snapshots:
 
   '@microsoft/tsdoc@0.16.0': {}
 
-  '@modelcontextprotocol/sdk@1.25.2(zod@3.25.76)':
-    dependencies:
-      '@hono/node-server': 1.19.9
-      ajv: 8.17.1
-      ajv-formats: 3.0.1
-      content-type: 1.0.5
-      cors: 2.8.5
-      cross-spawn: 7.0.6
-      eventsource: 3.0.7
-      eventsource-parser: 3.0.6
-      express: 5.2.1
-      express-rate-limit: 7.5.1(express@5.2.1)
-      jose: 6.1.3
-      json-schema-typed: 8.0.2
-      pkce-challenge: 5.0.1
-      raw-body: 3.0.2
-      zod: 3.25.76
-      zod-to-json-schema: 3.25.1(zod@3.25.76)
-    transitivePeerDependencies:
-      - hono
-      - supports-color
-
-  '@modelcontextprotocol/sdk@1.25.2(zod@4.3.5)':
+  '@modelcontextprotocol/sdk@1.25.2':
     dependencies:
       '@hono/node-server': 1.19.9
       ajv: 8.17.1
@@ -16492,7 +16511,7 @@ snapshots:
     dependencies:
       agent-base: 7.1.4
       http-proxy-agent: 7.0.2
-      https-proxy-agent: 7.0.6
+      https-proxy-agent: 7.0.6(supports-color@10.2.2)
       lru-cache: 11.2.4
       socks-proxy-agent: 8.0.5
     transitivePeerDependencies:
@@ -16875,8 +16894,8 @@ snapshots:
 
   '@puppeteer/browsers@2.11.1':
     dependencies:
-      debug: 4.4.3(supports-color@8.1.1)
-      extract-zip: 2.0.1(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
+      extract-zip: 2.0.1
       progress: 2.0.3
       proxy-agent: 6.5.0
       semver: 7.7.3
@@ -17124,7 +17143,7 @@ snapshots:
       '@secretlint/resolver': 10.2.2
       '@secretlint/types': 10.2.2
       ajv: 8.17.1
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       rc-config-loader: 4.1.3
     transitivePeerDependencies:
       - supports-color
@@ -17133,7 +17152,7 @@ snapshots:
     dependencies:
       '@secretlint/profiler': 10.2.2
       '@secretlint/types': 10.2.2
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       structured-source: 4.0.0
     transitivePeerDependencies:
       - supports-color
@@ -17146,7 +17165,7 @@ snapshots:
       '@textlint/module-interop': 15.5.0
       '@textlint/types': 15.5.0
       chalk: 5.6.2
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       pluralize: 8.0.0
       strip-ansi: 7.1.2
       table: 6.9.0
@@ -17162,7 +17181,7 @@ snapshots:
       '@secretlint/profiler': 10.2.2
       '@secretlint/source-creator': 10.2.2
       '@secretlint/types': 10.2.2
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       p-map: 7.0.4
     transitivePeerDependencies:
       - supports-color
@@ -17301,7 +17320,7 @@ snapshots:
       '@textlint/resolver': 15.5.0
       '@textlint/types': 15.5.0
       chalk: 4.1.2
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       js-yaml: 4.1.1
       lodash: 4.17.21
       pluralize: 2.0.0
@@ -17797,22 +17816,43 @@ snapshots:
   '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260119.1':
     optional: true
 
+  '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260120.1':
+    optional: true
+
   '@typescript/native-preview-darwin-x64@7.0.0-dev.20260119.1':
+    optional: true
+
+  '@typescript/native-preview-darwin-x64@7.0.0-dev.20260120.1':
     optional: true
 
   '@typescript/native-preview-linux-arm64@7.0.0-dev.20260119.1':
     optional: true
 
+  '@typescript/native-preview-linux-arm64@7.0.0-dev.20260120.1':
+    optional: true
+
   '@typescript/native-preview-linux-arm@7.0.0-dev.20260119.1':
+    optional: true
+
+  '@typescript/native-preview-linux-arm@7.0.0-dev.20260120.1':
     optional: true
 
   '@typescript/native-preview-linux-x64@7.0.0-dev.20260119.1':
     optional: true
 
+  '@typescript/native-preview-linux-x64@7.0.0-dev.20260120.1':
+    optional: true
+
   '@typescript/native-preview-win32-arm64@7.0.0-dev.20260119.1':
     optional: true
 
+  '@typescript/native-preview-win32-arm64@7.0.0-dev.20260120.1':
+    optional: true
+
   '@typescript/native-preview-win32-x64@7.0.0-dev.20260119.1':
+    optional: true
+
+  '@typescript/native-preview-win32-x64@7.0.0-dev.20260120.1':
     optional: true
 
   '@typescript/native-preview@7.0.0-dev.20260119.1':
@@ -17825,9 +17865,19 @@ snapshots:
       '@typescript/native-preview-win32-arm64': 7.0.0-dev.20260119.1
       '@typescript/native-preview-win32-x64': 7.0.0-dev.20260119.1
 
+  '@typescript/native-preview@7.0.0-dev.20260120.1':
+    optionalDependencies:
+      '@typescript/native-preview-darwin-arm64': 7.0.0-dev.20260120.1
+      '@typescript/native-preview-darwin-x64': 7.0.0-dev.20260120.1
+      '@typescript/native-preview-linux-arm': 7.0.0-dev.20260120.1
+      '@typescript/native-preview-linux-arm64': 7.0.0-dev.20260120.1
+      '@typescript/native-preview-linux-x64': 7.0.0-dev.20260120.1
+      '@typescript/native-preview-win32-arm64': 7.0.0-dev.20260120.1
+      '@typescript/native-preview-win32-x64': 7.0.0-dev.20260120.1
+
   '@typescript/vfs@1.6.2(typescript@5.9.3)':
     dependencies:
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       typescript: 5.9.3
     transitivePeerDependencies:
       - supports-color
@@ -17835,7 +17885,7 @@ snapshots:
   '@typespec/ts-http-runtime@0.3.2':
     dependencies:
       http-proxy-agent: 7.0.2
-      https-proxy-agent: 7.0.6
+      https-proxy-agent: 7.0.6(supports-color@10.2.2)
       tslib: 2.8.1
     transitivePeerDependencies:
       - supports-color
@@ -17966,7 +18016,7 @@ snapshots:
   '@vscode/test-electron@2.5.2':
     dependencies:
       http-proxy-agent: 7.0.2
-      https-proxy-agent: 7.0.6
+      https-proxy-agent: 7.0.6(supports-color@10.2.2)
       jszip: 3.10.1
       ora: 8.2.0
       semver: 7.7.3
@@ -18195,12 +18245,6 @@ snapshots:
       regex-parser: 2.3.1
 
   adm-zip@0.5.16: {}
-
-  agent-base@6.0.2:
-    dependencies:
-      debug: 4.4.3(supports-color@8.1.1)
-    transitivePeerDependencies:
-      - supports-color
 
   agent-base@6.0.2(supports-color@10.2.2):
     dependencies:
@@ -18766,7 +18810,7 @@ snapshots:
     dependencies:
       bytes: 3.1.2
       content-type: 1.0.5
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       http-errors: 2.0.1
       iconv-lite: 0.7.2
       on-finished: 2.4.1
@@ -18825,7 +18869,7 @@ snapshots:
 
   browserstack@1.6.1:
     dependencies:
-      https-proxy-agent: 7.0.6
+      https-proxy-agent: 7.0.6(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -20185,7 +20229,7 @@ snapshots:
       base64id: 2.0.0
       cookie: 0.7.2
       cors: 2.8.5
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       engine.io-parser: 5.2.3
       ws: 8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)
     transitivePeerDependencies:
@@ -20550,7 +20594,7 @@ snapshots:
       content-type: 1.0.5
       cookie: 0.7.2
       cookie-signature: 1.2.2
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       depd: 2.0.0
       encodeurl: 2.0.0
       escape-html: 1.0.3
@@ -20576,6 +20620,16 @@ snapshots:
       - supports-color
 
   extend@3.0.2: {}
+
+  extract-zip@2.0.1:
+    dependencies:
+      debug: 4.4.3(supports-color@10.2.2)
+      get-stream: 5.2.0
+      yauzl: 2.10.0
+    optionalDependencies:
+      '@types/yauzl': 2.10.3
+    transitivePeerDependencies:
+      - supports-color
 
   extract-zip@2.0.1(supports-color@8.1.1):
     dependencies:
@@ -20698,7 +20752,7 @@ snapshots:
 
   finalhandler@2.1.1:
     dependencies:
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       encodeurl: 2.0.0
       escape-html: 1.0.3
       on-finished: 2.4.1
@@ -20748,7 +20802,7 @@ snapshots:
       '@google-cloud/cloud-sql-connector': 1.9.0
       '@google-cloud/pubsub': 5.2.2
       '@inquirer/prompts': 7.10.1(@types/node@20.19.30)
-      '@modelcontextprotocol/sdk': 1.25.2(zod@3.25.76)
+      '@modelcontextprotocol/sdk': 1.25.2
       abort-controller: 3.0.0
       ajv: 8.17.1
       ajv-formats: 3.0.1
@@ -20883,7 +20937,7 @@ snapshots:
 
   follow-redirects@1.15.11(debug@4.4.3):
     optionalDependencies:
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
 
   for-each@0.3.5:
     dependencies:
@@ -20992,21 +21046,12 @@ snapshots:
   gaxios@6.7.1(encoding@0.1.13):
     dependencies:
       extend: 3.0.2
-      https-proxy-agent: 7.0.6
+      https-proxy-agent: 7.0.6(supports-color@10.2.2)
       is-stream: 2.0.1
       node-fetch: 2.7.0(encoding@0.1.13)
       uuid: 9.0.1
     transitivePeerDependencies:
       - encoding
-      - supports-color
-
-  gaxios@7.1.3:
-    dependencies:
-      extend: 3.0.2
-      https-proxy-agent: 7.0.6
-      node-fetch: 3.3.2
-      rimraf: 5.0.10
-    transitivePeerDependencies:
       - supports-color
 
   gaxios@7.1.3(supports-color@10.2.2):
@@ -21025,14 +21070,6 @@ snapshots:
       json-bigint: 1.0.0
     transitivePeerDependencies:
       - encoding
-      - supports-color
-
-  gcp-metadata@8.1.2:
-    dependencies:
-      gaxios: 7.1.3
-      google-logging-utils: 1.1.3
-      json-bigint: 1.0.0
-    transitivePeerDependencies:
       - supports-color
 
   gcp-metadata@8.1.2(supports-color@10.2.2):
@@ -21097,7 +21134,7 @@ snapshots:
     dependencies:
       basic-ftp: 5.1.0
       data-uri-to-buffer: 6.0.2
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -21253,18 +21290,6 @@ snapshots:
     dependencies:
       sparkles: 2.1.0
 
-  google-auth-library@10.5.0:
-    dependencies:
-      base64-js: 1.5.1
-      ecdsa-sig-formatter: 1.0.11
-      gaxios: 7.1.3
-      gcp-metadata: 8.1.2
-      google-logging-utils: 1.1.3
-      gtoken: 8.0.0
-      jws: 4.0.1
-    transitivePeerDependencies:
-      - supports-color
-
   google-auth-library@10.5.0(supports-color@10.2.2):
     dependencies:
       base64-js: 1.5.1
@@ -21287,22 +21312,6 @@ snapshots:
       jws: 4.0.1
     transitivePeerDependencies:
       - encoding
-      - supports-color
-
-  google-gax@5.0.6:
-    dependencies:
-      '@grpc/grpc-js': 1.14.3
-      '@grpc/proto-loader': 0.8.0
-      duplexify: 4.1.3
-      google-auth-library: 10.5.0
-      google-logging-utils: 1.1.3
-      node-fetch: 3.3.2
-      object-hash: 3.0.0
-      proto3-json-serializer: 3.0.4
-      protobufjs: 7.5.4
-      retry-request: 8.0.2
-      rimraf: 5.0.10
-    transitivePeerDependencies:
       - supports-color
 
   google-gax@5.0.6(supports-color@10.2.2):
@@ -21328,8 +21337,8 @@ snapshots:
   googleapis-common@8.0.1:
     dependencies:
       extend: 3.0.2
-      gaxios: 7.1.3
-      google-auth-library: 10.5.0
+      gaxios: 7.1.3(supports-color@10.2.2)
+      google-auth-library: 10.5.0(supports-color@10.2.2)
       qs: 6.14.1
       url-template: 2.0.8
     transitivePeerDependencies:
@@ -21375,13 +21384,6 @@ snapshots:
       jws: 4.0.1
     transitivePeerDependencies:
       - encoding
-      - supports-color
-
-  gtoken@8.0.0:
-    dependencies:
-      gaxios: 7.1.3
-      jws: 4.0.1
-    transitivePeerDependencies:
       - supports-color
 
   gtoken@8.0.0(supports-color@10.2.2):
@@ -21598,14 +21600,6 @@ snapshots:
 
   http-parser-js@0.5.10: {}
 
-  http-proxy-agent@5.0.0:
-    dependencies:
-      '@tootallnate/once': 2.0.0
-      agent-base: 6.0.2
-      debug: 4.4.3(supports-color@8.1.1)
-    transitivePeerDependencies:
-      - supports-color
-
   http-proxy-agent@5.0.0(supports-color@10.2.2):
     dependencies:
       '@tootallnate/once': 2.0.0
@@ -21617,7 +21611,7 @@ snapshots:
   http-proxy-agent@7.0.2:
     dependencies:
       agent-base: 7.1.4
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -21636,7 +21630,7 @@ snapshots:
   http-proxy-middleware@3.0.5:
     dependencies:
       '@types/http-proxy': 1.17.17
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       http-proxy: 1.18.1(debug@4.4.3)
       is-glob: 4.0.3
       is-plain-object: 5.0.0
@@ -21687,13 +21681,6 @@ snapshots:
     dependencies:
       quick-lru: 5.1.1
       resolve-alpn: 1.2.1
-
-  https-proxy-agent@7.0.6:
-    dependencies:
-      agent-base: 7.1.4
-      debug: 4.4.3(supports-color@8.1.1)
-    transitivePeerDependencies:
-      - supports-color
 
   https-proxy-agent@7.0.6(supports-color@10.2.2):
     dependencies:
@@ -22110,7 +22097,7 @@ snapshots:
 
   istanbul-lib-source-maps@4.0.1:
     dependencies:
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       istanbul-lib-coverage: 3.2.2
       source-map: 0.6.1
     transitivePeerDependencies:
@@ -22119,7 +22106,7 @@ snapshots:
   istanbul-lib-source-maps@5.0.6:
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       istanbul-lib-coverage: 3.2.2
     transitivePeerDependencies:
       - supports-color
@@ -22641,7 +22628,7 @@ snapshots:
       decimal.js: 10.6.0
       html-encoding-sniffer: 4.0.0
       http-proxy-agent: 7.0.2
-      https-proxy-agent: 7.0.6
+      https-proxy-agent: 7.0.6(supports-color@10.2.2)
       is-potential-custom-element-name: 1.0.1
       nwsapi: 2.2.23
       parse5: 7.3.0
@@ -22671,7 +22658,7 @@ snapshots:
       decimal.js: 10.6.0
       html-encoding-sniffer: 6.0.0
       http-proxy-agent: 7.0.2
-      https-proxy-agent: 7.0.6
+      https-proxy-agent: 7.0.6(supports-color@10.2.2)
       is-potential-custom-element-name: 1.0.1
       parse5: 8.0.0
       saxes: 6.0.0
@@ -23136,7 +23123,7 @@ snapshots:
   log4js@6.9.1:
     dependencies:
       date-format: 4.0.14
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       flatted: 3.3.3
       rfdc: 1.4.1
       streamroller: 3.1.5
@@ -24015,10 +24002,10 @@ snapshots:
     dependencies:
       '@tootallnate/quickjs-emscripten': 0.23.0
       agent-base: 7.1.4
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       get-uri: 6.0.5
       http-proxy-agent: 7.0.2
-      https-proxy-agent: 7.0.6
+      https-proxy-agent: 7.0.6(supports-color@10.2.2)
       pac-resolver: 7.0.1
       socks-proxy-agent: 8.0.5
     transitivePeerDependencies:
@@ -24283,7 +24270,7 @@ snapshots:
   portfinder@1.0.38:
     dependencies:
       async: 3.2.6
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -24481,9 +24468,9 @@ snapshots:
   proxy-agent@6.5.0:
     dependencies:
       agent-base: 7.1.4
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       http-proxy-agent: 7.0.2
-      https-proxy-agent: 7.0.6
+      https-proxy-agent: 7.0.6(supports-color@10.2.2)
       lru-cache: 7.18.3
       pac-proxy-agent: 7.2.0
       proxy-from-env: 1.1.0
@@ -24532,7 +24519,7 @@ snapshots:
     dependencies:
       '@puppeteer/browsers': 2.11.1
       chromium-bidi: 12.0.1(devtools-protocol@0.0.1534754)
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       devtools-protocol: 0.0.1534754
       typed-query-selector: 2.12.0
       webdriver-bidi-protocol: 0.3.10
@@ -24547,10 +24534,10 @@ snapshots:
 
   puppeteer-core@5.5.0(bufferutil@4.1.0)(encoding@0.1.13)(utf-8-validate@6.0.6):
     dependencies:
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       devtools-protocol: 0.0.818844
-      extract-zip: 2.0.1(supports-color@8.1.1)
-      https-proxy-agent: 7.0.6
+      extract-zip: 2.0.1
+      https-proxy-agent: 7.0.6(supports-color@10.2.2)
       node-fetch: 2.7.0(encoding@0.1.13)
       pkg-dir: 4.2.0
       progress: 2.0.3
@@ -24634,7 +24621,7 @@ snapshots:
 
   rc-config-loader@4.1.3:
     dependencies:
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       js-yaml: 4.1.1
       json5: 2.2.3
       require-from-string: 2.0.2
@@ -24880,13 +24867,6 @@ snapshots:
 
   ret@0.1.15: {}
 
-  retry-request@8.0.2:
-    dependencies:
-      extend: 3.0.2
-      teeny-request: 10.1.0
-    transitivePeerDependencies:
-      - supports-color
-
   retry-request@8.0.2(supports-color@10.2.2):
     dependencies:
       extend: 3.0.2
@@ -25005,7 +24985,7 @@ snapshots:
 
   router@2.2.0:
     dependencies:
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       depd: 2.0.0
       is-promise: 4.0.0
       parseurl: 1.3.3
@@ -25107,7 +25087,7 @@ snapshots:
       '@secretlint/formatter': 10.2.2
       '@secretlint/node': 10.2.2
       '@secretlint/profiler': 10.2.2
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       globby: 14.1.0
       read-pkg: 9.0.1
     transitivePeerDependencies:
@@ -25190,7 +25170,7 @@ snapshots:
 
   send@1.2.1:
     dependencies:
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       encodeurl: 2.0.0
       escape-html: 1.0.3
       etag: 1.8.1
@@ -25406,7 +25386,7 @@ snapshots:
 
   socket.io-adapter@2.5.6(bufferutil@4.1.0)(utf-8-validate@6.0.6):
     dependencies:
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       ws: 8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)
     transitivePeerDependencies:
       - bufferutil
@@ -25416,7 +25396,7 @@ snapshots:
   socket.io-parser@4.2.5:
     dependencies:
       '@socket.io/component-emitter': 3.1.2
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -25425,7 +25405,7 @@ snapshots:
       accepts: 1.3.8
       base64id: 2.0.0
       cors: 2.8.5
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       engine.io: 6.6.5(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       socket.io-adapter: 2.5.6(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       socket.io-parser: 4.2.5
@@ -25443,7 +25423,7 @@ snapshots:
   socks-proxy-agent@8.0.5:
     dependencies:
       agent-base: 7.1.4
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       socks: 2.8.7
     transitivePeerDependencies:
       - supports-color
@@ -25507,7 +25487,7 @@ snapshots:
 
   spdy-transport@3.0.0:
     dependencies:
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       detect-node: 2.1.0
       hpack.js: 2.1.6
       obuf: 1.1.2
@@ -25518,7 +25498,7 @@ snapshots:
 
   spdy@4.0.2:
     dependencies:
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       handle-thing: 2.0.1
       http-deceiver: 1.2.7
       select-hose: 2.0.0
@@ -25615,7 +25595,7 @@ snapshots:
   streamroller@3.1.5:
     dependencies:
       date-format: 4.0.14
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       fs-extra: 8.1.0
     transitivePeerDependencies:
       - supports-color
@@ -25902,15 +25882,6 @@ snapshots:
     dependencies:
       debug: 4.3.1
       is2: 2.0.9
-    transitivePeerDependencies:
-      - supports-color
-
-  teeny-request@10.1.0:
-    dependencies:
-      http-proxy-agent: 5.0.0
-      https-proxy-agent: 7.0.6
-      node-fetch: 3.3.2
-      stream-events: 1.0.5
     transitivePeerDependencies:
       - supports-color
 
@@ -26219,7 +26190,7 @@ snapshots:
   tuf-js@4.1.0:
     dependencies:
       '@tufjs/models': 4.1.0
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       make-fetch-happen: 15.0.3
     transitivePeerDependencies:
       - supports-color
@@ -26427,7 +26398,7 @@ snapshots:
 
   universal-analytics@0.5.3:
     dependencies:
-      debug: 4.4.3(supports-color@8.1.1)
+      debug: 4.4.3(supports-color@10.2.2)
       uuid: 8.3.2
     transitivePeerDependencies:
       - supports-color
