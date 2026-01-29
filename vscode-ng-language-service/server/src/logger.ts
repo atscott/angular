@@ -70,7 +70,7 @@ function nowString() {
   return `${d.getHours()}:${d.getMinutes()}:${d.getSeconds()}.${d.getMilliseconds()}`;
 }
 
-class Logger implements ts.server.Logger {
+export class Logger implements ts.server.Logger {
   private readonly fd: number;
   private seq = 0;
   private inGroup = false;

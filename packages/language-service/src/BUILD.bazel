@@ -1,6 +1,10 @@
+load("@aspect_rules_esbuild//esbuild:defs.bzl", "esbuild")
 load("//tools:defaults.bzl", "ts_project")
 
-package(default_visibility = ["//packages/language-service:__subpackages__"])
+package(default_visibility = [
+    "//packages/language-service:__subpackages__",
+    "//vscode-ng-language-service:__subpackages__",
+])
 
 ts_project(
     name = "src",
@@ -31,4 +35,19 @@ ts_project(
         "//packages/language-service/src/refactorings",
         "//packages/language-service/src/utils",
     ],
+)
+
+esbuild(
+    name = "isolated_bundle",
+    entry_point = "isolated_language_service.ts",
+    external = [
+        "typescript",
+        "@angular/compiler",
+        "@angular/compiler-cli",
+        "@angular/compiler-cli/src/ngtsc/file_system",
+    ],
+    format = "cjs",
+    platform = "node",
+    visibility = ["//packages/language-service:__pkg__"],
+    deps = [":src"],
 )

@@ -39,6 +39,7 @@ export class AngularLanguageClient implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
   private readonly outputChannel: vscode.OutputChannel;
   private readonly clientOptions: lsp.LanguageClientOptions;
+  private ts7Client: lsp.LanguageClient | null = null;
   private readonly name = 'Angular Language Service';
   private readonly virtualDocumentContents = new Map<string, string>();
   /** A map that indicates whether Angular could be found in the file's project. */
@@ -64,6 +65,30 @@ export class AngularLanguageClient implements vscode.Disposable {
       // If we don't watch it, npm install changes or dependency updates might be missed by the Language Service
       fileEvents.push(vscode.workspace.createFileSystemWatcher('**/package.json'));
     }
+
+    const serverPath = context.asAbsolutePath(
+      path.join('node_modules', '@typescript/native-preview', 'node_modules', '.bin', 'tsgo'),
+    );
+
+    const serverOptions: lsp.ServerOptions = {
+      command: serverPath,
+      args: ['--lsp', '--stdio'],
+    };
+
+    const clientOptions: lsp.LanguageClientOptions = {
+      documentSelector: [{scheme: 'file', language: 'typescript'}],
+      synchronize: {
+        fileEvents: vscode.workspace.createFileSystemWatcher('**/*.ts'),
+      },
+    };
+
+    this.ts7Client = new lsp.LanguageClient(
+      'ng-ts-server',
+      'Angular TS 7 Server',
+      serverOptions,
+      clientOptions,
+    );
+    this.ts7Client.start();
 
     this.outputChannel = vscode.window.createOutputChannel(this.name);
     // Options to control the language client
@@ -151,7 +176,7 @@ export class AngularLanguageClient implements vscode.Disposable {
           next: lsp.ProvideHoverSignature,
         ) => {
           if (
-            !(await this.isInAngularProject(document)) ||
+            //   !(await this.isInAngularProject(document)) ||
             !isNotTypescriptOrSupportedDecoratorField(document, position)
           ) {
             return;
@@ -356,6 +381,9 @@ export class AngularLanguageClient implements vscode.Disposable {
     // Must wait for the client to be ready before registering notification
     // handlers.
     this.disposables.push(registerNotificationHandlers(this.client));
+    if (this.ts7Client) {
+      this.disposables.push(registerTs7RelayHandlers(this.client, this.ts7Client));
+    }
   }
 
   /**
@@ -454,6 +482,11 @@ export class AngularLanguageClient implements vscode.Disposable {
 
     if (supportClientSide) {
       args.push('--useClientSideFileWatcher');
+    }
+
+    const tsGoPath = await resolveTsGoPath();
+    if (tsGoPath) {
+      args.push('--tsGoPath', tsGoPath);
     }
 
     return args;
@@ -618,6 +651,35 @@ function registerNotificationHandlers(client: lsp.LanguageClient): vscode.Dispos
   return vscode.Disposable.from(...disposables);
 }
 
+function registerTs7RelayHandlers(
+  angularClient: lsp.LanguageClient,
+  ts7Client: lsp.LanguageClient,
+): vscode.Disposable {
+  const disposables: vscode.Disposable[] = [];
+
+  // Relay generic notification
+  disposables.push(
+    angularClient.onNotification(
+      'angular/sendTsServerNotification',
+      (params: {method: string; params: any}) => {
+        return ts7Client.sendNotification(params.method, params.params);
+      },
+    ),
+  );
+
+  // Relay generic request
+  disposables.push(
+    angularClient.onRequest(
+      'angular/sendTsServerRequest',
+      (params: {method: string; params: any}) => {
+        return ts7Client.sendRequest(params.method, params.params);
+      },
+    ),
+  );
+
+  return vscode.Disposable.from(...disposables);
+}
+
 /**
  * Return the paths for the module that corresponds to the specified `configValue`,
  * and use the specified `bundled` as fallback if none is provided.
@@ -719,4 +781,26 @@ function setAngularVersionAndShowMultipleVersionsWarning(
       );
     }
   }
+}
+
+function resolveTsGoPath(): string | null {
+  // First, verify if the "typescriptteam.native-preview" extension is installed.
+  const tsGoExtension = vscode.extensions.getExtension('typescriptteam.native-preview');
+  if (tsGoExtension) {
+    const extensionPath = tsGoExtension.extensionPath;
+    const candidates = [
+      path.join(extensionPath, 'bin', 'tsgo'),
+      path.join(extensionPath, 'bin', 'tsgo.exe'),
+      path.join(extensionPath, 'lib', 'tsgo'),
+      path.join(extensionPath, 'lib', 'tsgo.exe'),
+      path.join(extensionPath, 'tsgo'),
+      path.join(extensionPath, 'tsgo.exe'),
+    ];
+    for (const candidate of candidates) {
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
+    }
+  }
+  return null;
 }

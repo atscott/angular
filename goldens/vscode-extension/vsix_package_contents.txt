@@ -8,6 +8,8 @@ node_modules/@angular/language-service/bundles/language-service.js
 node_modules/@angular/language-service/factory_bundle.js
 node_modules/@angular/language-service/index.d.ts
 node_modules/@angular/language-service/index.js
+node_modules/@angular/language-service/isolated.d.ts
+node_modules/@angular/language-service/isolated_bundle.js
 node_modules/@angular/language-service/package.json
 node_modules/@angular/language-service/plugin-factory.d.ts
 node_modules/typescript

@@ -46,6 +46,41 @@ esbuild(
     deps = [":api"],
 )
 
+ts_project(
+    name = "isolated",
+    srcs = ["isolated.ts"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//:node_modules/typescript",
+        "//packages/compiler-cli",
+        "//packages/language-service:api",
+        "//packages/language-service/src",
+    ],
+)
+
+esbuild(
+    name = "isolated_bundle",
+    entry_point = ":isolated.ts",
+    external = [
+        "typescript",
+        "path",
+        "fs",
+        "os",
+        "crypto",
+        "perf_hooks",
+        "inspector",
+        "source-map-support",
+    ],
+    format = "cjs",
+    platform = "node",
+    tsconfig = "tsconfig.json",
+    deps = [
+        ":isolated",
+        "//packages/compiler-cli",
+        "//packages/language-service/src",
+    ],
+)
+
 npm_package(
     srcs = [
         "index.d.ts",
@@ -55,6 +90,8 @@ npm_package(
         ":api_types",
         ":factory_bundle",
         ":factory_lib_types",
+        ":isolated_bundle",
+        ":isolated_types",
         "//packages/language-service/bundles:language-service.js",
     ],
     package = "@angular/language-service",
@@ -63,5 +100,5 @@ npm_package(
     ],
     # Do not add more to this list.
     # Dependencies on the full npm_package cause long re-builds.
-    visibility = [],
+    visibility = ["//visibility:public"],
 )

@@ -5,6 +5,7 @@ ts_project(
     srcs = glob([
         "*.ts",
         "handlers/*.ts",
+        "utils/*.ts",
     ]),
     visibility = [
         "//vscode-ng-language-service/server:__subpackages__",

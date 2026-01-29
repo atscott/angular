@@ -20,6 +20,7 @@ if (options.help) {
 import {createLogger} from './logger';
 import {ServerHost} from './server_host';
 import {Session} from './session';
+import {IsolatedSession} from './isolated_session';
 import {resolveNgLangSvc, resolveTsServer} from './version_provider';
 
 function main() {
@@ -38,22 +39,30 @@ function main() {
   const host = new ServerHost(isG3, options.useClientSideFileWatcher ?? false);
 
   // Establish a new server session that encapsulates lsp connection.
-  const session = new Session({
-    host,
-    logger,
-    // TypeScript allows only package names as plugin names.
-    ngPlugin: '@angular/language-service',
-    resolvedNgLsPath: ng.resolvedPath,
-    logToConsole: options.logToConsole,
-    includeAutomaticOptionalChainCompletions: options.includeAutomaticOptionalChainCompletions,
-    includeCompletionsWithSnippetText: options.includeCompletionsWithSnippetText,
-    includeCompletionsForModuleExports: options.includeCompletionsForModuleExports,
-    forceStrictTemplates: isG3 || options.forceStrictTemplates,
-    disableBlockSyntax: options.disableBlockSyntax,
-    disableLetSyntax: options.disableLetSyntax,
-    angularCoreVersion: options.angularCoreVersion ?? null,
-    suppressAngularDiagnosticCodes: options.suppressAngularDiagnosticCodes ?? null,
-  });
+  let session: Session | IsolatedSession;
+  if (options.tsGoPath) {
+    session = new IsolatedSession({
+      host,
+      logger,
+    });
+  } else {
+    session = new Session({
+      host,
+      logger,
+      // TypeScript allows only package names as plugin names.
+      ngPlugin: '@angular/language-service',
+      resolvedNgLsPath: ng.resolvedPath,
+      logToConsole: options.logToConsole,
+      includeAutomaticOptionalChainCompletions: options.includeAutomaticOptionalChainCompletions,
+      includeCompletionsWithSnippetText: options.includeCompletionsWithSnippetText,
+      includeCompletionsForModuleExports: options.includeCompletionsForModuleExports,
+      forceStrictTemplates: isG3 || options.forceStrictTemplates,
+      disableBlockSyntax: options.disableBlockSyntax,
+      disableLetSyntax: options.disableLetSyntax,
+      angularCoreVersion: options.angularCoreVersion ?? null,
+      suppressAngularDiagnosticCodes: options.suppressAngularDiagnosticCodes ?? null,
+    });
+  }
 
   // Log initialization info
   session.info(`Angular language server process ID: ${process.pid}`);

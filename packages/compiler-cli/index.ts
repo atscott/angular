@@ -29,6 +29,7 @@ export * from './src/ngtsc/file_system';
 // Exports for dealing with the `ngtsc` program.
 export {NgTscPlugin, PluginCompilerHost} from './src/ngtsc/tsc_plugin';
 export {NgtscProgram} from './src/ngtsc/program';
+export {NgtscIsolatedPreprocessor} from './src/ngtsc/preprocessor';
 export {OptimizeFor} from './src/ngtsc/typecheck/api';
 
 // **Note**: Explicit named exports to make this file work with CJS/ESM interop without

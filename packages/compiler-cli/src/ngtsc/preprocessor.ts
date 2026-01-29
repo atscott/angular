@@ -122,7 +122,7 @@ export class NgtscIsolatedPreprocessor {
 
       // If it is a TCB file (ends in .ngtypecheck.ts), we want it.
       if (sf.fileName.endsWith('.ngtypecheck.ts')) {
-        const content = printer.printFile(sf);
+        const content = sf.text;
         result.push({fileName: sf.fileName, content});
         continue;
       }

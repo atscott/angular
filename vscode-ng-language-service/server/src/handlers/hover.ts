@@ -8,11 +8,13 @@
 import * as lsp from 'vscode-languageserver';
 import {getSCSSLanguageService} from 'vscode-css-languageservice';
 import {TextDocument} from 'vscode-languageserver-textdocument';
+import * as ts from 'typescript/lib/tsserverlibrary';
 
 import {Session} from '../session';
 import {getSCSSVirtualContent, isInlineStyleNode} from '../embedded_support';
 import {lspPositionToTsPosition, getTokenAtPosition, tsTextSpanToLspRange} from '../utils';
 import {documentationToMarkdown} from '../text_render';
+import {tsQuickInfoToHover} from '../utils/hover';
 
 const scssLS = getSCSSLanguageService();
 
@@ -43,29 +45,9 @@ export function onHover(session: Session, params: lsp.HoverParams): lsp.Hover | 
     const stylesheet = scssLS.parseStylesheet(virtualScssDoc);
     return scssLS.doHover(virtualScssDoc, params.position, stylesheet);
   }
-  const {kind, kindModifiers, textSpan, displayParts, documentation, tags} = info;
-  let desc = kindModifiers ? kindModifiers + ' ' : '';
-  if (displayParts && displayParts.length > 0) {
-    // displayParts does not contain info about kindModifiers
-    // but displayParts does contain info about kind
-    desc += displayParts.map((dp) => dp.text).join('');
-  } else {
-    desc += kind;
-  }
-  const contents: lsp.MarkedString[] = [
-    {
-      language: 'typescript',
-      value: desc,
-    },
-  ];
-  const mds = documentationToMarkdown(
-    documentation,
-    tags,
+  return tsQuickInfoToHover(
+    info,
+    (span: ts.TextSpan) => tsTextSpanToLspRange(scriptInfo, span),
     (fileName: string) => session.getLSAndScriptInfo(fileName)?.scriptInfo,
   );
-  contents.push(mds.join('\n'));
-  return {
-    contents,
-    range: tsTextSpanToLspRange(scriptInfo, textSpan),
-  };
 }
