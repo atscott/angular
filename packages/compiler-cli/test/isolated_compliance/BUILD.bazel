@@ -1,0 +1,30 @@
+load("//tools:defaults.bzl", "angular_jasmine_test", "ts_project")
+
+ts_project(
+    name = "isolated_compliance_lib",
+    testonly = True,
+    srcs = glob(["**/*.ts"]),
+    deps = [
+        "//:node_modules/typescript",
+        "//packages/compiler",
+        "//packages/compiler-cli",
+        "//packages/compiler-cli/src/ngtsc/file_system",
+        "//packages/compiler-cli/src/ngtsc/file_system/testing",
+        "//packages/compiler-cli/src/ngtsc/testing",
+        "//packages/compiler-cli/test/compliance/test_helpers",
+        "//packages/core",
+    ],
+)
+
+filegroup(
+    name = "test_cases",
+    srcs = glob(["test_cases/**/*"]),
+)
+
+angular_jasmine_test(
+    name = "isolated_compliance",
+    data = [
+        ":isolated_compliance_lib",
+        ":test_cases",
+    ],
+)

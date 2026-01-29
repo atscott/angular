@@ -126,6 +126,13 @@ export interface InternalOptions {
    * import e.g. `Component` relatively and should be detected by the compiler.
    */
   _isAngularCoreCompilation?: boolean;
+
+  /**
+   * Whether to explicitly reify types for static fields in the output.
+   * This is used by the Source-to-Source transformation pipeline.
+   * @internal
+   */
+  _enableTypeReification?: boolean;
 }
 
 /**
@@ -135,7 +142,8 @@ export interface InternalOptions {
  * Also includes a few miscellaneous options.
  */
 export interface NgCompilerOptions
-  extends ts.CompilerOptions,
+  extends
+    ts.CompilerOptions,
     LegacyNgcOptions,
     BazelAndG3Options,
     DiagnosticOptions,

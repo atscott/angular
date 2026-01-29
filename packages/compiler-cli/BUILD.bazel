@@ -39,6 +39,7 @@ esbuild(
         ":index.ts",
         "//packages/compiler-cli:src/bin/ngc.ts",
         "//packages/compiler-cli:src/bin/ng_xi18n.ts",
+        "//packages/compiler-cli:src/bin/dump_sources.ts",
         "//packages/compiler-cli/linker:files",
         "//packages/compiler-cli/linker/babel:files",
         "//packages/compiler-cli/private:files",

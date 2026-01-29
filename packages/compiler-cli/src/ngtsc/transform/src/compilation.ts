@@ -119,6 +119,7 @@ export class TraitCompiler implements ProgramTypeCheckAdapter {
     private semanticDepGraphUpdater: SemanticDepGraphUpdater | null,
     private sourceFileTypeIdentifier: SourceFileTypeIdentifier,
     private emitDeclarationOnly: boolean,
+    private emitIntermediateTs: boolean,
   ) {
     for (const handler of handlers) {
       this.handlersByName.set(handler.name, handler);
@@ -543,7 +544,10 @@ export class TraitCompiler implements ProgramTypeCheckAdapter {
    * `ts.SourceFile`.
    */
   typeCheck(sf: ts.SourceFile, ctx: TypeCheckContext): void {
-    if (!this.fileToClasses.has(sf) || this.compilationMode === CompilationMode.LOCAL) {
+    if (
+      !this.fileToClasses.has(sf) ||
+      (this.compilationMode === CompilationMode.LOCAL && !this.emitIntermediateTs)
+    ) {
       return;
     }
 
