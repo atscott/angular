@@ -21,7 +21,7 @@ import {ServerHost} from './server_host';
 import {Logger} from './logger';
 import ts from 'typescript';
 
-import {NgIsolatedLanguageService} from '@angular/language-service/isolated';
+import {NgIsolatedLanguageService, LSRequestAdapter} from '@angular/language-service/isolated';
 import {documentationToMarkdown} from './text_render';
 import * as lsp from 'vscode-languageserver';
 import {tsQuickInfoToHover} from './utils/hover';
@@ -35,9 +35,22 @@ export interface IsolatedSessionOptions {
 export class IsolatedSession {
   private readonly connection: Connection;
   private readonly documents: TextDocuments<TextDocument>;
-  private readonly projects = new Map<string, NgIsolatedLanguageService>();
+  private readonly projects = new Map<
+    string,
+    {
+      service: NgIsolatedLanguageService;
+      watch: ts.WatchOfConfigFile<ts.SemanticDiagnosticsBuilderProgram>;
+    }
+  >();
+  // TODO: Implement an LRU cache or explicit disposal for projects.
+  // Currently, projects are opened on hover/open and never closed, which is fine for typical usage
+  // but could leak memory in very long-running sessions with many distinct projects.
   private readonly tcbVersions = new Map<string, number>();
   private readonly tcbContent = new Map<string, string>();
+  private readonly lsAdapter: LSRequestAdapter = {
+    getQuickInfoAtPosition: (f: string, p: number) => this.fetchTsQuickInfo(f, p),
+    getTypeDefinitionAtPosition: (f: string, p: number) => this.fetchTsDefinition(f, p),
+  };
 
   constructor(private readonly options: IsolatedSessionOptions) {
     this.connection = createConnection();
@@ -104,134 +117,146 @@ export class IsolatedSession {
   private async handleFileChange(filePath: string | null) {
     if (!filePath) return;
 
-    // We can't easily rely on just one lookup because a file might belong to multiple projects,
-    // or we might need to re-evaluate if the previously found config was a solution config.
-    // For now, let's resolve the best config every time we open/change?
-    // Optimization: Cache result for a filePath?
-    // Let's rely on cached 'projects' map keys.
-
-    const configPath = this.findConfigurationForFile(filePath);
+    const configPath = ts.findConfigFile(filePath, ts.sys.fileExists);
     if (!configPath) {
       this.info(`[Isolated] No tsconfig found for ${filePath}`);
       return;
     }
 
-    await this.updateProject(configPath, filePath);
+    await this.getOrCreateProject(configPath);
   }
 
-  private findConfigurationForFile(filePath: string): string | null {
-    // 1. Find the nearest tsconfig.json
-    const configPath = ts.findConfigFile(filePath, ts.sys.fileExists);
-    if (!configPath) return null;
-
-    // 2. Check if it's a solution-style config
-    return this.resolveDetailedConfig(configPath, filePath);
-  }
-
-  private resolveDetailedConfig(configPath: string, filePath: string): string {
-    const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
-    if (configFile.error) {
-      return configPath; // Return standard one if error, updateProject will diagnose
-    }
-
-    const parsed = ts.parseJsonConfigFileContent(
-      configFile.config,
-      ts.sys,
-      configPath.replace(/tsconfig\.json$/, ''),
-      undefined,
-      configPath,
-    );
-
-    // If it has project references, check them
-    if (parsed.projectReferences && parsed.projectReferences.length > 0) {
-      // HTML files are generally not listed in tsconfig (unless strict templates/inputs are used in a specific way),
-      // but they belong to the component's module.
-      // We probe using the .ts sibling if it's an html file.
-      const probePath = filePath.endsWith('.html') ? filePath.replace(/\.html$/, '.ts') : filePath;
-
-      // Simple check: is file in parsed.fileNames?
-      // Note: parsed.fileNames includes expanded glob matches if 'include' was present.
-      // Solution style configs usually have empty 'files'/'include' or specific ones.
-
-      // Simple check: is file in parsed.fileNames?
-      // Note: fileNames are absolute paths.
-      if (
-        parsed.fileNames.includes(filePath) ||
-        (probePath !== filePath && parsed.fileNames.includes(probePath))
-      ) {
-        return configPath;
-      }
-
-      // Check references
-      for (const ref of parsed.projectReferences) {
-        // ref.path is the referenced tsconfig path
-        const refConfigPath = ts.resolveProjectReferencePath(ref);
-        if (refConfigPath) {
-          // Parse the referenced config to see if it includes the file
-          const refConfig = ts.readConfigFile(refConfigPath, ts.sys.readFile);
-          if (refConfig.error) continue;
-
-          // We need to match includes/excludes. parsing is the most robust way but expensive?
-          // We only do this on file open strings, so maybe acceptable.
-          const refParsed = ts.parseJsonConfigFileContent(
-            refConfig.config,
-            ts.sys,
-            refConfigPath.replace(/[^/]+$/, ''),
-            undefined,
-            refConfigPath,
-          );
-
-          if (
-            refParsed.fileNames.includes(filePath) ||
-            (probePath !== filePath && refParsed.fileNames.includes(probePath))
-          ) {
-            return refConfigPath;
-          }
-        }
-      }
-    }
-
-    return configPath;
-  }
-
-  private async updateProject(configPath: string, triggeredFile: string) {
-    let service = this.projects.get(configPath);
-
-    // Parse config
-    const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
-    if (configFile.error) {
-      this.info(`[Isolated] Error reading tsconfig: ${configFile.error.messageText}`);
+  private async getOrCreateProject(configPath: string) {
+    if (this.projects.has(configPath)) {
       return;
     }
 
-    const parsed = ts.parseJsonConfigFileContent(
-      configFile.config,
+    this.info(`[Isolated] Creating watch for ${configPath}`);
+
+    const host = ts.createWatchCompilerHost(
+      configPath,
+      {},
       ts.sys,
-      configPath.replace('tsconfig.json', ''),
+      ts.createSemanticDiagnosticsBuilderProgram,
+      (diag) => {}, // reportDiagnostic
+      (diag) => {}, // reportWatchStatus
     );
 
-    // Create delegate host
-    const delegateHost = ts.createCompilerHost(parsed.options);
-    const originalReadFile = delegateHost.readFile;
-    delegateHost.readFile = (fileName: string) => {
-      // Start by checking if we have an open document for this file
+    // Polyfill missing methods for CompilerHost compatibility
+    // WatchCompilerHost from createWatchCompilerHost doesn't implement all CompilerHost methods directly
+    const compilerHost = host as unknown as ts.CompilerHost;
+    if (!compilerHost.getSourceFile) {
+      compilerHost.getSourceFile = (
+        fileName,
+        languageVersion,
+        onError,
+        shouldCreateNewSourceFile,
+      ) => {
+        let text: string | undefined;
+        try {
+          text = compilerHost.readFile(fileName);
+        } catch (e) {
+          if (onError) onError(e instanceof Error ? e.message : String(e));
+        }
+        return text !== undefined
+          ? ts.createSourceFile(fileName, text, languageVersion)
+          : undefined;
+      };
+    }
+    if (!compilerHost.getCanonicalFileName) {
+      compilerHost.getCanonicalFileName = (fileName: string) =>
+        ts.sys.useCaseSensitiveFileNames ? fileName : fileName.toLowerCase();
+    }
+    if (!compilerHost.getNewLine) {
+      compilerHost.getNewLine = () => ts.sys.newLine;
+    }
+    if (!compilerHost.getDefaultLibFileName) {
+      compilerHost.getDefaultLibFileName = (options) => ts.getDefaultLibFilePath(options);
+    }
+    if (!compilerHost.writeFile) {
+      compilerHost.writeFile = (fileName, data, writeByteOrderMark, onError, sourceFiles) => {
+        return ts.sys.writeFile(fileName, data, writeByteOrderMark);
+      };
+    }
+    if (!compilerHost.getCurrentDirectory) {
+      compilerHost.getCurrentDirectory = () => ts.sys.getCurrentDirectory();
+    }
+    if (!compilerHost.useCaseSensitiveFileNames) {
+      compilerHost.useCaseSensitiveFileNames = () => ts.sys.useCaseSensitiveFileNames;
+    }
+    if (!compilerHost.fileExists) {
+      compilerHost.fileExists = (path) => ts.sys.fileExists(path);
+    }
+    if (!compilerHost.directoryExists) {
+      compilerHost.directoryExists = (path) => ts.sys.directoryExists(path);
+    }
+    if (!compilerHost.getDirectories) {
+      compilerHost.getDirectories = (path) => ts.sys.getDirectories(path);
+    }
+
+    // Capture the original readFile to wrap it
+    const originalReadFile = host.readFile;
+    host.readFile = (fileName: string) => {
       const doc = this.documents.all().find((d) => this.uriToFilePath(d.uri) === fileName);
       if (doc) {
         return doc.getText();
       }
-      return originalReadFile.call(delegateHost, fileName);
+      return originalReadFile.call(host, fileName);
     };
 
-    // Re-create service (reusing old if exists)
+    // Hook into afterProgramCreate
+    const origAfterProgramCreate = host.afterProgramCreate;
+    host.afterProgramCreate = async (builderProgram) => {
+      const program = builderProgram.getProgram();
+      const fileNames = program.getRootFileNames();
+      const options = program.getCompilerOptions();
+
+      this.info(`[Isolated] Project updated: ${configPath} (${fileNames.length} files)`);
+
+      await this.updateIsolatedService(
+        configPath,
+        fileNames,
+        options,
+        host as unknown as ts.CompilerHost,
+      );
+
+      if (origAfterProgramCreate) origAfterProgramCreate(builderProgram);
+    };
+
+    const watchProgram = ts.createWatchProgram(host);
+    const entry = this.projects.get(configPath);
+    if (entry) {
+      entry.watch = watchProgram;
+    } else {
+      this.projects.set(configPath, {service: undefined!, watch: watchProgram});
+    }
+  }
+
+  private async updateIsolatedService(
+    configPath: string,
+    fileNames: readonly string[],
+    options: ts.CompilerOptions,
+    compilerHost: ts.CompilerHost,
+  ) {
+    let entry = this.projects.get(configPath);
+    let service = entry?.service;
+
     service = new NgIsolatedLanguageService(
-      parsed.fileNames,
-      parsed.options,
-      delegateHost,
+      fileNames,
+      options,
+      compilerHost as unknown as ts.CompilerHost,
       service,
     );
-    this.projects.set(configPath, service);
 
-    this.info(`[Isolated] Analyzing project ${configPath}`);
+    if (entry) {
+      entry.service = service;
+    } else {
+      if (!this.projects.has(configPath)) {
+        this.projects.set(configPath, {service, watch: undefined!});
+      } else {
+        this.projects.get(configPath)!.service = service;
+      }
+    }
     await service.analyze();
     const results = service.transformAndPrint();
 
@@ -271,7 +296,8 @@ export class IsolatedSession {
         }
       }
     }
-    // }
+
+    return service;
   }
 
   private async onHover(params: any): Promise<any> {
@@ -282,18 +308,21 @@ export class IsolatedSession {
     const doc = this.documents.get(textDocument.uri);
     if (!doc) return null;
 
-    const configPath = this.findConfigurationForFile(fileName);
+    const configPath = ts.findConfigFile(fileName, ts.sys.fileExists);
     if (!configPath) return null;
 
-    const service = this.projects.get(configPath);
-    if (!service) return null;
+    if (!this.projects.has(configPath)) {
+      await this.getOrCreateProject(configPath);
+    }
+
+    const projectData = this.projects.get(configPath);
+    if (!projectData || !projectData.service) return null;
+    const service = projectData.service;
 
     const offset = doc.offsetAt(position);
 
     try {
-      const info = await service.getQuickInfoAtPosition(fileName, offset, (f, p) =>
-        this.fetchTsQuickInfo(f, p),
-      );
+      const info = await service.getQuickInfoAtPosition(fileName, offset, this.lsAdapter);
       if (info) {
         return tsQuickInfoToHover(
           info,
@@ -365,6 +394,70 @@ export class IsolatedSession {
     } catch (e) {
       debugger;
       this.options.logger.info(`[Isolated] Error fetching TS QuickInfo: ${e}`);
+      return undefined;
+    }
+  }
+
+  private async fetchTsDefinition(
+    fileName: string,
+    position: number,
+  ): Promise<readonly ts.DefinitionInfo[] | undefined> {
+    const uri = `file://${fileName}`;
+    const content = this.tcbContent.get(uri);
+    let pos: lsp.Position;
+    if (content) {
+      const tempDoc = TextDocument.create(uri, 'typescript', 0, content);
+      pos = tempDoc.positionAt(position);
+    } else {
+      const doc = this.documents.get(uri);
+      if (doc) {
+        pos = doc.positionAt(position);
+      } else {
+        return undefined;
+      }
+    }
+
+    try {
+      const result = (await this.connection.sendRequest('angular/sendTsServerRequest', {
+        method: lsp.DefinitionRequest.type.method,
+        params: {
+          textDocument: {uri},
+          position: pos,
+        },
+      })) as lsp.Location | lsp.Location[] | null;
+
+      if (!result) return undefined;
+
+      const locations = Array.isArray(result) ? result : [result];
+      return locations.map((loc) => {
+        const locUri = loc.uri;
+        let start = 0;
+        // precise mapping back isn't super critical for just getting quick info at the destination
+        // but we need to try.
+        if (this.tcbContent.has(locUri)) {
+          start = TextDocument.create(
+            locUri,
+            'typescript',
+            0,
+            this.tcbContent.get(locUri)!,
+          ).offsetAt(loc.range.start);
+        } else {
+          const doc = this.documents.get(locUri);
+          if (doc) {
+            start = doc.offsetAt(loc.range.start);
+          }
+        }
+        return {
+          fileName: this.uriToFilePath(locUri) || locUri,
+          textSpan: {start, length: 0},
+          kind: ts.ScriptElementKind.unknown,
+          name: '',
+          containerKind: ts.ScriptElementKind.unknown,
+          containerName: '',
+        };
+      });
+    } catch (e) {
+      this.options.logger.info(`[Isolated] Error fetching TS Definition: ${e}`);
       return undefined;
     }
   }
