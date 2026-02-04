@@ -22,7 +22,7 @@ import {CONTAINER_HEADER_OFFSET} from './interfaces/container';
 import {TNode, TNodeType} from './interfaces/node';
 import {RElement} from './interfaces/renderer_dom';
 import {isComponentHost, isLContainer} from './interfaces/type_checks';
-import {ANIMATIONS, ID, LView, TVIEW} from './interfaces/view';
+import {ANIMATIONS, FLAGS, ID, LView, LViewFlags, TVIEW} from './interfaces/view';
 import {getComponentLViewByIndex} from './util/view_utils';
 
 export function maybeQueueEnterAnimation(
@@ -47,6 +47,10 @@ export function runLeaveAnimationsWithCallback(
   // the injector tree. If this happens, we will get an error when we try to
   // get the injector, so we catch it here and avoid the error and return
   // safely.
+  if (lView && lView[FLAGS] & LViewFlags.Destroyed) {
+    return callback(false);
+  }
+
   try {
     injector.get(INJECTOR);
   } catch {
@@ -147,8 +151,12 @@ function executeLeaveAnimations(
   if (runningAnimations.length > 0) {
     const currentAnimations = animations || lView?.[ANIMATIONS];
     if (currentAnimations) {
+      const prevRunning = currentAnimations.running;
+      if (prevRunning) {
+        runningAnimations.push(prevRunning);
+      }
       currentAnimations.running = Promise.allSettled(runningAnimations);
-      runAfterLeaveAnimations(lView!, callback);
+      runAfterLeaveAnimations(lView!, currentAnimations.running, callback);
     } else {
       Promise.allSettled(runningAnimations).then(() => {
         if (lView) allLeavingAnimations.delete(lView[ID]);
@@ -212,15 +220,20 @@ function collectAllViewLeaveAnimations(view: LView, collectedPromises: Promise<u
   }
 }
 
-function runAfterLeaveAnimations(lView: LView, callback: Function) {
-  const runningAnimations = lView[ANIMATIONS]?.running;
-  if (runningAnimations) {
-    runningAnimations.then(() => {
+function runAfterLeaveAnimations(
+  lView: LView,
+  runningAnimations: Promise<unknown>,
+  callback: Function,
+) {
+  runningAnimations.then(() => {
+    // We only want to clear the running flag and the allLeavingAnimations set if
+    // the current running animation is the same as the one we just waited for.
+    // If it's different, it means another animation started while we were waiting,
+    // and that other animation is now responsible for clearing the flag.
+    if (lView[ANIMATIONS]?.running === runningAnimations) {
       lView[ANIMATIONS]!.running = undefined;
       allLeavingAnimations.delete(lView[ID]);
-      callback(true);
-    });
-    return;
-  }
-  callback(false);
+    }
+    callback(true);
+  });
 }

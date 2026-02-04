@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 
-import {Component, signal, ViewEncapsulation, OnDestroy} from '@angular/core';
+import {Component, signal, ViewEncapsulation, OnDestroy, destroyPlatform} from '@angular/core';
 import {TestBed, fakeAsync, tick} from '@angular/core/testing';
 import {BrowserTestingModule, platformBrowserTesting} from '@angular/platform-browser/testing';
 import {NoopAnimationsModule} from '@angular/platform-browser/animations';
@@ -14,6 +14,7 @@ import {tickAnimationFrames} from '../animation_utils/tick_animation_frames';
 
 describe('Nested animate.leave', () => {
   beforeEach(() => {
+    destroyPlatform();
     TestBed.resetTestEnvironment();
     TestBed.initTestEnvironment(
       [BrowserTestingModule, NoopAnimationsModule],
