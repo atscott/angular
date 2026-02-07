@@ -43,7 +43,7 @@ export class Environment extends ReferenceEmitEnvironment {
   private typeCtors = new Map<ClassDeclaration, ts.Expression>();
   protected typeCtorStatements: ts.Statement[] = [];
 
-  private pipeInsts = new Map<ClassDeclaration, ts.Expression>();
+  private pipeInsts = new Map<string, ts.Expression>();
   protected pipeInstStatements: ts.Statement[] = [];
 
   constructor(
@@ -105,16 +105,20 @@ export class Environment extends ReferenceEmitEnvironment {
    * Get an expression referring to an instance of the given pipe.
    */
   pipeInst(pipe: import('../api').TcbPipeMetadata): ts.Expression {
-    const ref = (pipe as any).ref as Reference<ClassDeclaration<ts.ClassDeclaration>>;
-    if (this.pipeInsts.has(ref.node)) {
-      return this.pipeInsts.get(ref.node)!;
+    const key = `${pipe.moduleName}#${pipe.name}`;
+    if (this.pipeInsts.has(key)) {
+      return this.pipeInsts.get(key)!;
     }
 
+    const ref = pipe.ref as import('../../imports').Reference<
+      ClassDeclaration<ts.ClassDeclaration>
+    >;
+    // Fallback or use ref if needed for referenceType
     const pipeType = this.referenceType(ref);
     const pipeInstId = ts.factory.createIdentifier(`_pipe${this.nextIds.pipeInst++}`);
 
     this.pipeInstStatements.push(tsDeclareVariable(pipeInstId, pipeType));
-    this.pipeInsts.set(ref.node, pipeInstId);
+    this.pipeInsts.set(key, pipeInstId);
 
     return pipeInstId;
   }

@@ -694,3 +694,21 @@ Moving to the true native pre-processor requires integration changes in the JS c
 3. **Reference by ID (Pre-processor):** When defining the scope or used targets for a particular component, the compilation unit simply sends a lightweight array of dependency IDs (e.g., `usedDirectiveIds: string[]`), _not_ the duplicated metadata objects themselves.
 4. **Rehydration (JS Compiler):** The JS compiler's adapter (`tcb_adapter` equivalent) acts as a lookup mechanism. It maps the component's arrays of referenced `usedDirectiveIds` against the global dictionary payload to rehydrate the actual `TcbDirectiveMetadata` objects within memory safely.
 5. **Execution (JS Compiler):** These rehydrated scopes are seamlessly passed directly into `generateTypeCheckBlock`, rendering the TCB normally without requiring any alterations to the AST emission pipeline itself!
+
+### Future Architecture Improvements
+
+Based on a design and implementation review of the Hybrid Isolated Architecture, there are several areas of improvement to consider for future decoupling efforts:
+
+#### 1. The `ts.TypeNode` JSON-Serializability Problem
+
+Currently, detached metadata interfaces (`TcbDirectiveMetadata`, `TcbPipeMetadata`) heavily feature `ts.TypeNode`, `ts.TypeParameterDeclaration`, and `ts.Expression`. Since AST nodes are not JSON-serializable, a raw Rust pre-processor cannot directly output them. Given that the pre-processor only extracts Angular information from decorators and things like inputs/outputs, the Node.js side will require a **Hydration Step**. When Rust hands over the JSON metadata with stringified types (e.g., `type: "Observable<T>"`), the TS worker will need to run a small parsing pass (using `ts.createSourceFile` or similar) to hydrate those strings into `ts.TypeNode` instances before passing the `TcbComponentMetadata` to the generator.
+
+#### 2. Virtual Output Requirements (`import()` types)
+
+The output must remain valid TypeScript source text using `import()` types for external references. Currently, `DetachedTcbEnvironment` maintains a `preludeStatements` array to emit top-level namespace imports (`import * as i1 from '...'`), and uses `ts.factory.createQualifiedName(ns, ...)` to emit references. While valid TS, managing a prelude complicates the pure "virtual file" concept since the TCB statements must be stitched together with the prelude. A future improvement could modify `DetachedTcbEnvironment.referenceType` and other generators to emit inline `import('...').MyComponent` types (via `ts.factory.createImportTypeNode`).
+
+_Note on implementation attempt:_ Changing `referenceType` to return `import()` types currently breaks the generator because `generateTypeCheckBlock` strictly expects a `ts.TypeReferenceNode` and reads its `.typeName` property to generate generic types contexts. Carefully refactoring `generateTypeCheckBlock` to support `ts.ImportTypeNode` is required before this can be adopted.
+
+#### 3. The `BoundTarget` Boundary
+
+`TcbComponentMetadata` relies on `BoundTarget<TcbDirectiveMetadata>`. `BoundTarget` is a massive interface with methods like `getDirectivesOfNode` and `getConsumerOfBinding()`, which operate on actual `TmplAstNode`s by reference. Since template parsing remains strictly on the JS/TS side (while the native pre-processor only extracts decorator data), `BoundTarget` inherently stays on the JS side of the boundary. The JS compiler can safely construct the `BoundTarget` natively using the detached metadata supplied by the pre-processor, completely bypassing the need to serialize the complex `BoundTarget` interface or template references over the IPC bridge. This division of labor validates the current design of `TcbComponentMetadata`.
