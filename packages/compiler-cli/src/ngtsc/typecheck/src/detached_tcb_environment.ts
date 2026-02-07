@@ -97,10 +97,12 @@ export class DetachedTcbEnvironment implements TcbEnvironment {
         : 'UNKNOWN';
       const moduleName = (ref as any).moduleName;
       if (moduleName) {
-        const ns = this.getNamespaceImport(moduleName);
-        return ts.factory.createTypeReferenceNode(
-          ts.factory.createQualifiedName(ns, ts.factory.createIdentifier(nameText)),
+        return ts.factory.createImportTypeNode(
+          ts.factory.createLiteralTypeNode(ts.factory.createStringLiteral(moduleName)),
           undefined,
+          ts.factory.createIdentifier(nameText),
+          undefined,
+          false,
         );
       }
       return ts.factory.createTypeReferenceNode(ts.factory.createIdentifier(nameText), undefined);
@@ -112,10 +114,12 @@ export class DetachedTcbEnvironment implements TcbEnvironment {
           undefined,
         );
       }
-      const ns = this.getNamespaceImport(dir.moduleName);
-      return ts.factory.createTypeReferenceNode(
-        ts.factory.createQualifiedName(ns, ts.factory.createIdentifier(dir.name || 'UNKNOWN')),
+      return ts.factory.createImportTypeNode(
+        ts.factory.createLiteralTypeNode(ts.factory.createStringLiteral(dir.moduleName)),
         undefined,
+        ts.factory.createIdentifier(dir.name || 'UNKNOWN'),
+        undefined,
+        false,
       );
     }
   }

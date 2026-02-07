@@ -66,9 +66,9 @@ export function generateTypeCheckBlock(
     meta.preserveWhitespaces,
   );
   const ctxRawType = env.referenceType(ref);
-  if (!ts.isTypeReferenceNode(ctxRawType)) {
+  if (!ts.isTypeReferenceNode(ctxRawType) && !ts.isImportTypeNode(ctxRawType)) {
     throw new Error(
-      `Expected TypeReferenceNode when referencing the ctx param for ${ref.debugName}`,
+      `Expected TypeReferenceNode or ImportTypeNode when referencing the ctx param for ${ref.debugName}`,
     );
   }
 
@@ -104,7 +104,7 @@ export function generateTypeCheckBlock(
     }
   }
 
-  const paramList = [tcbThisParam(ctxRawType.typeName, typeArguments)];
+  const paramList = [tcbThisParam(ctxRawType, typeArguments)];
   const statements: ts.Statement[] = [];
 
   // Add the template type checking code.
@@ -159,15 +159,29 @@ function renderBlockStatements(
  * arguments.
  */
 function tcbThisParam(
-  name: ts.EntityName,
+  type: ts.TypeReferenceNode | ts.ImportTypeNode,
   typeArguments: ts.TypeNode[] | undefined,
 ): ts.ParameterDeclaration {
+  const typeArgsNodeArray = typeArguments ? ts.factory.createNodeArray(typeArguments) : undefined;
+  if (ts.isTypeReferenceNode(type)) {
+    type = ts.factory.updateTypeReferenceNode(type, type.typeName, typeArgsNodeArray);
+  } else {
+    type = ts.factory.updateImportTypeNode(
+      type,
+      type.argument,
+      type.attributes,
+      type.qualifier,
+      typeArgsNodeArray,
+      type.isTypeOf,
+    );
+  }
+
   return ts.factory.createParameterDeclaration(
     /* modifiers */ undefined,
     /* dotDotDotToken */ undefined,
     /* name */ 'this',
     /* questionToken */ undefined,
-    /* type */ ts.factory.createTypeReferenceNode(name, typeArguments),
+    /* type */ type,
     /* initializer */ undefined,
   );
 }

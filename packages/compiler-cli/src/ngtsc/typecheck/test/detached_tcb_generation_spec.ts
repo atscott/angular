@@ -176,7 +176,8 @@ describe('Detached TCB Generation', () => {
     );
     const printed = printer.printFile(sourceFile);
 
-    expect(printed).toContain('import * as i1 from "/test/my_component.ts";');
+    expect(printed).not.toContain('import * as i1 from "/test/my_component.ts";');
+    expect(printed).toContain('function _tcb1(this: import("/test/my_component.ts").MyComponent)');
     expect(printed).toContain('function _tcb1(');
     // expect(printed).toContain('let ctx: i1.MyComponent;');
     // Should have basic variable creation
