@@ -10,9 +10,9 @@ import {BoundTarget, SchemaMetadata} from '@angular/compiler';
 import ts from 'typescript';
 import {DomSchemaChecker} from '../dom';
 import {OutOfBandDiagnosticRecorder} from '../oob';
-import {TypeCheckableDirectiveMeta, TypeCheckId} from '../../api';
-import {PipeMeta} from '../../../metadata';
-import {Environment} from '../environment';
+import {TcbDirectiveMetadata, TcbPipeMetadata} from '../../api/tcb_metadata';
+import {TypeCheckId} from '../../api';
+import {TcbEnvironment} from '../tcb_environment';
 
 /**
  * Controls how generics for the component context class will be handled during TCB generation.
@@ -53,12 +53,12 @@ export class Context {
   private nextId = 1;
 
   constructor(
-    readonly env: Environment,
+    readonly env: TcbEnvironment,
     readonly domSchemaChecker: DomSchemaChecker,
     readonly oobRecorder: OutOfBandDiagnosticRecorder,
     readonly id: TypeCheckId,
-    readonly boundTarget: BoundTarget<TypeCheckableDirectiveMeta>,
-    private pipes: Map<string, PipeMeta> | null,
+    readonly boundTarget: BoundTarget<TcbDirectiveMetadata>,
+    private pipes: Map<string, TcbPipeMetadata> | null,
     readonly schemas: SchemaMetadata[],
     readonly hostIsStandalone: boolean,
     readonly hostPreserveWhitespaces: boolean,
@@ -74,7 +74,7 @@ export class Context {
     return ts.factory.createIdentifier(`_t${this.nextId++}`);
   }
 
-  getPipeByName(name: string): PipeMeta | null {
+  getPipeByName(name: string): TcbPipeMetadata | null {
     if (this.pipes === null || !this.pipes.has(name)) {
       return null;
     }

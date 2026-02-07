@@ -47,6 +47,7 @@ import {TypeCheckShimGenerator} from './shim';
 import {DirectiveSourceManager} from './source';
 import {requiresInlineTypeCheckBlock, TcbInliningRequirement} from './tcb_util';
 import {generateTypeCheckBlock} from './type_check_block';
+import {adaptTypeCheckBlockMetadata} from './tcb_adapter';
 import {TypeCheckFile} from './type_check_file';
 import {generateInlineTypeCtor, requiresInlineTypeCtor} from './type_constructor';
 import {TcbGenericContextBehavior} from './ops/context';
@@ -679,13 +680,14 @@ class InlineTcbOp implements Op {
     const env = new Environment(this.config, im, refEmitter, this.reflector, sf);
     const fnName = ts.factory.createIdentifier(`_tcb_${this.ref.node.pos}`);
 
-    // Inline TCBs should copy any generic type parameter nodes directly, as the TCB code is
+    // Inline TCBs MUST copy any generic type parameter nodes directly, as the TCB code is
     // inlined into the class in a context where that will always be legal.
+    const adaptedMeta = adaptTypeCheckBlockMetadata(this.meta, env, this.ref);
     const fn = generateTypeCheckBlock(
       env,
       this.ref,
       fnName,
-      this.meta,
+      adaptedMeta,
       this.domSchemaChecker,
       this.oobRecorder,
       TcbGenericContextBehavior.CopyClassNodes,

@@ -55,11 +55,14 @@ export class ReferenceEmitEnvironment {
    * This may involve importing the node into the file if it's not declared there already.
    */
   referenceType(
-    ref: Reference,
+    ref: Reference | import('../api').TcbDirectiveMetadata,
     flags: ImportFlags = ImportFlags.NoAliasing |
       ImportFlags.AllowTypeImports |
       ImportFlags.AllowRelativeDtsImports,
   ): ts.TypeNode {
+    if (!(ref instanceof Reference)) {
+      ref = (ref as any).ref as Reference;
+    }
     const ngExpr = this.refEmitter.emit(ref, this.contextFile, flags);
     assertSuccessfulReferenceEmit(ngExpr, this.contextFile, 'symbol');
 

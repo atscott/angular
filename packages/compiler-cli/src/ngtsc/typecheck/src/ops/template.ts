@@ -12,7 +12,7 @@ import {addParseSpanInfo} from '../diagnostics';
 import {TcbOp} from './base';
 import type {Context} from './context';
 import type {Scope} from './scope';
-import {TypeCheckableDirectiveMeta} from '../../api';
+import {TcbDirectiveMetadata} from '../../api/tcb_metadata';
 import {Reference} from '../../../imports';
 import {ClassDeclaration} from '../../../reflection';
 import {markIgnoreDiagnostics} from '../comments';
@@ -142,7 +142,7 @@ export class TcbTemplateBodyOp extends TcbOp {
   private addDirectiveGuards(
     guards: ts.Expression[],
     hostNode: TmplAstTemplate | TmplAstDirective,
-    directives: TypeCheckableDirectiveMeta[] | null,
+    directives: TcbDirectiveMetadata[] | null,
   ) {
     if (directives === null || directives.length === 0) {
       return;
@@ -151,15 +151,12 @@ export class TcbTemplateBodyOp extends TcbOp {
     const isTemplate = hostNode instanceof TmplAstTemplate;
 
     for (const dir of directives) {
-      const dirInstId = this.scope.resolve(hostNode, dir);
-      const dirId = this.tcb.env.reference(
-        dir.ref as Reference<ClassDeclaration<ts.ClassDeclaration>>,
-      );
+      if (!dir.ngTemplateGuards) continue;
 
-      // There are two kinds of guards. Template guards (ngTemplateGuards) allow type narrowing of
-      // the expression passed to an @Input of the directive. Scan the directive to see if it has
-      // any template guards, and generate them if needed.
-      dir.ngTemplateGuards.forEach((guard) => {
+      const dirRef = this.tcb.env.reference((dir as any).ref);
+      const dirInstId = this.scope.resolve(hostNode, dir);
+
+      for (const guard of dir.ngTemplateGuards) {
         // For each template guard function on the directive, look for a binding to that input.
         const boundInput =
           hostNode.inputs.find((i) => i.name === guard.inputName) ||
@@ -182,7 +179,7 @@ export class TcbTemplateBodyOp extends TcbOp {
           } else {
             // Call the guard function on the directive with the directive instance and that
             // expression.
-            const guardInvoke = tsCallMethod(dirId, `ngTemplateGuard_${guard.inputName}`, [
+            const guardInvoke = tsCallMethod(dirRef, `ngTemplateGuard_${guard.inputName}`, [
               dirInstId,
               expr,
             ]);
@@ -190,14 +187,14 @@ export class TcbTemplateBodyOp extends TcbOp {
             guards.push(guardInvoke);
           }
         }
-      });
+      }
 
       // The second kind of guard is a template context guard. This guard narrows the template
       // rendering context variable `ctx`.
       if (dir.hasNgTemplateContextGuard) {
         if (this.tcb.env.config.applyTemplateContextGuards) {
           const ctx = this.scope.resolve(hostNode);
-          const guardInvoke = tsCallMethod(dirId, 'ngTemplateContextGuard', [dirInstId, ctx]);
+          const guardInvoke = tsCallMethod(dirRef, 'ngTemplateContextGuard', [dirInstId, ctx]);
           markIgnoreDiagnostics(guardInvoke);
           addParseSpanInfo(guardInvoke, hostNode.sourceSpan);
           guards.push(guardInvoke);

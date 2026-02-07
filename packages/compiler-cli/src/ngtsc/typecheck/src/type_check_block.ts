@@ -10,7 +10,7 @@ import ts from 'typescript';
 
 import {Reference} from '../../imports';
 import {ClassDeclaration} from '../../reflection';
-import {TypeCheckBlockMetadata} from '../api';
+import {TcbComponentMetadata, TypeCheckBlockMetadata} from '../api';
 
 import {addTypeCheckId} from './diagnostics';
 import {DomSchemaChecker} from './dom';
@@ -49,7 +49,7 @@ export function generateTypeCheckBlock(
   env: Environment,
   ref: Reference<ClassDeclaration<ts.ClassDeclaration>>,
   name: ts.Identifier,
-  meta: TypeCheckBlockMetadata,
+  meta: TcbComponentMetadata,
   domSchemaChecker: DomSchemaChecker,
   oobRecorder: OutOfBandDiagnosticRecorder,
   genericContextBehavior: TcbGenericContextBehavior,

@@ -119,7 +119,17 @@ export interface TypeCtorMetadata {
   /**
    * Input, output, and query field names in the type which should be included as constructor input.
    */
-  fields: {inputs: ClassPropertyMapping<InputMapping>; queries: string[]};
+  fields: {
+    inputs:
+      | ClassPropertyMapping<InputMapping>
+      | Iterable<{
+          classPropertyName: string;
+          isSignal: boolean;
+          transform?: {type: {node: ts.TypeNode}};
+          type?: ts.TypeNode;
+        }>;
+    queries: string[];
+  };
 
   /**
    * `Set` of field names which have type coercion enabled.

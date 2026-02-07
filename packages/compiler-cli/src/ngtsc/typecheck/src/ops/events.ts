@@ -21,7 +21,7 @@ import ts from 'typescript';
 import {TcbOp} from './base';
 import type {Context} from './context';
 import type {Scope} from './scope';
-import {TypeCheckableDirectiveMeta} from '../../api';
+import {TcbDirectiveMetadata} from '../../api/tcb_metadata';
 import {addParseSpanInfo} from '../diagnostics';
 import {TcbExpressionTranslator, unwrapWritableSignal} from './expression';
 import {tsCreateVariable} from '../ts_util';
@@ -62,7 +62,7 @@ export class TcbDirectiveOutputsOp extends TcbOp {
     private node: DirectiveOwner,
     private inputs: TmplAstBoundAttribute[] | null,
     private outputs: TmplAstBoundEvent[],
-    private dir: TypeCheckableDirectiveMeta,
+    private dir: TcbDirectiveMetadata,
   ) {
     super();
   }
@@ -91,8 +91,9 @@ export class TcbDirectiveOutputsOp extends TcbOp {
         const inputName = output.name.slice(0, -6);
         checkSplitTwoWayBinding(inputName, output, this.inputs, this.tcb);
       }
-      // TODO(alxhub): consider supporting multiple fields with the same property name for outputs.
-      const field = outputs.getByBindingPropertyName(output.name)![0].classPropertyName;
+      const outputMapping = this.dir.tcbOutputs.find((o) => o.bindingPropertyName === output.name);
+      if (!outputMapping) continue;
+      const field = outputMapping.classPropertyName;
 
       if (dirId === null) {
         dirId = this.scope.resolve(this.node, this.dir);

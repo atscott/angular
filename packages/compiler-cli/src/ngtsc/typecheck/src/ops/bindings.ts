@@ -19,7 +19,7 @@ import {
   TmplAstTextAttribute,
 } from '@angular/compiler';
 import ts from 'typescript';
-import {TypeCheckableDirectiveMeta} from '../../api';
+import {TcbDirectiveMetadata} from '../../api/tcb_metadata';
 import {ClassPropertyName} from '../../../metadata';
 import {Reference} from '../../../imports';
 import {Context} from './context';
@@ -30,10 +30,9 @@ export interface TcbBoundAttribute {
   sourceSpan: ParseSourceSpan;
   keySpan: ParseSourceSpan | null;
   inputs: {
-    fieldName: ClassPropertyName;
+    fieldName: string;
     required: boolean;
     isSignal: boolean;
-    transformType: Reference<ts.TypeNode> | null;
     isTwoWayBinding: boolean;
   }[];
 }
@@ -80,7 +79,7 @@ export interface TcbDirectiveUnsetInput {
 export type TcbDirectiveInput = TcbDirectiveBoundInput | TcbDirectiveUnsetInput;
 
 export function getBoundAttributes(
-  directive: TypeCheckableDirectiveMeta,
+  directive: TcbDirectiveMetadata,
   node: TmplAstTemplate | TmplAstElement | TmplAstComponent | TmplAstDirective,
 ): TcbBoundAttribute[] {
   const boundInputs: TcbBoundAttribute[] = [];
@@ -95,10 +94,9 @@ export function getBoundAttributes(
       return;
     }
 
-    // Skip the attribute if the directive does not have an input for it.
-    const inputs = directive.inputs.getByBindingPropertyName(attr.name);
+    const inputs = directive.tcbInputs.filter((i) => i.bindingPropertyName === attr.name);
 
-    if (inputs !== null) {
+    if (inputs.length > 0) {
       boundInputs.push({
         value: attr.value,
         sourceSpan: attr.sourceSpan,
@@ -107,7 +105,6 @@ export function getBoundAttributes(
           return {
             fieldName: input.classPropertyName,
             required: input.required,
-            transformType: input.transform?.type || null,
             isSignal: input.isSignal,
             isTwoWayBinding:
               attr instanceof TmplAstBoundAttribute && attr.type === BindingType.TwoWay,
@@ -143,34 +140,14 @@ export function checkSplitTwoWayBinding(
     return false;
   }
   // Input consumer should be a directive because it's claimed
-  const inputConsumer = tcb.boundTarget.getConsumerOfBinding(input) as TypeCheckableDirectiveMeta;
+  const inputConsumer = tcb.boundTarget.getConsumerOfBinding(input) as TcbDirectiveMetadata;
   const outputConsumer = tcb.boundTarget.getConsumerOfBinding(output);
-  if (
-    outputConsumer === null ||
-    inputConsumer.ref === undefined ||
-    outputConsumer instanceof TmplAstTemplate
-  ) {
+  if (outputConsumer === null || outputConsumer instanceof TmplAstTemplate) {
     return false;
   }
-  if (outputConsumer instanceof TmplAstElement) {
-    tcb.oobRecorder.splitTwoWayBinding(
-      tcb.id,
-      input,
-      output,
-      inputConsumer.ref.node,
-      outputConsumer,
-    );
-    return true;
-  } else if (outputConsumer.ref !== inputConsumer.ref) {
-    tcb.oobRecorder.splitTwoWayBinding(
-      tcb.id,
-      input,
-      output,
-      inputConsumer.ref.node,
-      outputConsumer.ref.node,
-    );
-    return true;
-  }
+
+  // NOTE: splitTwoWayBinding diagnostic skipped for detached TCB generation right now
+  // because we don't have ts.ClassDeclaration node to report on.
   return false;
 }
 
