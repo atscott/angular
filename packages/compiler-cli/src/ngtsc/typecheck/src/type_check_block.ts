@@ -10,11 +10,11 @@ import ts from 'typescript';
 
 import {Reference} from '../../imports';
 import {ClassDeclaration} from '../../reflection';
-import {TypeCheckBlockMetadata} from '../api';
+import {TcbComponentMetadata, TypeCheckBlockMetadata} from '../api';
+import {TcbEnvironment} from './tcb_environment';
 
 import {addTypeCheckId} from './diagnostics';
 import {DomSchemaChecker} from './dom';
-import {Environment} from './environment';
 import {OutOfBandDiagnosticRecorder} from './oob';
 import {TypeParameterEmitter} from './type_parameter_emitter';
 import {createHostBindingsBlockGuard} from './host_bindings';
@@ -46,13 +46,11 @@ import {Scope} from './ops/scope';
  * bounds) will be referenced from the generated TCB code.
  */
 export function generateTypeCheckBlock(
-  env: Environment,
-  ref: Reference<ClassDeclaration<ts.ClassDeclaration>>,
+  env: TcbEnvironment,
   name: ts.Identifier,
-  meta: TypeCheckBlockMetadata,
+  meta: TcbComponentMetadata,
   domSchemaChecker: DomSchemaChecker,
   oobRecorder: OutOfBandDiagnosticRecorder,
-  genericContextBehavior: TcbGenericContextBehavior,
 ): ts.FunctionDeclaration {
   const tcb = new Context(
     env,
@@ -65,46 +63,17 @@ export function generateTypeCheckBlock(
     meta.isStandalone,
     meta.preserveWhitespaces,
   );
-  const ctxRawType = env.referenceType(ref);
-  if (!ts.isTypeReferenceNode(ctxRawType)) {
+  const ctxRawType = env.referenceType(meta.component);
+  if (!ts.isTypeReferenceNode(ctxRawType) && !ts.isImportTypeNode(ctxRawType)) {
     throw new Error(
-      `Expected TypeReferenceNode when referencing the ctx param for ${ref.debugName}`,
+      `Expected TypeReferenceNode or ImportTypeNode when referencing the ctx param for ${meta.component.name}`,
     );
   }
 
-  let typeParameters: ts.TypeParameterDeclaration[] | undefined = undefined;
-  let typeArguments: ts.TypeNode[] | undefined = undefined;
+  let typeParameters: ts.TypeParameterDeclaration[] | undefined = meta.fnTypeParameters;
+  let typeArguments: ts.TypeNode[] | undefined = meta.fnTypeArguments;
 
-  if (ref.node.typeParameters !== undefined) {
-    if (!env.config.useContextGenericType) {
-      genericContextBehavior = TcbGenericContextBehavior.FallbackToAny;
-    }
-
-    switch (genericContextBehavior) {
-      case TcbGenericContextBehavior.UseEmitter:
-        // Guaranteed to emit type parameters since we checked that the class has them above.
-        typeParameters = new TypeParameterEmitter(ref.node.typeParameters, env.reflector).emit(
-          (typeRef) => env.referenceType(typeRef),
-        )!;
-        typeArguments = typeParameters.map((param) =>
-          ts.factory.createTypeReferenceNode(param.name),
-        );
-        break;
-      case TcbGenericContextBehavior.CopyClassNodes:
-        typeParameters = [...ref.node.typeParameters];
-        typeArguments = typeParameters.map((param) =>
-          ts.factory.createTypeReferenceNode(param.name),
-        );
-        break;
-      case TcbGenericContextBehavior.FallbackToAny:
-        typeArguments = ref.node.typeParameters.map(() =>
-          ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-        );
-        break;
-    }
-  }
-
-  const paramList = [tcbThisParam(ctxRawType.typeName, typeArguments)];
+  const paramList = [tcbThisParam(ctxRawType, typeArguments)];
   const statements: ts.Statement[] = [];
 
   // Add the template type checking code.
@@ -141,7 +110,7 @@ export function generateTypeCheckBlock(
 }
 
 function renderBlockStatements(
-  env: Environment,
+  env: TcbEnvironment,
   scope: Scope,
   wrapperExpression: ts.Expression,
 ): ts.Statement {
@@ -159,15 +128,29 @@ function renderBlockStatements(
  * arguments.
  */
 function tcbThisParam(
-  name: ts.EntityName,
+  type: ts.TypeReferenceNode | ts.ImportTypeNode,
   typeArguments: ts.TypeNode[] | undefined,
 ): ts.ParameterDeclaration {
+  const typeArgsNodeArray = typeArguments ? ts.factory.createNodeArray(typeArguments) : undefined;
+  if (ts.isTypeReferenceNode(type)) {
+    type = ts.factory.updateTypeReferenceNode(type, type.typeName, typeArgsNodeArray);
+  } else {
+    type = ts.factory.updateImportTypeNode(
+      type,
+      type.argument,
+      type.attributes,
+      type.qualifier,
+      typeArgsNodeArray,
+      type.isTypeOf,
+    );
+  }
+
   return ts.factory.createParameterDeclaration(
     /* modifiers */ undefined,
     /* dotDotDotToken */ undefined,
     /* name */ 'this',
     /* questionToken */ undefined,
-    /* type */ ts.factory.createTypeReferenceNode(name, typeArguments),
+    /* type */ type,
     /* initializer */ undefined,
   );
 }

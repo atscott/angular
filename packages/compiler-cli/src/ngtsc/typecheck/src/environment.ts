@@ -16,7 +16,7 @@ import {
 } from '../../imports';
 import {ClassDeclaration, ReflectionHost} from '../../reflection';
 import {ImportManager, translateExpression} from '../../translator';
-import {TypeCheckableDirectiveMeta, TypeCheckingConfig, TypeCtorMetadata} from '../api';
+import {TcbDirectiveMetadata, TypeCheckingConfig, TypeCtorMetadata} from '../api';
 
 import {ReferenceEmitEnvironment} from './reference_emit_environment';
 import {tsDeclareVariable} from './ts_util';
@@ -43,7 +43,7 @@ export class Environment extends ReferenceEmitEnvironment {
   private typeCtors = new Map<ClassDeclaration, ts.Expression>();
   protected typeCtorStatements: ts.Statement[] = [];
 
-  private pipeInsts = new Map<ClassDeclaration, ts.Expression>();
+  private pipeInsts = new Map<string, ts.Expression>();
   protected pipeInstStatements: ts.Statement[] = [];
 
   constructor(
@@ -62,8 +62,8 @@ export class Environment extends ReferenceEmitEnvironment {
    * Depending on the shape of the directive itself, this could be either a reference to a declared
    * type constructor, or to an inline type constructor.
    */
-  typeCtorFor(dir: TypeCheckableDirectiveMeta): ts.Expression {
-    const dirRef = dir.ref as Reference<ClassDeclaration<ts.ClassDeclaration>>;
+  typeCtorFor(dir: TcbDirectiveMetadata): ts.Expression {
+    const dirRef = (dir as any).ref as Reference<ClassDeclaration<ts.ClassDeclaration>>;
     const node = dirRef.node;
     if (this.typeCtors.has(node)) {
       return this.typeCtors.get(node)!;
@@ -86,9 +86,9 @@ export class Environment extends ReferenceEmitEnvironment {
         fnName,
         body: true,
         fields: {
-          inputs: dir.inputs,
+          inputs: dir.tcbInputs as any,
           // TODO: support queries
-          queries: dir.queries,
+          queries: (dir as any).queries || [],
         },
         coercedInputFields: dir.coercedInputFields,
       };
@@ -104,16 +104,21 @@ export class Environment extends ReferenceEmitEnvironment {
   /*
    * Get an expression referring to an instance of the given pipe.
    */
-  pipeInst(ref: Reference<ClassDeclaration<ts.ClassDeclaration>>): ts.Expression {
-    if (this.pipeInsts.has(ref.node)) {
-      return this.pipeInsts.get(ref.node)!;
+  pipeInst(pipe: import('../api').TcbPipeMetadata): ts.Expression {
+    const key = `${pipe.moduleName}#${pipe.name}`;
+    if (this.pipeInsts.has(key)) {
+      return this.pipeInsts.get(key)!;
     }
 
+    const ref = pipe.ref as import('../../imports').Reference<
+      ClassDeclaration<ts.ClassDeclaration>
+    >;
+    // Fallback or use ref if needed for referenceType
     const pipeType = this.referenceType(ref);
     const pipeInstId = ts.factory.createIdentifier(`_pipe${this.nextIds.pipeInst++}`);
 
     this.pipeInstStatements.push(tsDeclareVariable(pipeInstId, pipeType));
-    this.pipeInsts.set(ref.node, pipeInstId);
+    this.pipeInsts.set(key, pipeInstId);
 
     return pipeInstId;
   }

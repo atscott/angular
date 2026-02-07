@@ -12,6 +12,7 @@ import {Reference, ReferenceEmitter} from '../../imports';
 import {ClassDeclaration, ReflectionHost} from '../../reflection';
 import {ImportManager} from '../../translator';
 import {TypeCheckBlockMetadata, TypeCheckingConfig} from '../api';
+import {adaptTypeCheckBlockMetadata} from './tcb_adapter';
 
 import {DomSchemaChecker} from './dom';
 import {Environment} from './environment';
@@ -67,15 +68,8 @@ export class TypeCheckFile extends Environment {
     genericContextBehavior: TcbGenericContextBehavior,
   ): void {
     const fnId = ts.factory.createIdentifier(`_tcb${this.nextTcbId++}`);
-    const fn = generateTypeCheckBlock(
-      this,
-      ref,
-      fnId,
-      meta,
-      domSchemaChecker,
-      oobRecorder,
-      genericContextBehavior,
-    );
+    const adaptedMeta = adaptTypeCheckBlockMetadata(meta, this, ref, genericContextBehavior);
+    const fn = generateTypeCheckBlock(this, fnId, adaptedMeta, domSchemaChecker, oobRecorder);
     this.tcbStatements.push(fn);
   }
 

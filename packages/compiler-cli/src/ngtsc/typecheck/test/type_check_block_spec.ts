@@ -1591,7 +1591,9 @@ describe('type check blocks', () => {
 
       const renderedTcb = tcb(template, declarations, {useInlineTypeConstructors: false});
 
-      expect(renderedTcb).toContain(`var _t1 = null! as i0.Dir<any, any>;`);
+      expect(renderedTcb).toContain(
+        `var _t1 = i0.Dir.ngTypeCtor({ "inputA": (((this).foo)), "inputB": (((this).bar)) });`,
+      );
       expect(renderedTcb).toContain(`_t1.inputA = (((this).foo));`);
       expect(renderedTcb).toContain(`_t1.inputB = (((this).bar));`);
     },
@@ -2690,6 +2692,7 @@ describe('type check blocks', () => {
         type: 'directive',
         name: 'FormField',
         selector: '[formField]',
+        file: absoluteFrom('/node_modules/@angular/forms/index.d.ts'),
         bestGuessOwningModule: {
           specifier: '@angular/forms/signals',
           resolutionContext: '',

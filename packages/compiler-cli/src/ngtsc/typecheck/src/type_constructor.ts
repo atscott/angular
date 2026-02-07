@@ -152,7 +152,7 @@ function constructTypeCtorParameter(
   const coercedKeys: ts.PropertySignature[] = [];
   const signalInputKeys: ts.LiteralTypeNode[] = [];
 
-  for (const {classPropertyName, transform, isSignal} of meta.fields.inputs) {
+  for (const {classPropertyName, transform, type, isSignal} of meta.fields.inputs as any) {
     if (isSignal) {
       signalInputKeys.push(
         ts.factory.createLiteralTypeNode(ts.factory.createStringLiteral(classPropertyName)),
@@ -165,7 +165,9 @@ function constructTypeCtorParameter(
       const coercionType =
         transform != null
           ? transform.type.node
-          : tsCreateTypeQueryForCoercedInput(rawType.typeName, classPropertyName);
+          : type != null
+            ? type
+            : tsCreateTypeQueryForCoercedInput(rawType.typeName, classPropertyName);
 
       coercedKeys.push(
         ts.factory.createPropertySignature(
@@ -237,9 +239,8 @@ export function requiresInlineTypeCtor(
   host: ReflectionHost,
   env: ReferenceEmitEnvironment,
 ): boolean {
-  // The class requires an inline type constructor if it has generic type bounds that can not be
-  // emitted into the provided type-check environment.
-  return !checkIfGenericTypeBoundsCanBeEmitted(node, host, env);
+  const hasTypeParams = node.typeParameters !== undefined && node.typeParameters.length > 0;
+  return hasTypeParams && !checkIfGenericTypeBoundsCanBeEmitted(node, host, env);
 }
 
 /**

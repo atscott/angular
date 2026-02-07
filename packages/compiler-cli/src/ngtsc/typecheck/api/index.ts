@@ -12,3 +12,5 @@ export * from './completion';
 export * from './context';
 export * from './scope';
 export * from './symbols';
+export * from './tcb_metadata';
+export * from './tcb_util';
