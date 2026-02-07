@@ -12,8 +12,6 @@ import {DomSchemaChecker} from '../src/dom';
 import {OutOfBandDiagnosticRecorder} from '../src/oob';
 import {TcbGenericContextBehavior} from '../src/ops/context';
 import {generateTypeCheckBlock} from '../src/type_check_block';
-import {Reference} from '../../imports';
-import {ClassDeclaration} from '../../reflection';
 
 describe('Detached TCB Generation', () => {
   it('should generate a valid TCB from manually constructed metadata without a live ts.Program', () => {
@@ -49,21 +47,9 @@ describe('Detached TCB Generation', () => {
     };
 
     // 2. Mock a detached TCB environment
-    const env = new DetachedTcbEnvironment(config) as any;
+    const env = new DetachedTcbEnvironment(config);
 
     // 3. Construct a manual component metadata
-    const componentDirClass = ts.factory.createClassDeclaration(
-      undefined,
-      ts.factory.createIdentifier('MyComponent'),
-      undefined,
-      undefined,
-      [],
-    );
-    const componentDirRef = new Reference(componentDirClass) as Reference<
-      ClassDeclaration<ts.ClassDeclaration>
-    >;
-    (componentDirRef as any).moduleName = '/test/my_component.ts';
-
     const componentMetadata: TcbDirectiveMetadata = {
       name: 'MyComponent',
       moduleName: '/test/my_component.ts',
@@ -131,6 +117,8 @@ describe('Detached TCB Generation', () => {
       pipes: new Map(),
       schemas: [],
       isStandalone: true,
+      fnTypeParameters: undefined,
+      fnTypeArguments: undefined,
     };
 
     // Mock DomSchemaChecker and OutOfBandDiagnosticRecorder
@@ -157,15 +145,7 @@ describe('Detached TCB Generation', () => {
 
     // 4. Run the pure TCB generator!
     const fnName = ts.factory.createIdentifier('_tcb1');
-    const tcbFunction = generateTypeCheckBlock(
-      env,
-      componentDirRef,
-      fnName,
-      tcbMeta,
-      domSchemaChecker,
-      oobRecorder,
-      TcbGenericContextBehavior.UseEmitter,
-    );
+    const tcbFunction = generateTypeCheckBlock(env, fnName, tcbMeta, domSchemaChecker, oobRecorder);
 
     // 5. Verify the output
     const printer = ts.createPrinter();

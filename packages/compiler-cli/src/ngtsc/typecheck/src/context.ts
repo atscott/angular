@@ -682,15 +682,18 @@ class InlineTcbOp implements Op {
 
     // Inline TCBs MUST copy any generic type parameter nodes directly, as the TCB code is
     // inlined into the class in a context where that will always be legal.
-    const adaptedMeta = adaptTypeCheckBlockMetadata(this.meta, env, this.ref);
-    const fn = generateTypeCheckBlock(
+    const adaptedMeta = adaptTypeCheckBlockMetadata(
+      this.meta,
       env,
       this.ref,
+      TcbGenericContextBehavior.CopyClassNodes,
+    );
+    const fn = generateTypeCheckBlock(
+      env,
       fnName,
       adaptedMeta,
       this.domSchemaChecker,
       this.oobRecorder,
-      TcbGenericContextBehavior.CopyClassNodes,
     );
 
     return printer.printNode(ts.EmitHint.Unspecified, fn, sf);

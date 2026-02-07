@@ -11,10 +11,10 @@ import ts from 'typescript';
 import {Reference} from '../../imports';
 import {ClassDeclaration} from '../../reflection';
 import {TcbComponentMetadata, TypeCheckBlockMetadata} from '../api';
+import {TcbEnvironment} from './tcb_environment';
 
 import {addTypeCheckId} from './diagnostics';
 import {DomSchemaChecker} from './dom';
-import {Environment} from './environment';
 import {OutOfBandDiagnosticRecorder} from './oob';
 import {TypeParameterEmitter} from './type_parameter_emitter';
 import {createHostBindingsBlockGuard} from './host_bindings';
@@ -46,13 +46,11 @@ import {Scope} from './ops/scope';
  * bounds) will be referenced from the generated TCB code.
  */
 export function generateTypeCheckBlock(
-  env: Environment,
-  ref: Reference<ClassDeclaration<ts.ClassDeclaration>>,
+  env: TcbEnvironment,
   name: ts.Identifier,
   meta: TcbComponentMetadata,
   domSchemaChecker: DomSchemaChecker,
   oobRecorder: OutOfBandDiagnosticRecorder,
-  genericContextBehavior: TcbGenericContextBehavior,
 ): ts.FunctionDeclaration {
   const tcb = new Context(
     env,
@@ -65,44 +63,15 @@ export function generateTypeCheckBlock(
     meta.isStandalone,
     meta.preserveWhitespaces,
   );
-  const ctxRawType = env.referenceType(ref);
+  const ctxRawType = env.referenceType(meta.component);
   if (!ts.isTypeReferenceNode(ctxRawType) && !ts.isImportTypeNode(ctxRawType)) {
     throw new Error(
-      `Expected TypeReferenceNode or ImportTypeNode when referencing the ctx param for ${ref.debugName}`,
+      `Expected TypeReferenceNode or ImportTypeNode when referencing the ctx param for ${meta.component.name}`,
     );
   }
 
-  let typeParameters: ts.TypeParameterDeclaration[] | undefined = undefined;
-  let typeArguments: ts.TypeNode[] | undefined = undefined;
-
-  if (ref.node.typeParameters !== undefined) {
-    if (!env.config.useContextGenericType) {
-      genericContextBehavior = TcbGenericContextBehavior.FallbackToAny;
-    }
-
-    switch (genericContextBehavior) {
-      case TcbGenericContextBehavior.UseEmitter:
-        // Guaranteed to emit type parameters since we checked that the class has them above.
-        typeParameters = new TypeParameterEmitter(ref.node.typeParameters, env.reflector).emit(
-          (typeRef) => env.referenceType(typeRef),
-        )!;
-        typeArguments = typeParameters.map((param) =>
-          ts.factory.createTypeReferenceNode(param.name),
-        );
-        break;
-      case TcbGenericContextBehavior.CopyClassNodes:
-        typeParameters = [...ref.node.typeParameters];
-        typeArguments = typeParameters.map((param) =>
-          ts.factory.createTypeReferenceNode(param.name),
-        );
-        break;
-      case TcbGenericContextBehavior.FallbackToAny:
-        typeArguments = ref.node.typeParameters.map(() =>
-          ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-        );
-        break;
-    }
-  }
+  let typeParameters: ts.TypeParameterDeclaration[] | undefined = meta.fnTypeParameters;
+  let typeArguments: ts.TypeNode[] | undefined = meta.fnTypeArguments;
 
   const paramList = [tcbThisParam(ctxRawType, typeArguments)];
   const statements: ts.Statement[] = [];
@@ -141,7 +110,7 @@ export function generateTypeCheckBlock(
 }
 
 function renderBlockStatements(
-  env: Environment,
+  env: TcbEnvironment,
   scope: Scope,
   wrapperExpression: ts.Expression,
 ): ts.Statement {

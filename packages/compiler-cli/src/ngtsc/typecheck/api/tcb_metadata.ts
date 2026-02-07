@@ -148,4 +148,6 @@ export interface TcbComponentMetadata {
   schemas: SchemaMetadata[];
   isStandalone: boolean;
   id: TypeCheckId;
+  fnTypeParameters: ts.TypeParameterDeclaration[] | undefined;
+  fnTypeArguments: ts.TypeNode[] | undefined;
 }

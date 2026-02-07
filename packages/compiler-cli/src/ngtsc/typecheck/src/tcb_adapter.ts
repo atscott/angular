@@ -15,11 +15,14 @@ import {tsCreateTypeQueryForCoercedInput} from './ts_util';
 import {BoundTarget, TransplantedType} from '@angular/compiler';
 import {ClassDeclaration} from '../../reflection';
 import {requiresInlineTypeCtor} from './type_constructor';
+import {TcbGenericContextBehavior} from './ops/context';
+import {TypeParameterEmitter} from './type_parameter_emitter';
 
 export function adaptTypeCheckBlockMetadata(
   meta: TypeCheckBlockMetadata,
   env: Environment,
   compRef: Reference<ClassDeclaration<ts.ClassDeclaration>>,
+  genericContextBehavior: TcbGenericContextBehavior,
 ): TcbComponentMetadata {
   const directives: TcbDirectiveMetadata[] = [];
   const pipes: TcbPipeMetadata[] = [];
@@ -91,6 +94,38 @@ export function adaptTypeCheckBlockMetadata(
     animationTriggerNames: null,
   } as unknown as TcbDirectiveMetadata;
 
+  let fnTypeParameters: ts.TypeParameterDeclaration[] | undefined = undefined;
+  let fnTypeArguments: ts.TypeNode[] | undefined = undefined;
+  if (compRef.node.typeParameters !== undefined) {
+    let behavior = genericContextBehavior;
+    if (!env.config.useContextGenericType) {
+      behavior = TcbGenericContextBehavior.FallbackToAny;
+    }
+
+    switch (behavior) {
+      case TcbGenericContextBehavior.UseEmitter:
+        fnTypeParameters = new TypeParameterEmitter(
+          compRef.node.typeParameters,
+          env.reflector,
+        ).emit((typeRef) => env.referenceType(typeRef))!;
+        fnTypeArguments = fnTypeParameters.map((param) =>
+          ts.factory.createTypeReferenceNode(param.name),
+        );
+        break;
+      case TcbGenericContextBehavior.CopyClassNodes:
+        fnTypeParameters = [...compRef.node.typeParameters];
+        fnTypeArguments = fnTypeParameters.map((param) =>
+          ts.factory.createTypeReferenceNode(param.name),
+        );
+        break;
+      case TcbGenericContextBehavior.FallbackToAny:
+        fnTypeArguments = compRef.node.typeParameters.map(() =>
+          ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+        );
+        break;
+    }
+  }
+
   return {
     name: compRef.node.name.text,
     moduleName: compRef.node.getSourceFile().fileName,
@@ -103,6 +138,8 @@ export function adaptTypeCheckBlockMetadata(
     schemas: meta.schemas,
     isStandalone: meta.isStandalone,
     id: meta.id,
+    fnTypeParameters,
+    fnTypeArguments,
   };
 }
 
