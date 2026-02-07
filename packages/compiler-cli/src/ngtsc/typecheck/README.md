@@ -671,6 +671,10 @@ The native pre-processor and the JavaScript-based compiler divide labor to const
 - **The Pre-processor's Role:** Analyzes decorator metadata (the _what_). It builds a global registry of declarative metadata for directives, pipes, and modules (including selectors and inputs/outputs) entirely independently of Angular templates.
 - **The JS Compiler's Role:** Parses HTML templates and mathematically computes the intersection (the _how_): determining the `BoundTarget` of specifically matched elements and attributes against the scope's directives.
 
+#### A Note on `BoundTarget` and the IPC Boundary
+
+A common point of confusion is whether the complex, deeply-nested `BoundTarget` structure (which operates on actual `TmplAstNode` objects by reference) needs to be serialized and passed across the IPC boundary. **It does not.** Because template parsing remains strictly on the JS/TS side—while the native pre-processor _only_ extracts class and decorator data—`BoundTarget` inherently stays on the JS side of the boundary. The JS compiler safely constructs the `BoundTarget` natively using the detached generic metadata supplied by the pre-processor, completely bypassing the need to serialize complex template bindings and logic over the IPC bridge. This intentional division of labor protects the pre-processor from needing to parse Angular templates.
+
 ### 6. Scope Deduplication and JS Implementation (How to pick up the work)
 
 **Current JS-Based Hybrid Implementation**
@@ -708,7 +712,3 @@ Currently, detached metadata interfaces (`TcbDirectiveMetadata`, `TcbPipeMetadat
 The output must remain valid TypeScript source text using `import()` types for external references. Currently, `DetachedTcbEnvironment` maintains a `preludeStatements` array to emit top-level namespace imports (`import * as i1 from '...'`), and uses `ts.factory.createQualifiedName(ns, ...)` to emit references. While valid TS, managing a prelude complicates the pure "virtual file" concept since the TCB statements must be stitched together with the prelude. A future improvement could modify `DetachedTcbEnvironment.referenceType` and other generators to emit inline `import('...').MyComponent` types (via `ts.factory.createImportTypeNode`).
 
 _Note on implementation attempt:_ Changing `referenceType` to return `import()` types currently breaks the generator because `generateTypeCheckBlock` strictly expects a `ts.TypeReferenceNode` and reads its `.typeName` property to generate generic types contexts. Carefully refactoring `generateTypeCheckBlock` to support `ts.ImportTypeNode` is required before this can be adopted.
-
-#### 3. The `BoundTarget` Boundary
-
-`TcbComponentMetadata` relies on `BoundTarget<TcbDirectiveMetadata>`. `BoundTarget` is a massive interface with methods like `getDirectivesOfNode` and `getConsumerOfBinding()`, which operate on actual `TmplAstNode`s by reference. Since template parsing remains strictly on the JS/TS side (while the native pre-processor only extracts decorator data), `BoundTarget` inherently stays on the JS side of the boundary. The JS compiler can safely construct the `BoundTarget` natively using the detached metadata supplied by the pre-processor, completely bypassing the need to serialize the complex `BoundTarget` interface or template references over the IPC bridge. This division of labor validates the current design of `TcbComponentMetadata`.
