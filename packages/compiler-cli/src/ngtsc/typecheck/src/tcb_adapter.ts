@@ -15,6 +15,7 @@ import {tsCreateTypeQueryForCoercedInput} from './ts_util';
 import {BoundTarget, TransplantedType} from '@angular/compiler';
 import {ClassDeclaration} from '../../reflection';
 import {requiresInlineTypeCtor} from './type_constructor';
+import {checkIfGenericTypeBoundsCanBeEmitted} from './tcb_util';
 import {TcbGenericContextBehavior} from './ops/context';
 import {TypeParameterEmitter} from './type_parameter_emitter';
 
@@ -324,14 +325,20 @@ function adaptDirective(dir: TypeCheckableDirectiveMeta, env: Environment): TcbD
       dir.publicMethods.has('writeValue') &&
       dir.publicMethods.has('registerOnChange') &&
       dir.publicMethods.has('registerOnTouched'),
-    typeParameters: (dir.ref.node as unknown as ts.ClassDeclaration).typeParameters
-      ? new TypeParameterEmitter(
-          (dir.ref.node as unknown as ts.ClassDeclaration).typeParameters!,
-          env.reflector,
-        ).emit((typeRef) => {
-          return env.referenceType(typeRef);
-        }) || undefined
-      : undefined,
+    typeParameters:
+      (dir.ref.node as unknown as ts.ClassDeclaration).typeParameters &&
+      checkIfGenericTypeBoundsCanBeEmitted(
+        dir.ref.node as unknown as ClassDeclaration<ts.ClassDeclaration>,
+        env.reflector,
+        env,
+      )
+        ? new TypeParameterEmitter(
+            (dir.ref.node as unknown as ts.ClassDeclaration).typeParameters!,
+            env.reflector,
+          ).emit((typeRef) => {
+            return env.referenceType(typeRef);
+          }) || undefined
+        : undefined,
     requiresInlineTcbConstructor: requiresInlineTypeCtor(
       dir.ref.node as unknown as ClassDeclaration<ts.ClassDeclaration>,
       env.reflector,

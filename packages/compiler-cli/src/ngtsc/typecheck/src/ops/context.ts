@@ -11,6 +11,7 @@ import ts from 'typescript';
 import {DomSchemaChecker} from '../dom';
 import {OutOfBandDiagnosticRecorder} from '../oob';
 import {TypeCheckableDirectiveMeta, TypeCheckId} from '../../api';
+import {TcbDirectiveMetadata, TcbPipeMetadata} from '../../api/tcb_metadata';
 import {PipeMeta} from '../../../metadata';
 import {Environment} from '../environment';
 
@@ -58,7 +59,9 @@ export class Context {
     readonly oobRecorder: OutOfBandDiagnosticRecorder,
     readonly id: TypeCheckId,
     readonly boundTarget: BoundTarget<TypeCheckableDirectiveMeta>,
+    readonly tcbBoundTarget: BoundTarget<TcbDirectiveMetadata>,
     private pipes: Map<string, PipeMeta> | null,
+    private tcbPipes: Map<string, TcbPipeMetadata> | null,
     readonly schemas: SchemaMetadata[],
     readonly hostIsStandalone: boolean,
     readonly hostPreserveWhitespaces: boolean,
@@ -79,5 +82,12 @@ export class Context {
       return null;
     }
     return this.pipes.get(name)!;
+  }
+
+  getTcbPipeByName(name: string): TcbPipeMetadata | null {
+    if (this.tcbPipes === null || !this.tcbPipes.has(name)) {
+      return null;
+    }
+    return this.tcbPipes.get(name)!;
   }
 }

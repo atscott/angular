@@ -455,7 +455,13 @@ export class Scope {
     ) {
       // Resolving a directive on an element or sub-template.
       const dirMap = this.directiveOpMap.get(ref)!;
-      return dirMap.has(directive) ? this.resolveOp(dirMap.get(directive)!) : null;
+      if (dirMap.has(directive as any)) return this.resolveOp(dirMap.get(directive as any)!);
+      for (const [key, val] of dirMap.entries()) {
+        if (key.name === directive.name && key.isComponent === directive.isComponent) {
+          return this.resolveOp(val);
+        }
+      }
+      return null;
     } else if (ref instanceof TmplAstElement && this.elementOpMap.has(ref)) {
       // Resolving the DOM node of an element in this template.
       return this.resolveOp(this.elementOpMap.get(ref)!);
@@ -582,8 +588,11 @@ export class Scope {
       } else if (target instanceof TmplAstTemplate || target instanceof TmplAstElement) {
         ctxIndex = this.opQueue.push(new TcbReferenceOp(this.tcb, this, ref, node, target)) - 1;
       } else {
+        const tcbTarget = this.tcb.tcbBoundTarget.getReferenceTarget(ref)!;
         ctxIndex =
-          this.opQueue.push(new TcbReferenceOp(this.tcb, this, ref, node, target.directive)) - 1;
+          this.opQueue.push(
+            new TcbReferenceOp(this.tcb, this, ref, node, (tcbTarget as any).directive),
+          ) - 1;
       }
       this.referenceOpMap.set(ref, ctxIndex);
     }
@@ -670,8 +679,11 @@ export class Scope {
     }
 
     // Queue operations for all directives to check the relevant outputs for a directive.
-    for (const dir of directives) {
-      this.opQueue.push(new TcbDirectiveOutputsOp(this.tcb, this, node, bindings, events, dir));
+    const tcbDirectives = this.tcb.tcbBoundTarget.getDirectivesOfNode(node)!;
+    for (let i = 0; i < directives.length; i++) {
+      const dir = directives[i];
+      const tcbDir = tcbDirectives[i];
+      this.opQueue.push(new TcbDirectiveOutputsOp(this.tcb, this, node, bindings, events, tcbDir));
     }
 
     // After expanding the directives, we might need to queue an operation to check any unclaimed
@@ -735,9 +747,12 @@ export class Scope {
     const claimedOutputs = new Set<string>();
 
     if (directives !== null && directives.length > 0) {
-      for (const dir of directives) {
+      const tcbDirectives = this.tcb.tcbBoundTarget.getDirectivesOfNode(node)!;
+      for (let i = 0; i < directives.length; i++) {
+        const dir = directives[i];
+        const tcbDir = tcbDirectives[i];
         this.opQueue.push(
-          new TcbDirectiveOutputsOp(this.tcb, this, node, node.inputs, node.outputs, dir),
+          new TcbDirectiveOutputsOp(this.tcb, this, node, node.inputs, node.outputs, tcbDir),
         );
 
         for (const outputProperty of dir.outputs.propertyNames) {

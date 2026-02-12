@@ -20,6 +20,7 @@ import {TypeParameterEmitter} from './type_parameter_emitter';
 import {createHostBindingsBlockGuard} from './host_bindings';
 import {Context, TcbGenericContextBehavior} from './ops/context';
 import {Scope} from './ops/scope';
+import {adaptTypeCheckBlockMetadata} from './tcb_adapter';
 
 /**
  * Given a `ts.ClassDeclaration` for a component, and metadata regarding that component, compose a
@@ -54,13 +55,16 @@ export function generateTypeCheckBlock(
   oobRecorder: OutOfBandDiagnosticRecorder,
   genericContextBehavior: TcbGenericContextBehavior,
 ): ts.FunctionDeclaration {
+  const tcbMeta = adaptTypeCheckBlockMetadata(meta, env, ref, genericContextBehavior);
   const tcb = new Context(
     env,
     domSchemaChecker,
     oobRecorder,
     meta.id,
     meta.boundTarget,
+    tcbMeta.boundTarget,
     meta.pipes,
+    tcbMeta.pipes,
     meta.schemas,
     meta.isStandalone,
     meta.preserveWhitespaces,

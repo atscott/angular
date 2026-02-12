@@ -21,7 +21,7 @@ import ts from 'typescript';
 import {TcbOp} from './base';
 import type {Context} from './context';
 import type {Scope} from './scope';
-import {TypeCheckableDirectiveMeta} from '../../api';
+import {TcbDirectiveMetadata} from '../../api/tcb_metadata';
 import {addParseSpanInfo} from '../diagnostics';
 import {tsCreateVariable} from '../ts_util';
 import {getAnyExpression} from '../expression';
@@ -63,7 +63,7 @@ export class TcbReferenceOp extends TcbOp {
     private readonly scope: Scope,
     private readonly node: TmplAstReference,
     private readonly host: TmplAstElement | TmplAstTemplate | TmplAstComponent | TmplAstDirective,
-    private readonly target: TypeCheckableDirectiveMeta | TmplAstTemplate | TmplAstElement,
+    private readonly target: TcbDirectiveMetadata | TmplAstTemplate | TmplAstElement,
   ) {
     super();
   }
@@ -75,14 +75,16 @@ export class TcbReferenceOp extends TcbOp {
   override execute(): ts.Identifier {
     const id = this.tcb.allocateId();
     let initializer: ts.Expression =
-      this.target instanceof TmplAstTemplate || this.target instanceof TmplAstElement
-        ? this.scope.resolve(this.target)
-        : this.scope.resolve(this.host, this.target);
+      (this.target as any) instanceof TmplAstTemplate ||
+      (this.target as any) instanceof TmplAstElement
+        ? this.scope.resolve(this.target as any)
+        : this.scope.resolve(this.host, this.target as any);
 
     // The reference is either to an element, an <ng-template> node, or to a directive on an
     // element or template.
     if (
-      (this.target instanceof TmplAstElement && !this.tcb.env.config.checkTypeOfDomReferences) ||
+      ((this.target as any) instanceof TmplAstElement &&
+        !this.tcb.env.config.checkTypeOfDomReferences) ||
       !this.tcb.env.config.checkTypeOfNonDomReferences
     ) {
       // References to DOM nodes are pinned to 'any' when `checkTypeOfDomReferences` is `false`.
@@ -92,7 +94,7 @@ export class TcbReferenceOp extends TcbOp {
         initializer,
         ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
       );
-    } else if (this.target instanceof TmplAstTemplate) {
+    } else if ((this.target as any) instanceof TmplAstTemplate) {
       // Direct references to an <ng-template> node simply require a value of type
       // `TemplateRef<any>`. To get this, an expression of the form
       // `(_t1 as any as TemplateRef<any>)` is constructed.
