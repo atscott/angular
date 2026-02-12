@@ -811,6 +811,10 @@ export class Scope {
     customFieldType: CustomFormControlType | null,
   ): TcbOp {
     const dirRef = dir.ref as Reference<ClassDeclaration<ts.ClassDeclaration>>;
+    // Find the corresponding TcbDirectiveMetadata since we're refactoring TcbDirectiveCtorOp
+    const tcbDir = this.tcb.tcbBoundTarget
+      .getDirectivesOfNode(node)!
+      .find((d) => d.name === dir.name && d.isComponent === dir.isComponent)!;
 
     if (!dir.isGeneric) {
       // The most common case is that when a directive is not generic, we use the normal
@@ -823,7 +827,7 @@ export class Scope {
       // For generic directives, we use a type constructor to infer types. If a directive requires
       // an inline type constructor, then inlining must be available to use the
       // `TcbDirectiveCtorOp`. If not we, we fallback to using `any` – see below.
-      return new TcbDirectiveCtorOp(this.tcb, this, node, dir, customFieldType);
+      return new TcbDirectiveCtorOp(this.tcb, this, node, dir, tcbDir, customFieldType);
     }
 
     // If inlining is not available, then we give up on inferring the generic params, and use

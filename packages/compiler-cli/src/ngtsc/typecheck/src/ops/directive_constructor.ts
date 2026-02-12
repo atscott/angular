@@ -12,6 +12,7 @@ import {TcbOp} from './base';
 import {Context} from './context';
 import type {Scope} from './scope';
 import {TypeCheckableDirectiveMeta} from '../../api';
+import {TcbDirectiveMetadata} from '../../api/tcb_metadata';
 import {addExpressionIdentifier, ExpressionIdentifier, markIgnoreDiagnostics} from '../comments';
 import {addParseSpanInfo, wrapForDiagnostics} from '../diagnostics';
 import {tsCreateVariable} from '../ts_util';
@@ -39,6 +40,7 @@ export class TcbDirectiveCtorOp extends TcbOp {
     private scope: Scope,
     private node: DirectiveOwner,
     private dir: TypeCheckableDirectiveMeta,
+    private tcbDir: TcbDirectiveMetadata,
     private customFormControlType: CustomFormControlType | null,
   ) {
     super();
@@ -105,7 +107,7 @@ export class TcbDirectiveCtorOp extends TcbOp {
     }
 
     // Add unset directive inputs for each of the remaining unset fields.
-    for (const {classPropertyName} of this.dir.inputs) {
+    for (const {classPropertyName} of this.tcbDir.tcbInputs) {
       if (!genericInputs.has(classPropertyName)) {
         genericInputs.set(classPropertyName, {type: 'unset', field: classPropertyName});
       }
@@ -113,14 +115,19 @@ export class TcbDirectiveCtorOp extends TcbOp {
 
     // Call the type constructor of the directive to infer a type, and assign the directive
     // instance.
-    const typeCtor = tcbCallTypeCtor(this.dir, this.tcb, Array.from(genericInputs.values()));
+    const typeCtor = tcbCallTypeCtor(
+      this.dir,
+      this.tcbDir,
+      this.tcb,
+      Array.from(genericInputs.values()),
+    );
     markIgnoreDiagnostics(typeCtor);
     this.scope.addStatement(tsCreateVariable(id, typeCtor));
     return id;
   }
 
   override circularFallback(): TcbOp {
-    return new TcbDirectiveCtorCircularFallbackOp(this.tcb, this.scope, this.dir);
+    return new TcbDirectiveCtorCircularFallbackOp(this.tcb, this.scope, this.dir, this.tcbDir);
   }
 }
 
@@ -143,6 +150,7 @@ export class TcbDirectiveCtorCircularFallbackOp extends TcbOp {
     private tcb: Context,
     private scope: Scope,
     private dir: TypeCheckableDirectiveMeta,
+    private tcbDir: TcbDirectiveMetadata,
   ) {
     super();
   }
@@ -170,6 +178,7 @@ export class TcbDirectiveCtorCircularFallbackOp extends TcbOp {
  */
 function tcbCallTypeCtor(
   dir: TypeCheckableDirectiveMeta,
+  tcbDir: TcbDirectiveMetadata,
   tcb: Context,
   inputs: TcbDirectiveInput[],
 ): ts.Expression {
