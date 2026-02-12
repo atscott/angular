@@ -20,14 +20,15 @@ import {
 import ts from 'typescript';
 import type {Context} from './context';
 import type {Scope} from './scope';
-import {TypeCheckableDirectiveMeta} from '../../api';
 import {TcbOp} from './base';
+import {TypeCheckableDirectiveMeta} from '../../api';
+import {TcbDirectiveMetadata, TcbInputMapping} from '../../api/tcb_metadata';
 import {BindingPropertyName, ClassPropertyName} from '../../../metadata';
 import {addParseSpanInfo, wrapForDiagnostics} from '../diagnostics';
 import {markIgnoreDiagnostics} from '../comments';
 import {REGISTRY} from '../dom';
 import {tcbExpression, unwrapWritableSignal} from './expression';
-import {tsCreateTypeQueryForCoercedInput, tsDeclareVariable} from '../ts_util';
+import {tsDeclareVariable} from '../ts_util';
 import {
   checkUnsupportedFieldBindings,
   CustomFormControlType,
@@ -62,6 +63,7 @@ export class TcbDirectiveInputsOp extends TcbOp {
     private scope: Scope,
     private node: TmplAstTemplate | TmplAstElement | TmplAstComponent | TmplAstDirective,
     private dir: TypeCheckableDirectiveMeta,
+    private tcbDir: TcbDirectiveMetadata,
     private isFormControl: boolean = false,
     private customFormControlType: CustomFormControlType | null,
   ) {
@@ -77,7 +79,7 @@ export class TcbDirectiveInputsOp extends TcbOp {
 
     // TODO(joost): report duplicate properties
     const seenRequiredInputs = new Set<ClassPropertyName>();
-    const boundAttrs = getBoundAttributes(this.dir, this.node);
+    const boundAttrs = getBoundAttributes(this.tcbDir, this.node);
 
     if (this.customFormControlType !== null) {
       checkUnsupportedFieldBindings(this.node, customFormControlBannedInputFields, this.tcb);
@@ -101,7 +103,7 @@ export class TcbDirectiveInputsOp extends TcbOp {
 
       let assignment: ts.Expression = wrapForDiagnostics(expr);
 
-      for (const {fieldName, required, transformType, isSignal, isTwoWayBinding} of attr.inputs) {
+      for (const {fieldName, required, isSignal, isTwoWayBinding} of attr.inputs) {
         let target: ts.LeftHandSideExpression;
 
         if (required) {
@@ -114,39 +116,25 @@ export class TcbDirectiveInputsOp extends TcbOp {
         // transform write type into their member type, and we extract it below when
         // setting the `WriteT` of such `InputSignalWithTransform<_, WriteT>`.
 
-        if (this.dir.coercedInputFields.has(fieldName)) {
-          let type: ts.TypeNode;
-
-          if (transformType !== null) {
-            type = this.tcb.env.referenceTransplantedType(new TransplantedType(transformType));
-          } else {
-            // The input has a coercion declaration which should be used instead of assigning the
-            // expression into the input field directly. To achieve this, a variable is declared
-            // with a type of `typeof Directive.ngAcceptInputType_fieldName` which is then used as
-            // target of the assignment.
-            const dirTypeRef: ts.TypeNode = this.tcb.env.referenceType(this.dir.ref);
-
-            if (!ts.isTypeReferenceNode(dirTypeRef)) {
-              throw new Error(
-                `Expected TypeReferenceNode from reference to ${this.dir.ref.debugName}`,
-              );
-            }
-
-            type = tsCreateTypeQueryForCoercedInput(dirTypeRef.typeName, fieldName);
-          }
+        if (this.tcbDir.coercedInputFields.has(fieldName)) {
+          const tcbInput: TcbInputMapping | undefined = this.tcbDir.tcbInputs.find(
+            (i: TcbInputMapping) => i.classPropertyName === fieldName,
+          );
+          const type: ts.TypeNode =
+            tcbInput?.type ?? ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword);
 
           const id = this.tcb.allocateId();
           this.scope.addStatement(tsDeclareVariable(id, type));
 
           target = id;
-        } else if (this.dir.undeclaredInputFields.has(fieldName)) {
+        } else if (this.tcbDir.undeclaredInputFields.has(fieldName)) {
           // If no coercion declaration is present nor is the field declared (i.e. the input is
           // declared in a `@Directive` or `@Component` decorator's `inputs` property) there is no
           // assignment target available, so this field is skipped.
           continue;
         } else if (
           !this.tcb.env.config.honorAccessModifiersForInputBindings &&
-          this.dir.restrictedInputFields.has(fieldName)
+          this.tcbDir.restrictedInputFields.has(fieldName)
         ) {
           // If strict checking of access modifiers is disabled and the field is restricted
           // (i.e. private/protected/readonly), generate an assignment into a temporary variable
@@ -157,12 +145,10 @@ export class TcbDirectiveInputsOp extends TcbOp {
           }
 
           const id = this.tcb.allocateId();
-          const dirTypeRef = this.tcb.env.referenceType(this.dir.ref);
-          if (!ts.isTypeReferenceNode(dirTypeRef)) {
-            throw new Error(
-              `Expected TypeReferenceNode from reference to ${this.dir.ref.debugName}`,
-            );
-          }
+          const dirTypeRef = this.tcb.env.referenceExternalSymbol(
+            this.tcbDir.moduleName,
+            this.tcbDir.name,
+          );
           const type = ts.factory.createIndexedAccessTypeNode(
             ts.factory.createTypeQueryNode(dirId as ts.Identifier),
             ts.factory.createLiteralTypeNode(ts.factory.createStringLiteral(fieldName)),
@@ -178,7 +164,7 @@ export class TcbDirectiveInputsOp extends TcbOp {
           // To get errors assign directly to the fields on the instance, using property access
           // when possible. String literal fields may not be valid JS identifiers so we use
           // literal element access instead for those cases.
-          target = this.dir.stringLiteralInputFields.has(fieldName)
+          target = this.tcbDir.stringLiteralInputFields.has(fieldName)
             ? ts.factory.createElementAccessExpression(
                 dirId,
                 ts.factory.createStringLiteral(fieldName),
@@ -245,7 +231,7 @@ export class TcbDirectiveInputsOp extends TcbOp {
   private checkRequiredInputs(seenRequiredInputs: Set<ClassPropertyName>): void {
     const missing: BindingPropertyName[] = [];
 
-    for (const input of this.dir.inputs) {
+    for (const input of this.tcbDir.tcbInputs) {
       if (input.required && !seenRequiredInputs.has(input.classPropertyName)) {
         missing.push(input.bindingPropertyName);
       }
@@ -255,8 +241,8 @@ export class TcbDirectiveInputsOp extends TcbOp {
       this.tcb.oobRecorder.missingRequiredInputs(
         this.tcb.id,
         this.node,
-        this.dir.name,
-        this.dir.isComponent,
+        this.tcbDir.name,
+        this.tcbDir.isComponent,
         missing,
       );
     }

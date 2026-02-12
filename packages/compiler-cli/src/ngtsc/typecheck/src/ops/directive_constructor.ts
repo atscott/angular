@@ -64,7 +64,7 @@ export class TcbDirectiveCtorOp extends TcbOp {
       span = this.node.sourceSpan;
     } else {
       span = this.node.startSourceSpan || this.node.sourceSpan;
-      boundAttrs = getBoundAttributes(this.dir, this.node);
+      boundAttrs = getBoundAttributes(this.tcbDir, this.node);
 
       if (this.customFormControlType !== null) {
         const additionalBindings = expandBoundAttributesForField(

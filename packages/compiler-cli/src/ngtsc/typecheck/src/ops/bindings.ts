@@ -20,6 +20,7 @@ import {
 } from '@angular/compiler';
 import ts from 'typescript';
 import {TypeCheckableDirectiveMeta} from '../../api';
+import {TcbDirectiveMetadata} from '../../api/tcb_metadata';
 import {ClassPropertyName} from '../../../metadata';
 import {Reference} from '../../../imports';
 import {Context} from './context';
@@ -30,10 +31,9 @@ export interface TcbBoundAttribute {
   sourceSpan: ParseSourceSpan;
   keySpan: ParseSourceSpan | null;
   inputs: {
-    fieldName: ClassPropertyName;
+    fieldName: string;
     required: boolean;
     isSignal: boolean;
-    transformType: Reference<ts.TypeNode> | null;
     isTwoWayBinding: boolean;
   }[];
 }
@@ -80,7 +80,7 @@ export interface TcbDirectiveUnsetInput {
 export type TcbDirectiveInput = TcbDirectiveBoundInput | TcbDirectiveUnsetInput;
 
 export function getBoundAttributes(
-  directive: TypeCheckableDirectiveMeta,
+  directive: TcbDirectiveMetadata,
   node: TmplAstTemplate | TmplAstElement | TmplAstComponent | TmplAstDirective,
 ): TcbBoundAttribute[] {
   const boundInputs: TcbBoundAttribute[] = [];
@@ -96,9 +96,9 @@ export function getBoundAttributes(
     }
 
     // Skip the attribute if the directive does not have an input for it.
-    const inputs = directive.inputs.getByBindingPropertyName(attr.name);
+    const inputs = directive.tcbInputs.filter((i) => i.bindingPropertyName === attr.name);
 
-    if (inputs !== null) {
+    if (inputs.length > 0) {
       boundInputs.push({
         value: attr.value,
         sourceSpan: attr.sourceSpan,
@@ -107,7 +107,6 @@ export function getBoundAttributes(
           return {
             fieldName: input.classPropertyName,
             required: input.required,
-            transformType: input.transform?.type || null,
             isSignal: input.isSignal,
             isTwoWayBinding:
               attr instanceof TmplAstBoundAttribute && attr.type === BindingType.TwoWay,

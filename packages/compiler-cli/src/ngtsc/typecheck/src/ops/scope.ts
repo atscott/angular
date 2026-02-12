@@ -801,7 +801,17 @@ export class Scope {
     }
 
     this.opQueue.push(
-      new TcbDirectiveInputsOp(this.tcb, this, node, dir, nodeIsFormControl, customFormControlType),
+      new TcbDirectiveInputsOp(
+        this.tcb,
+        this,
+        node,
+        dir,
+        this.tcb.tcbBoundTarget
+          .getDirectivesOfNode(node)!
+          .find((d) => d.name === dir.name && d.isComponent === dir.isComponent)!,
+        nodeIsFormControl,
+        customFormControlType,
+      ),
     );
   }
 
