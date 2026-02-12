@@ -87,7 +87,7 @@ export class TcbDirectiveInputsOp extends TcbOp {
 
     if (this.customFormControlType !== null || this.isFormControl) {
       const additionalBindings = expandBoundAttributesForField(
-        this.dir,
+        this.tcbDir,
         this.node,
         this.customFormControlType,
       );

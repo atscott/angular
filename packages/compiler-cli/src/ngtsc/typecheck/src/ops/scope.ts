@@ -781,14 +781,18 @@ export class Scope {
     dirMap: Map<TypeCheckableDirectiveMeta, number>,
     allDirectiveMatches: TypeCheckableDirectiveMeta[],
   ): void {
-    const nodeIsFormControl = isFormControl(allDirectiveMatches);
-    const customFormControlType = nodeIsFormControl ? getCustomFieldDirectiveType(dir) : null;
+    const tcbDirectiveMatches = this.tcb.tcbBoundTarget.getDirectivesOfNode(node) || [];
+    const nodeIsFormControl = isFormControl(tcbDirectiveMatches);
+    const tcbDir = tcbDirectiveMatches.find(
+      (d) => d.name === dir.name && d.isComponent === dir.isComponent,
+    )!;
+    const customFormControlType = nodeIsFormControl ? getCustomFieldDirectiveType(tcbDir) : null;
 
     const directiveOp = this.getDirectiveOp(dir, node, customFormControlType);
     const dirIndex = this.opQueue.push(directiveOp) - 1;
     dirMap.set(dir, dirIndex);
 
-    if (isNativeField(dir, node, allDirectiveMatches)) {
+    if (isNativeField(tcbDir, node, tcbDirectiveMatches)) {
       const inputType =
         (node.name === 'input' && node.attributes.find((attr) => attr.name === 'type')?.value) ||
         null;

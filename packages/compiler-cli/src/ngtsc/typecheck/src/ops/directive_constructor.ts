@@ -68,7 +68,7 @@ export class TcbDirectiveCtorOp extends TcbOp {
 
       if (this.customFormControlType !== null) {
         const additionalBindings = expandBoundAttributesForField(
-          this.dir,
+          this.tcbDir,
           this.node,
           this.customFormControlType,
         );
