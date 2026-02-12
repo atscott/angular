@@ -15,6 +15,7 @@ import {getTokenAtPosition} from '../../util/src/typescript';
 import {FullSourceMapping, SourceLocation, TypeCheckId, SourceMapping} from '../api';
 
 import {hasIgnoreForDiagnosticsMarker, readSpanComment} from './comments';
+import {TcbEnvironment} from './tcb_environment';
 import {ReferenceEmitEnvironment} from './reference_emit_environment';
 import {TypeParameterEmitter} from './type_parameter_emitter';
 import {isHostBindingsBlockGuard} from './host_bindings';
@@ -94,7 +95,7 @@ export enum TcbInliningRequirement {
 
 export function requiresInlineTypeCheckBlock(
   ref: Reference<ClassDeclaration<ts.ClassDeclaration>>,
-  env: ReferenceEmitEnvironment,
+  env: Pick<TcbEnvironment, 'canReferenceType'>,
   usedPipes: Reference<ClassDeclaration<ts.ClassDeclaration>>[],
   reflector: ReflectionHost,
 ): TcbInliningRequirement {
@@ -269,11 +270,11 @@ export function ensureTypeCheckFilePreparationImports(env: ReferenceEmitEnvironm
 export function checkIfGenericTypeBoundsCanBeEmitted(
   node: ClassDeclaration<ts.ClassDeclaration>,
   reflector: ReflectionHost,
-  env: ReferenceEmitEnvironment,
+  env: Pick<TcbEnvironment, 'canReferenceType'>,
 ): boolean {
   // Generic type parameters are considered context free if they can be emitted into any context.
   const emitter = new TypeParameterEmitter(node.typeParameters, reflector);
-  return emitter.canEmit((ref) => env.canReferenceType(ref));
+  return emitter.canEmit((ref) => env.canReferenceType(ref as any));
 }
 
 export function findNodeInFile<T extends ts.Node>(

@@ -43,3 +43,16 @@ export const constructorParametersDownlevelTransform = (
 ): ts.TransformerFactory<ts.SourceFile> => {
   return angularJitApplicationTransform(program, isCore);
 };
+
+export {generateTypeCheckBlock} from '../src/ngtsc/typecheck/src/type_check_block';
+export {DetachedTcbEnvironment} from '../src/ngtsc/typecheck/src/detached_tcb_environment';
+export {
+  TcbComponentMetadata,
+  TcbDirectiveMetadata,
+  TcbPipeMetadata,
+  TcbPropertySet,
+  TcbScope,
+} from '../src/ngtsc/typecheck/api/tcb_metadata';
+export {DomSchemaChecker} from '../src/ngtsc/typecheck/src/dom';
+export {OutOfBandDiagnosticRecorder} from '../src/ngtsc/typecheck/src/oob';
+export {ClassPropertyMapping} from '../src/ngtsc/metadata/src/property_mapping';

@@ -55,11 +55,26 @@ export class ReferenceEmitEnvironment {
    * This may involve importing the node into the file if it's not declared there already.
    */
   referenceType(
-    ref: Reference,
+    ref: Reference | import('../api').TcbDirectiveMetadata,
     flags: ImportFlags = ImportFlags.NoAliasing |
       ImportFlags.AllowTypeImports |
       ImportFlags.AllowRelativeDtsImports,
   ): ts.TypeNode {
+    if (!(ref instanceof Reference)) {
+      if ((ref as any).ref) {
+        ref = (ref as any).ref as Reference;
+      } else {
+        // Rust Pre-processor string-based import specifier
+        // Generates import("moduleName").name
+        return ts.factory.createImportTypeNode(
+          ts.factory.createLiteralTypeNode(ts.factory.createStringLiteral(ref.moduleName)),
+          undefined,
+          ts.factory.createIdentifier(ref.name || 'UNKNOWN'),
+          undefined,
+          false,
+        );
+      }
+    }
     const ngExpr = this.refEmitter.emit(ref, this.contextFile, flags);
     assertSuccessfulReferenceEmit(ngExpr, this.contextFile, 'symbol');
 

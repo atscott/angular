@@ -12,12 +12,12 @@ import ts from 'typescript';
 import {ClassDeclaration, ReflectionHost} from '../../reflection';
 import {TypeCtorMetadata} from '../api';
 
-import {ReferenceEmitEnvironment} from './reference_emit_environment';
+import {TcbEnvironment} from './tcb_environment';
 import {checkIfGenericTypeBoundsCanBeEmitted} from './tcb_util';
 import {tsCreateTypeQueryForCoercedInput} from './ts_util';
 
 export function generateTypeCtorDeclarationFn(
-  env: ReferenceEmitEnvironment,
+  env: Pick<TcbEnvironment, 'referenceExternalType' | 'canReferenceType'>,
   meta: TypeCtorMetadata,
   nodeTypeRef: ts.EntityName,
   typeParams: ts.TypeParameterDeclaration[] | undefined,
@@ -96,7 +96,7 @@ export function generateTypeCtorDeclarationFn(
  * @returns a `ts.MethodDeclaration` for the type constructor.
  */
 export function generateInlineTypeCtor(
-  env: ReferenceEmitEnvironment,
+  env: Pick<TcbEnvironment, 'referenceExternalType' | 'canReferenceType'>,
   node: ClassDeclaration<ts.ClassDeclaration>,
   meta: TypeCtorMetadata,
 ): ts.MethodDeclaration {
@@ -133,7 +133,7 @@ export function generateInlineTypeCtor(
 }
 
 function constructTypeCtorParameter(
-  env: ReferenceEmitEnvironment,
+  env: Pick<TcbEnvironment, 'referenceExternalType' | 'canReferenceType'>,
   meta: TypeCtorMetadata,
   rawType: ts.TypeReferenceNode,
 ): ts.ParameterDeclaration {
@@ -152,7 +152,7 @@ function constructTypeCtorParameter(
   const coercedKeys: ts.PropertySignature[] = [];
   const signalInputKeys: ts.LiteralTypeNode[] = [];
 
-  for (const {classPropertyName, transform, isSignal} of meta.fields.inputs) {
+  for (const {classPropertyName, transform, type, isSignal} of meta.fields.inputs as any) {
     if (isSignal) {
       signalInputKeys.push(
         ts.factory.createLiteralTypeNode(ts.factory.createStringLiteral(classPropertyName)),
@@ -165,7 +165,9 @@ function constructTypeCtorParameter(
       const coercionType =
         transform != null
           ? transform.type.node
-          : tsCreateTypeQueryForCoercedInput(rawType.typeName, classPropertyName);
+          : type != null
+            ? type
+            : tsCreateTypeQueryForCoercedInput(rawType.typeName, classPropertyName);
 
       coercedKeys.push(
         ts.factory.createPropertySignature(
@@ -235,11 +237,10 @@ function generateGenericArgs(params: ReadonlyArray<ts.TypeParameterDeclaration>)
 export function requiresInlineTypeCtor(
   node: ClassDeclaration<ts.ClassDeclaration>,
   host: ReflectionHost,
-  env: ReferenceEmitEnvironment,
+  env: Pick<TcbEnvironment, 'referenceExternalType' | 'canReferenceType'>,
 ): boolean {
-  // The class requires an inline type constructor if it has generic type bounds that can not be
-  // emitted into the provided type-check environment.
-  return !checkIfGenericTypeBoundsCanBeEmitted(node, host, env);
+  const hasTypeParams = node.typeParameters !== undefined && node.typeParameters.length > 0;
+  return hasTypeParams && !checkIfGenericTypeBoundsCanBeEmitted(node, host, env);
 }
 
 /**
