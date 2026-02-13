@@ -30,6 +30,21 @@ import {ClassDeclaration} from '../../reflection';
  * Extension of `DirectiveMeta` that includes additional information required to type-check the
  * usage of a particular directive.
  */
+
+export interface TcbReferenceMetadata {
+  /** The name of the class */
+  name: string;
+  /** The module path where the symbol is located, or null if local/ambient */
+  moduleName: string | null;
+  /** Whether the reference is local to the current file */
+  isLocal: boolean;
+  /**
+   * The original class declaration node.
+   * Note: This property is attached non-enumerably so that it does not leak into serialized JSON.
+   */
+  node?: ClassDeclaration;
+}
+
 export interface TypeCheckableDirectiveMeta extends DirectiveMeta, DirectiveTypeCheckMeta {
   ref: Reference<ClassDeclaration>;
   queries: string[];

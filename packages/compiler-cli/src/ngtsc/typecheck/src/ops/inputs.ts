@@ -21,6 +21,7 @@ import ts from 'typescript';
 import type {Context} from './context';
 import type {Scope} from './scope';
 import {TypeCheckableDirectiveMeta} from '../../api';
+import {getTcbReferenceMetadata} from '../reference_emit_environment';
 import {TcbOp} from './base';
 import {BindingPropertyName, ClassPropertyName} from '../../../metadata';
 import {addParseSpanInfo, wrapForDiagnostics} from '../diagnostics';
@@ -124,7 +125,9 @@ export class TcbDirectiveInputsOp extends TcbOp {
             // expression into the input field directly. To achieve this, a variable is declared
             // with a type of `typeof Directive.ngAcceptInputType_fieldName` which is then used as
             // target of the assignment.
-            const dirTypeRef: ts.TypeNode = this.tcb.env.referenceType(this.dir.ref);
+            const dirTypeRef: ts.TypeNode = this.tcb.env.referenceTcbType(
+              getTcbReferenceMetadata(this.dir.ref, this.tcb.env),
+            );
 
             if (!ts.isTypeReferenceNode(dirTypeRef)) {
               throw new Error(
@@ -157,7 +160,9 @@ export class TcbDirectiveInputsOp extends TcbOp {
           }
 
           const id = this.tcb.allocateId();
-          const dirTypeRef = this.tcb.env.referenceType(this.dir.ref);
+          const dirTypeRef = this.tcb.env.referenceTcbType(
+            getTcbReferenceMetadata(this.dir.ref, this.tcb.env),
+          );
           if (!ts.isTypeReferenceNode(dirTypeRef)) {
             throw new Error(
               `Expected TypeReferenceNode from reference to ${this.dir.ref.debugName}`,

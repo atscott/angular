@@ -18,7 +18,7 @@ import {ClassDeclaration, ReflectionHost} from '../../reflection';
 import {ImportManager, translateExpression} from '../../translator';
 import {TypeCheckableDirectiveMeta, TypeCheckingConfig, TypeCtorMetadata} from '../api';
 
-import {ReferenceEmitEnvironment} from './reference_emit_environment';
+import {ReferenceEmitEnvironment, getTcbReferenceMetadata} from './reference_emit_environment';
 import {tsDeclareVariable} from './ts_util';
 import {generateTypeCtorDeclarationFn, requiresInlineTypeCtor} from './type_constructor';
 import {TypeParameterEmitter} from './type_parameter_emitter';
@@ -78,7 +78,7 @@ export class Environment extends ReferenceEmitEnvironment {
       return typeCtorExpr;
     } else {
       const fnName = `_ctor${this.nextIds.typeCtor++}`;
-      const nodeTypeRef = this.referenceType(dirRef);
+      const nodeTypeRef = this.referenceTcbType(getTcbReferenceMetadata(dirRef, this));
       if (!ts.isTypeReferenceNode(nodeTypeRef)) {
         throw new Error(`Expected TypeReferenceNode from reference to ${dirRef.debugName}`);
       }
@@ -109,7 +109,7 @@ export class Environment extends ReferenceEmitEnvironment {
       return this.pipeInsts.get(ref.node)!;
     }
 
-    const pipeType = this.referenceType(ref);
+    const pipeType = this.referenceTcbType(getTcbReferenceMetadata(ref, this));
     const pipeInstId = ts.factory.createIdentifier(`_pipe${this.nextIds.pipeInst++}`);
 
     this.pipeInstStatements.push(tsDeclareVariable(pipeInstId, pipeType));

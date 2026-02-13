@@ -13,6 +13,7 @@ import {TcbOp} from './base';
 import type {Context} from './context';
 import type {Scope} from './scope';
 import {TypeCheckableDirectiveMeta} from '../../api';
+import {getTcbReferenceMetadata} from '../reference_emit_environment';
 import {Reference} from '../../../imports';
 import {ClassDeclaration} from '../../../reflection';
 import {markIgnoreDiagnostics} from '../comments';

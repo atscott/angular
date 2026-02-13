@@ -12,6 +12,7 @@ import type {Context} from './context';
 import type {Scope} from './scope';
 import {TcbOp} from './base';
 import {TypeCheckableDirectiveMeta} from '../../api';
+import {getTcbReferenceMetadata} from '../reference_emit_environment';
 import {Reference} from '../../../imports';
 import {ClassDeclaration} from '../../../reflection';
 import {addExpressionIdentifier, ExpressionIdentifier} from '../comments';
@@ -42,7 +43,9 @@ export abstract class TcbDirectiveTypeOpBase extends TcbOp {
   override execute(): ts.Identifier {
     const dirRef = this.dir.ref as Reference<ClassDeclaration<ts.ClassDeclaration>>;
 
-    const rawType = this.tcb.env.referenceType(this.dir.ref);
+    const rawType = this.tcb.env.referenceTcbType(
+      getTcbReferenceMetadata(this.dir.ref, this.tcb.env),
+    );
 
     let type: ts.TypeNode;
     let span: ParseSourceSpan;

@@ -22,6 +22,7 @@ import {TcbOp} from './base';
 import type {Context} from './context';
 import type {Scope} from './scope';
 import {TypeCheckableDirectiveMeta} from '../../api';
+import {getTcbReferenceMetadata} from '../reference_emit_environment';
 import {addParseSpanInfo} from '../diagnostics';
 import {tsCreateVariable} from '../ts_util';
 import {getAnyExpression} from '../expression';
