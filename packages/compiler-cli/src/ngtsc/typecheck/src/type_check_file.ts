@@ -18,6 +18,7 @@ import {Environment} from './environment';
 import {OutOfBandDiagnosticRecorder} from './oob';
 import {ensureTypeCheckFilePreparationImports} from './tcb_util';
 import {generateTypeCheckBlock} from './type_check_block';
+import {adaptTypeCheckBlockMetadata} from './tcb_adapter';
 import {TcbGenericContextBehavior} from './ops/context';
 
 /**
@@ -67,11 +68,12 @@ export class TypeCheckFile extends Environment {
     genericContextBehavior: TcbGenericContextBehavior,
   ): void {
     const fnId = ts.factory.createIdentifier(`_tcb${this.nextTcbId++}`);
+    const adaptedMeta = adaptTypeCheckBlockMetadata(meta, this);
     const fn = generateTypeCheckBlock(
       this,
       ref,
       fnId,
-      meta,
+      adaptedMeta,
       domSchemaChecker,
       oobRecorder,
       genericContextBehavior,

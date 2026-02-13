@@ -22,7 +22,7 @@ import {
   ReferenceEmitKind,
   ReferenceEmitter,
 } from '../../imports';
-import {ClassDeclaration, ReflectionHost} from '../../reflection';
+import {ReflectionHost} from '../../reflection';
 import {ImportManager, translateExpression, translateType} from '../../translator';
 import {TcbReferenceMetadata} from '../api';
 
@@ -136,24 +136,4 @@ export class ReferenceEmitEnvironment {
       this.importManager,
     );
   }
-}
-
-export function getTcbReferenceMetadata(
-  ref: Reference<ClassDeclaration>,
-  env: ReferenceEmitEnvironment,
-): TcbReferenceMetadata {
-  const emitted = env.refEmitter.emit(ref, env.contextFile, ImportFlags.NoAliasing);
-  let name = ref.debugName || ref.node.name!.text;
-  let moduleName = ref.ownedByModuleGuess;
-  let isLocal = true;
-
-  if (emitted.kind === ReferenceEmitKind.Success && emitted.expression instanceof ExternalExpr) {
-    name = emitted.expression.value.name!;
-    moduleName = emitted.expression.value.moduleName;
-    isLocal = false;
-  }
-
-  const refMeta = {name, moduleName, isLocal} as TcbReferenceMetadata;
-  Object.defineProperty(refMeta, 'node', {value: ref.node, enumerable: false});
-  return refMeta;
 }

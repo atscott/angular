@@ -8,10 +8,22 @@
 
 import {
   AbsoluteSourceSpan,
+  AST,
   BoundTarget,
   DirectiveMeta,
+  DirectiveOwner,
+  LegacyAnimationTriggerNames,
   ParseSourceSpan,
   SchemaMetadata,
+  TemplateEntity,
+  TmplAstBoundAttribute,
+  TmplAstBoundEvent,
+  TmplAstComponent,
+  TmplAstDirective,
+  TmplAstElement,
+  TmplAstReference,
+  TmplAstTemplate,
+  TmplAstTextAttribute,
 } from '@angular/compiler';
 import ts from 'typescript';
 
@@ -19,17 +31,14 @@ import {ErrorCode} from '../../diagnostics';
 import {Reference} from '../../imports';
 import {
   ClassPropertyMapping,
+  ClassPropertyName,
   DirectiveTypeCheckMeta,
   HostDirectiveMeta,
   InputMapping,
   PipeMeta,
+  TemplateGuardMeta,
 } from '../../metadata';
 import {ClassDeclaration} from '../../reflection';
-
-/**
- * Extension of `DirectiveMeta` that includes additional information required to type-check the
- * usage of a particular directive.
- */
 
 export interface TcbReferenceMetadata {
   /** The name of the class */
@@ -41,10 +50,80 @@ export interface TcbReferenceMetadata {
   /**
    * The original class declaration node.
    * Note: This property is attached non-enumerably so that it does not leak into serialized JSON.
+   *
+   * @deprecated
+   * When Angular metadata is provided by the native Rust compiler, this property will be undefined
+   * because `ts.Node` cannot be serialized across the IPC boundary (and wouldn't be a ts.Node shape anyway with oxc). The hybrid JS-based compiler
+   * will need to rely on spans, file paths, and names rather than AST nodes for related information.
    */
   node?: ClassDeclaration;
 }
 
+export interface TcbDirectiveMetadata {
+  ref: TcbReferenceMetadata;
+  name: string;
+  selector: string | null;
+  isComponent: boolean;
+  isGeneric: boolean;
+  isStructural: boolean;
+  isStandalone: boolean;
+  isSignal: boolean;
+  isExplicitlyDeferred: boolean;
+  preserveWhitespaces: boolean;
+  exportAs: string[] | null;
+  typeParameterCount: number;
+  fnTypeParameters: ts.TypeParameterDeclaration[] | null;
+  queries: string[];
+  inputs: ClassPropertyMapping<InputMapping>;
+  outputs: ClassPropertyMapping;
+  hasRequiresInlineTypeCtor: boolean;
+  ngTemplateGuards: TemplateGuardMeta[];
+  hasNgTemplateContextGuard: boolean;
+  coercedInputFields: Set<ClassPropertyName>;
+  restrictedInputFields: Set<ClassPropertyName>;
+  stringLiteralInputFields: Set<ClassPropertyName>;
+  undeclaredInputFields: Set<ClassPropertyName>;
+  publicMethods: Set<string>;
+  ngContentSelectors: string[] | null;
+  animationTriggerNames: LegacyAnimationTriggerNames | null;
+}
+
+export interface TcbBoundTarget {
+  target: BoundTarget<any>['target']; // Just the raw target for now, wait, target has directives
+  getUsedDirectives(): TcbDirectiveMetadata[];
+  getUsedPipes(): string[];
+  getDirectivesOfNode(node: DirectiveOwner): TcbDirectiveMetadata[] | null;
+  getReferenceTarget(ref: TmplAstReference):
+    | {
+        directive: TcbDirectiveMetadata;
+        node: TmplAstElement | TmplAstTemplate | TmplAstComponent | TmplAstDirective;
+      }
+    | TmplAstTemplate
+    | TmplAstElement
+    | null;
+  getDeferredTriggerTarget(block: any, trigger: any): any | null;
+  isDeferred(node: any): boolean;
+  referencedDirectiveExists(name: string): boolean;
+  getConsumerOfBinding(
+    binding: TmplAstBoundAttribute | TmplAstBoundEvent | TmplAstTextAttribute,
+  ): TcbDirectiveMetadata | TmplAstElement | TmplAstTemplate | null;
+  getExpressionTarget(expr: AST): TemplateEntity | null;
+  getEagerlyUsedPipes(): string[];
+}
+
+export interface TcbTypeCheckBlockMetadata {
+  id: TypeCheckId;
+  boundTarget: TcbBoundTarget;
+  pipes: Map<string, PipeMeta> | null;
+  schemas: SchemaMetadata[];
+  isStandalone: boolean;
+  preserveWhitespaces: boolean;
+}
+
+/**
+ * Extension of `DirectiveMeta` that includes additional information required to type-check the
+ * usage of a particular directive.
+ */
 export interface TypeCheckableDirectiveMeta extends DirectiveMeta, DirectiveTypeCheckMeta {
   ref: Reference<ClassDeclaration>;
   queries: string[];

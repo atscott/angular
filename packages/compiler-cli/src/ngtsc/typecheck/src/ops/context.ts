@@ -10,7 +10,7 @@ import {BoundTarget, SchemaMetadata} from '@angular/compiler';
 import ts from 'typescript';
 import {DomSchemaChecker} from '../dom';
 import {OutOfBandDiagnosticRecorder} from '../oob';
-import {TypeCheckableDirectiveMeta, TypeCheckId} from '../../api';
+import {TypeCheckId, TcbBoundTarget} from '../../api';
 import {PipeMeta} from '../../../metadata';
 import {Environment} from '../environment';
 
@@ -57,7 +57,7 @@ export class Context {
     readonly domSchemaChecker: DomSchemaChecker,
     readonly oobRecorder: OutOfBandDiagnosticRecorder,
     readonly id: TypeCheckId,
-    readonly boundTarget: BoundTarget<TypeCheckableDirectiveMeta>,
+    readonly boundTarget: TcbBoundTarget,
     private pipes: Map<string, PipeMeta> | null,
     readonly schemas: SchemaMetadata[],
     readonly hostIsStandalone: boolean,
