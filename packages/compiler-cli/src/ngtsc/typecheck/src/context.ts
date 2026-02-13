@@ -39,6 +39,7 @@ import {
 } from '../api';
 import {makeTemplateDiagnostic} from '../diagnostics';
 
+import {adaptTypeCheckBlockMetadata} from './tcb_adapter';
 import {DomSchemaChecker, RegistryDomSchemaChecker} from './dom';
 import {Environment} from './environment';
 import {OutOfBandDiagnosticRecorder, OutOfBandDiagnosticRecorderImpl} from './oob';
@@ -679,13 +680,15 @@ class InlineTcbOp implements Op {
     const env = new Environment(this.config, im, refEmitter, this.reflector, sf);
     const fnName = ts.factory.createIdentifier(`_tcb_${this.ref.node.pos}`);
 
+    const adaptedMeta = adaptTypeCheckBlockMetadata(this.meta, env);
+
     // Inline TCBs should copy any generic type parameter nodes directly, as the TCB code is
     // inlined into the class in a context where that will always be legal.
     const fn = generateTypeCheckBlock(
       env,
       this.ref,
       fnName,
-      this.meta,
+      adaptedMeta,
       this.domSchemaChecker,
       this.oobRecorder,
       TcbGenericContextBehavior.CopyClassNodes,

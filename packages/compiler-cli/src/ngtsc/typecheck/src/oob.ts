@@ -35,7 +35,7 @@ import ts from 'typescript';
 
 import {ErrorCode, makeDiagnostic, makeRelatedInformation, ngErrorCode} from '../../diagnostics';
 import {ClassDeclaration} from '../../reflection';
-import {TemplateDiagnostic, TypeCheckId} from '../api';
+import {TcbDirectiveMetadata, TemplateDiagnostic, TypeCheckId} from '../api';
 import {makeTemplateDiagnostic} from '../diagnostics';
 
 import {TypeCheckSourceResolver} from './tcb_util';
@@ -125,8 +125,8 @@ export interface OutOfBandDiagnosticRecorder {
     id: TypeCheckId,
     input: TmplAstBoundAttribute,
     output: TmplAstBoundEvent,
-    inputConsumer: ClassDeclaration,
-    outputConsumer: ClassDeclaration | TmplAstElement,
+    inputConsumer: TcbDirectiveMetadata,
+    outputConsumer: TcbDirectiveMetadata | TmplAstElement,
   ): void;
 
   /** Reports required inputs that haven't been bound. */
@@ -510,8 +510,8 @@ export class OutOfBandDiagnosticRecorderImpl implements OutOfBandDiagnosticRecor
     id: TypeCheckId,
     input: TmplAstBoundAttribute,
     output: TmplAstBoundEvent,
-    inputConsumer: ClassDeclaration,
-    outputConsumer: ClassDeclaration | TmplAstElement,
+    inputConsumer: TcbDirectiveMetadata,
+    outputConsumer: TcbDirectiveMetadata | TmplAstElement,
   ): void {
     const mapping = this.resolver.getTemplateSourceMapping(id);
     const errorMsg = `The property and event halves of the two-way binding '${input.name}' are not bound to the same target.
@@ -520,12 +520,14 @@ export class OutOfBandDiagnosticRecorderImpl implements OutOfBandDiagnosticRecor
     const relatedMessages: {text: string; start: number; end: number; sourceFile: ts.SourceFile}[] =
       [];
 
-    relatedMessages.push({
-      text: `The property half of the binding is to the '${inputConsumer.name.text}' component.`,
-      start: inputConsumer.name.getStart(),
-      end: inputConsumer.name.getEnd(),
-      sourceFile: inputConsumer.name.getSourceFile(),
-    });
+    if (inputConsumer.ref.node && inputConsumer.ref.node.name) {
+      relatedMessages.push({
+        text: `The property half of the binding is to the '${inputConsumer.name}' ${inputConsumer.isComponent ? 'component' : 'directive'}.`,
+        start: inputConsumer.ref.node.name.getStart(),
+        end: inputConsumer.ref.node.name.getEnd(),
+        sourceFile: inputConsumer.ref.node.name.getSourceFile(),
+      });
+    }
 
     if (outputConsumer instanceof TmplAstElement) {
       let message = `The event half of the binding is to a native event called '${input.name}' on the <${outputConsumer.name}> DOM element.`;
@@ -539,12 +541,14 @@ export class OutOfBandDiagnosticRecorderImpl implements OutOfBandDiagnosticRecor
         sourceFile: mapping.node.getSourceFile(),
       });
     } else {
-      relatedMessages.push({
-        text: `The event half of the binding is to the '${outputConsumer.name.text}' component.`,
-        start: outputConsumer.name.getStart(),
-        end: outputConsumer.name.getEnd(),
-        sourceFile: outputConsumer.name.getSourceFile(),
-      });
+      if (outputConsumer.ref.node && outputConsumer.ref.node.name) {
+        relatedMessages.push({
+          text: `The event half of the binding is to the '${outputConsumer.name}' ${outputConsumer.isComponent ? 'component' : 'directive'}.`,
+          start: outputConsumer.ref.node.name.getStart(),
+          end: outputConsumer.ref.node.name.getEnd(),
+          sourceFile: outputConsumer.ref.node.name.getSourceFile(),
+        });
+      }
     }
 
     this._diagnostics.push(
