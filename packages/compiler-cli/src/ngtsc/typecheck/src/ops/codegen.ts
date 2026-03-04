@@ -75,6 +75,30 @@ export class TcbExpr {
    * span comments become attached to the proper node.
    */
   wrapForTypeChecker(): this {
+    const s = this.source;
+    // Mimic ts.isIdentifier. 'this', 'null', 'undefined', 'true', 'false' are NOT identifiers.
+    const isIdentifier =
+      /^[a-zA-Z_$][0-9a-zA-Z_$]*$/.test(s) && !/^(this|null|undefined|true|false)$/.test(s);
+    if (isIdentifier) {
+      return this;
+    }
+    // Mimic ts.isParenthesizedExpression. It's wrapped if the entire string is enclosed in a single pair of parens at the top level.
+    // A simple heuristic for our generated strings: it starts with '(' and ends with ')', and there is no top-level operator outside.
+    let isParenthesized = s.startsWith('(') && s.endsWith(')');
+    if (isParenthesized) {
+      let depth = 0;
+      for (let i = 0; i < s.length - 1; i++) {
+        if (s[i] === '(') depth++;
+        else if (s[i] === ')') depth--;
+        if (depth === 0) {
+          isParenthesized = false;
+          break;
+        }
+      }
+    }
+    if (isParenthesized) {
+      return this;
+    }
     this.source = `(${this.print()})`;
     this.spanComment = this.identifierComment = this.ignoreComment = null;
     return this;

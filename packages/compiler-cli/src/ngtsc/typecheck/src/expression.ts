@@ -181,6 +181,8 @@ class TcbExprTranslator implements AstVisitor {
     // If strictLiteralTypes is disabled, array literals are cast to `any`.
     if (!this.config.strictLiteralTypes) {
       literal = `(${literal} as any)`;
+    } else {
+      literal = `(${literal})`;
     }
 
     return new TcbExpr(literal).addParseSpanInfo(ast.sourceSpan);
