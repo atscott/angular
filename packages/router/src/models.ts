@@ -753,6 +753,12 @@ export interface Route {
    */
   resources?: (ctx: ResourceContext) => ResourceResult | Promise<ResourceResult>;
   /**
+   * A function that returns a map of resources.
+   * This function is executed immediately after matching (early in the navigation).
+   * @experimental
+   */
+  eagerResources?: (ctx: ResourceContext) => ResourceResult | Promise<ResourceResult>;
+  /**
    * An array of child `Route` objects that specifies a nested route
    * configuration.
    */

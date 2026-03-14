@@ -1210,6 +1210,7 @@ export function guardsIntegrationSuite() {
         await advance(fixture);
 
         const teamCmp = fixture.debugElement.children[1].componentInstance;
+        console.log('TEAM CMP ROUTE', teamCmp.route);
         expect(teamCmp.route.firstChild.url.value[0].path).toEqual('component1');
         expect(location.path()).toEqual('/main/component1');
       });

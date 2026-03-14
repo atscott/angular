@@ -56,7 +56,6 @@ export class RouterState extends Tree<ActivatedRoute> {
     public snapshot: RouterStateSnapshot,
   ) {
     super(root);
-    setRouterState(<RouterState>this, root);
   }
 
   override toString(): string {
@@ -85,7 +84,9 @@ export function createEmptyState(
     snapshot.root,
   );
   activated.snapshot = snapshot.root;
-  return new RouterState(new TreeNode<ActivatedRoute>(activated, []), snapshot);
+  const rs = new RouterState(new TreeNode<ActivatedRoute>(activated, []), snapshot);
+  setRouterState(rs, rs._root);
+  return rs;
 }
 
 export function createEmptyStateSnapshot(
@@ -285,7 +286,7 @@ export class ActivatedRoute {
   /** @internal */
   _rollback(): void {
     const resources = this._futureSnapshot.resourceResult;
-    if (resources && !this.resources) {
+    if (resources && !this.snapshot?.resourceResult) {
       // we have no valid thing to roll back to so we instead destroy any loaded resources
       for (const key in resources) {
         if (typeof (resources[key] as any).destroy === 'function') {
@@ -293,6 +294,12 @@ export class ActivatedRoute {
         }
       }
       this._resourceInjector?.destroy();
+    } else if (this.snapshot?.resourceResult && (this as any)._resourceContextSignals) {
+      const signals = (this as any)._resourceContextSignals;
+      signals.params.set(this.snapshot.params);
+      signals.queryParams.set(this.snapshot.queryParams);
+      signals.fragment.set(this.snapshot.fragment);
+      signals.data.set(this.snapshot.data);
     }
     this.pending.set(false);
   }
@@ -542,7 +549,7 @@ export class RouterStateSnapshot extends Tree<ActivatedRouteSnapshot> {
   }
 }
 
-function setRouterState<U, T extends {_routerState: U}>(state: U, node: TreeNode<T>): void {
+export function setRouterState<U, T extends {_routerState: U}>(state: U, node: TreeNode<T>): void {
   node.value._routerState = state;
   node.children.forEach((c) => setRouterState(state, c));
 }

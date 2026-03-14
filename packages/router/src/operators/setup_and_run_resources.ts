@@ -24,10 +24,9 @@ import {ActivatedRoute, ActivatedRouteSnapshot} from '../router_state';
 import {TreeNode} from '../utils/tree';
 import {BLOCKING_SYMBOL, REAL_RESOURCE_SYMBOL} from '../router_resource';
 
-export function setupAndRunResources(): OperatorFunction<
-  NavigationTransition,
-  NavigationTransition
-> {
+export function setupAndRunResources(
+  resourceKey: 'resources' | 'eagerResources' = 'resources',
+): OperatorFunction<NavigationTransition, NavigationTransition> {
   return switchMap((t) => {
     const {newlyCreatedRoutes, targetRouterState} = t;
     if (!newlyCreatedRoutes || !targetRouterState) {
@@ -35,14 +34,14 @@ export function setupAndRunResources(): OperatorFunction<
     }
 
     const routesToProcess: Array<Promise<void>> = [];
-    t.blockingResources = [];
+    t.blockingResources ??= [];
 
     const traverse = (stateNode: TreeNode<ActivatedRoute>) => {
       const route = stateNode.value;
-      if (route && route.routeConfig?.resources) {
+      if (route && route.routeConfig?.[resourceKey]) {
         if (newlyCreatedRoutes.has(route)) {
           // This route is new. We need to run its resources function once.
-          routesToProcess.push(runResources((route as any)._futureSnapshot, route, t));
+          routesToProcess.push(runResources((route as any)._futureSnapshot, route, t, resourceKey));
         } else {
           // This route is reused. We must eagerly update the resource context signals
           // so that resources can react and fetch new data during the pending navigation.
@@ -81,9 +80,10 @@ async function runResources(
   snapshot: ActivatedRouteSnapshot,
   route: ActivatedRoute,
   t: NavigationTransition,
+  resourceKey: 'resources' | 'eagerResources',
 ) {
   try {
-    const resourcesFn = snapshot?.routeConfig?.resources;
+    const resourcesFn = snapshot?.routeConfig?.[resourceKey];
     if (!resourcesFn) return;
     const parentInjector = (snapshot as any)?._environmentInjector;
     if (!parentInjector) {
@@ -92,16 +92,21 @@ async function runResources(
     }
 
     let resourceResult: any;
-    const childInjector = createEnvironmentInjector([], parentInjector);
-    (route as any)._resourceInjector = childInjector; // Attach to route for cleanup
+    let childInjector = (route as any)._resourceInjector;
+    let contextSignals = (route as any)._resourceContextSignals;
 
-    const contextSignals = {
-      params: signal(snapshot.params),
-      queryParams: signal(snapshot.queryParams),
-      fragment: signal(snapshot.fragment),
-      data: signal(snapshot.data),
-    };
-    (route as any)._resourceContextSignals = contextSignals;
+    if (!childInjector) {
+      childInjector = createEnvironmentInjector([], parentInjector);
+      (route as any)._resourceInjector = childInjector; // Attach to route for cleanup
+
+      contextSignals = {
+        params: signal(snapshot.params),
+        queryParams: signal(snapshot.queryParams),
+        fragment: signal(snapshot.fragment),
+        data: signal(snapshot.data),
+      };
+      (route as any)._resourceContextSignals = contextSignals;
+    }
 
     const context: ResourceContext = contextSignals;
 
@@ -111,8 +116,8 @@ async function runResources(
     }
 
     if (resourceResult) {
-      snapshot.resourceResult = resourceResult;
-      route._futureSnapshot.resourceResult = resourceResult;
+      snapshot.resourceResult = {...snapshot.resourceResult, ...resourceResult};
+      route._futureSnapshot.resourceResult = snapshot.resourceResult;
       setupBlocking(route, resourceResult, t);
     }
   } catch (e) {

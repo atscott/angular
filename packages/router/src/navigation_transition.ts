@@ -631,6 +631,31 @@ export class NavigationTransitions {
             }
           }),
 
+          map((t: NavigationTransition) => {
+            const newlyCreatedRoutes = new Set<ActivatedRoute>();
+            const targetRouterState = createRouterState(
+              router.routeReuseStrategy,
+              t.targetSnapshot!,
+              t.currentRouterState,
+              newlyCreatedRoutes,
+            );
+            this.currentTransition =
+              overallTransitionState =
+              t =
+                {
+                  ...t,
+                  targetRouterState,
+                  newlyCreatedRoutes,
+                };
+            this.currentNavigation.update((nav) => {
+              nav!.targetRouterState = targetRouterState;
+              return nav;
+            });
+            return t;
+          }),
+
+          setupAndRunResources('eagerResources'),
+
           map((t) => {
             const guardsStart = new GuardsCheckStart(
               t.id,
@@ -722,8 +747,23 @@ export class NavigationTransitions {
           switchTap((t: NavigationTransition) => {
             const loadComponents = (route: ActivatedRouteSnapshot): Array<Promise<void>> => {
               const loaders: Array<Promise<void>> = [];
+
+              const syncComponentToRouterState = (loadedComponent: Type<any>) => {
+                const routerStateNode = t.targetRouterState?._root;
+                if (routerStateNode) {
+                  const matchRouterState = (node: TreeNode<ActivatedRoute>) => {
+                    if (node.value.snapshot === route || node.value._futureSnapshot === route) {
+                      node.value.component = loadedComponent;
+                    }
+                    node.children.forEach(matchRouterState);
+                  };
+                  matchRouterState(routerStateNode);
+                }
+              };
+
               if (route.routeConfig?._loadedComponent) {
                 route.component = route.routeConfig?._loadedComponent;
+                syncComponentToRouterState(route.component);
               } else if (route.routeConfig?.loadComponent) {
                 const injector = route._environmentInjector;
                 loaders.push(
@@ -731,6 +771,7 @@ export class NavigationTransitions {
                     .loadComponent(injector, route.routeConfig)
                     .then((loadedComponent) => {
                       route.component = loadedComponent;
+                      syncComponentToRouterState(loadedComponent);
                     }),
                 );
               }
@@ -766,25 +807,6 @@ export class NavigationTransitions {
           // this is done as a safety measure to avoid surfacing this error (#49567).
           take(1),
 
-          switchMap((t: NavigationTransition) => {
-            const newlyCreatedRoutes = new Set<ActivatedRoute>();
-            const targetRouterState = createRouterState(
-              router.routeReuseStrategy,
-              t.targetSnapshot!,
-              t.currentRouterState,
-              newlyCreatedRoutes,
-            );
-            this.currentTransition =
-              overallTransitionState =
-              t =
-                {...t, targetRouterState, newlyCreatedRoutes};
-            this.currentNavigation.update((nav) => {
-              nav!.targetRouterState = targetRouterState;
-              return nav;
-            });
-
-            return of(t);
-          }),
           setupAndRunResources(),
           waitForBlockingResources(this.environmentInjector),
 

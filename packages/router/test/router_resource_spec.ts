@@ -459,4 +459,225 @@ describe('routerResource', () => {
       expect(resourceRef.value()).toBe('rx loaded 123');
     });
   });
+
+  describe('eagerResources', () => {
+    it('should execute eagerResources BEFORE guards finish', async () => {
+      let eagerExecuted = false;
+      let guardResolve!: (val: boolean) => void;
+      const guardPromise = new Promise<boolean>((r) => (guardResolve = r));
+
+      @Component({standalone: true, template: ''})
+      class TargetCmp {}
+
+      TestBed.configureTestingModule({
+        providers: [
+          provideRouter([
+            {
+              path: 'test',
+              component: TargetCmp,
+              canActivate: [() => guardPromise],
+              eagerResources: () => ({
+                data: routerResource(
+                  {
+                    loader: async () => {
+                      eagerExecuted = true;
+                      return 'eager loaded';
+                    },
+                  },
+                  TestBed.inject(Router),
+                ),
+              }),
+            },
+          ]),
+        ],
+      });
+
+      const harness = await RouterTestingHarness.create();
+
+      const nav = harness.navigateByUrl('/test');
+      await timeout(10); // allow eagerResources to start
+
+      // The guard is still pending, but eagerResources should have already executed
+      // because it runs immediately after matching.
+      expect(eagerExecuted).toBe(true);
+
+      guardResolve(true);
+      await nav;
+      await harness.fixture.whenStable();
+
+      const router = TestBed.inject(Router);
+      const resourceRef = router.routerState.root.firstChild?.resources?.['data'] as any;
+      expect(resourceRef.value()).toBe('eager loaded');
+    });
+
+    it('should rollback transaction on failed navigation for eagerResources too', async () => {
+      let canActivate = true;
+
+      @Component({standalone: true, template: ''})
+      class TargetCmp {}
+
+      TestBed.configureTestingModule({
+        providers: [
+          provideRouter([
+            {
+              path: 'test/:id',
+              component: TargetCmp,
+              resolve: {blocker: () => (canActivate ? 'ok' : Promise.reject('fail'))},
+              eagerResources: (ctx) => ({
+                data: routerResource(
+                  {
+                    params: () => ctx.params(),
+                    loader: async ({params}: any) => params.id,
+                  },
+                  TestBed.inject(Router),
+                ),
+              }),
+            },
+          ]),
+        ],
+      });
+
+      const harness = await RouterTestingHarness.create();
+      const router = TestBed.inject(Router);
+
+      await harness.navigateByUrl('/test/1');
+      await harness.fixture.whenStable();
+      const resourceRef = router.routerState.root.firstChild?.resources?.['data'] as any;
+      expect(resourceRef.value()).toBe('1');
+
+      // Fail next navigation via guard
+      canActivate = false;
+      await harness.navigateByUrl('/test/2').catch(() => {});
+      await harness.fixture.whenStable();
+      await timeout(50);
+      await harness.fixture.whenStable();
+
+      // The navigation is cancelled; eagerResources might have started but state should rollback
+      expect(resourceRef.value()).toBe('1');
+    });
+
+    it('should successfully execute both eagerResources and resources, with correct timing', async () => {
+      const executionOrder: string[] = [];
+      let resolveGuard!: (val: boolean) => void;
+      const guardPromise = new Promise<boolean>((r) => (resolveGuard = r));
+
+      @Component({standalone: true, template: ''})
+      class TargetCmp {}
+
+      TestBed.configureTestingModule({
+        providers: [
+          provideRouter([
+            {
+              path: 'test',
+              component: TargetCmp,
+              canActivate: [
+                () => {
+                  executionOrder.push('guard start');
+                  return guardPromise;
+                },
+              ],
+              eagerResources: () => ({
+                eagerData: routerResource(
+                  {
+                    loader: async () => {
+                      executionOrder.push('eagerResource load');
+                      return 'eager';
+                    },
+                  },
+                  TestBed.inject(Router),
+                ),
+              }),
+              resources: () => ({
+                lateData: routerResource(
+                  {
+                    loader: async () => {
+                      executionOrder.push('resource load');
+                      return 'late';
+                    },
+                  },
+                  TestBed.inject(Router),
+                ),
+              }),
+            },
+          ]),
+        ],
+      });
+
+      const harness = await RouterTestingHarness.create();
+      const router = TestBed.inject(Router);
+
+      const nav = harness.navigateByUrl('/test');
+      await timeout(10);
+
+      // Eager resource runs immediately after matching
+      // Then guard starts.
+      expect(executionOrder.includes('eagerResource load')).toBe(true);
+      expect(executionOrder.includes('guard start')).toBe(true);
+
+      resolveGuard(true);
+      await nav;
+      await harness.fixture.whenStable();
+
+      // After guard resolves, standard resources run
+      expect(executionOrder.includes('eagerResource load')).toBe(true);
+      expect(executionOrder.includes('guard start')).toBe(true);
+      expect(executionOrder.includes('resource load')).toBe(true);
+
+      // Eager resource runs before standard resource
+      expect(executionOrder.indexOf('eagerResource load')).toBeLessThan(
+        executionOrder.indexOf('resource load'),
+      );
+
+      const route = router.routerState.root.firstChild!;
+      expect((route.resources?.['eagerData'] as any).value()).toBe('eager');
+      expect((route.resources?.['lateData'] as any).value()).toBe('late');
+    });
+
+    it('eagerResource blocking should block BeforeActivateRoutes', async () => {
+      let resolveWait!: () => void;
+      const waitPromise = new Promise<void>((r) => (resolveWait = r));
+
+      @Component({standalone: true, template: ''})
+      class TargetCmp {}
+
+      TestBed.configureTestingModule({
+        providers: [
+          provideRouter([
+            {
+              path: 'test',
+              component: TargetCmp,
+              eagerResources: () => ({
+                data: routerResource.blocking(
+                  {
+                    loader: async () => {
+                      await waitPromise;
+                      return 'loaded';
+                    },
+                  },
+                  TestBed.inject(Router),
+                ),
+              }),
+            },
+          ]),
+        ],
+      });
+
+      const harness = await RouterTestingHarness.create();
+      const router = TestBed.inject(Router);
+
+      let completed = false;
+      const navPromise = harness.navigateByUrl('/test').then(() => {
+        completed = true;
+      });
+
+      await timeout(10);
+      expect(completed).toBe(false);
+      expect(router.url).toBe('/'); // Blocked navigation
+
+      resolveWait();
+      await navPromise;
+      expect(completed).toBe(true);
+      expect(router.url).toBe('/test');
+    });
+  });
 });

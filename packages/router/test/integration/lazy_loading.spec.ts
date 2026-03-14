@@ -375,7 +375,7 @@ export function lazyLoadingIntegrationSuite(browserAPI: 'navigation' | 'history'
       const location = TestBed.inject(Location);
 
       @Component({
-        selector: 'lazy',
+        selector: 'lazy-sibling-1',
         template: 'lazy-loaded-2',
         standalone: false,
       })
@@ -388,7 +388,7 @@ export function lazyLoadingIntegrationSuite(browserAPI: 'navigation' | 'history'
       class SiblingOfLoadedModule {}
 
       @Component({
-        selector: 'lazy',
+        selector: 'lazy-sibling-2',
         template: 'lazy-loaded-1',
         standalone: false,
       })
@@ -764,7 +764,7 @@ export function lazyLoadingIntegrationSuite(browserAPI: 'navigation' | 'history'
       class LazyLoadedComponent {}
 
       @Component({
-        selector: 'lazy',
+        selector: 'lazy-standalone',
         template: 'LazyLoadedStandaloneComponent',
       })
       class LazyLoadedStandaloneComponent {}
