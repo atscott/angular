@@ -1,6 +1,13 @@
 import {Component} from '@angular/core';
 import {TestBed} from '@angular/core/testing';
-import {provideRouter, Router, ActivatedRoute, NavigationError} from '@angular/router';
+import {
+  provideRouter,
+  Router,
+  ActivatedRoute,
+  NavigationError,
+  withNavigationErrorHandler,
+  RedirectCommand,
+} from '@angular/router';
 import {RouterTestingHarness} from '../testing';
 import {resource, ApplicationRef} from '@angular/core';
 import {blocking, createTransactionalResource} from '../src/router_resource';
@@ -678,6 +685,81 @@ describe('routerResource', () => {
       await navPromise;
       expect(completed).toBe(true);
       expect(router.url).toBe('/test');
+    });
+  });
+
+  describe('redirecting from resources', () => {
+    it('should be able to redirect from a blocking resource using a NavigationErrorHandler', async () => {
+      let handleCount = 0;
+      let errorRef: unknown = null;
+
+      @Component({standalone: true, template: ''})
+      class TargetCmp {}
+
+      @Component({standalone: true, template: ''})
+      class ErrorCmp {}
+
+      TestBed.configureTestingModule({
+        providers: [
+          provideRouter(
+            [
+              {
+                path: 'test',
+                component: TargetCmp,
+                resources: () => ({
+                  data: routerResource.blocking(
+                    {
+                      loader: async () => {
+                        throw new Error('Resource failed!');
+                      },
+                    },
+                    TestBed.inject(Router),
+                  ),
+                }),
+              },
+              {
+                path: 'test-eager',
+                component: TargetCmp,
+                eagerResources: () => ({
+                  data: routerResource.blocking(
+                    {
+                      loader: async () => {
+                        throw new Error('Eager resource failed!');
+                      },
+                    },
+                    TestBed.inject(Router),
+                  ),
+                }),
+              },
+              {
+                path: 'error',
+                component: ErrorCmp,
+              },
+            ],
+            withNavigationErrorHandler((e: NavigationError) => {
+              handleCount++;
+              errorRef = e.error;
+              return new RedirectCommand(TestBed.inject(Router).parseUrl('/error'));
+            }),
+          ),
+        ],
+      });
+
+      const harness = await RouterTestingHarness.create();
+      const router = TestBed.inject(Router);
+
+      await harness.navigateByUrl('/test');
+
+      expect(router.url).toBe('/error');
+      expect(handleCount).toBe(1);
+      expect((errorRef as Error).message).toBe('Resource failed!');
+
+      // Also works for eagerResources
+      await harness.navigateByUrl('/test-eager');
+
+      expect(router.url).toBe('/error');
+      expect(handleCount).toBe(2);
+      expect((errorRef as Error).message).toBe('Eager resource failed!');
     });
   });
 });
