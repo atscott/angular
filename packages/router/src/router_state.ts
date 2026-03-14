@@ -6,11 +6,12 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 
-import {EnvironmentInjector, Type} from '@angular/core';
+import {computed, EnvironmentInjector, signal, Type} from '@angular/core';
 import {BehaviorSubject, Observable, of} from 'rxjs';
 import {map} from 'rxjs/operators';
 
 import {Data, ResolveData, Route} from './models';
+import {Resource} from '@angular/core';
 import {convertToParamMap, ParamMap, Params, PRIMARY_OUTLET, RouteTitleKey} from './shared';
 import {equalSegments, UrlSegment} from './url_tree';
 import {shallowEqual, shallowEqualArrays} from './utils/collection';
@@ -154,6 +155,39 @@ export class ActivatedRoute {
   /** An observable of the static and resolved data of this route. */
   public data: Observable<Data>;
 
+  /**
+   * The static and resolved data of this route.
+   * @experimental
+   */
+  public get resources(): {[key: string]: Resource<unknown>} | undefined {
+    return this.snapshot?.resourceResult || this._futureSnapshot?.resourceResult;
+  }
+
+  /** @internal */
+  _resourceInjector: EnvironmentInjector | undefined;
+
+  /** @internal */
+  readonly pending = signal(false);
+  /** @internal */
+  readonly paramsSignal = computed(() =>
+    this.pending() || !this.snapshot ? this._futureSnapshot.params : this.snapshot.params,
+  );
+
+  /** @internal */
+  readonly queryParamsSignal = computed(() =>
+    this.pending() || !this.snapshot ? this._futureSnapshot.queryParams : this.snapshot.queryParams,
+  );
+
+  /** @internal */
+  readonly fragmentSignal = computed(() =>
+    this.pending() || !this.snapshot ? this._futureSnapshot.fragment : this.snapshot.fragment,
+  );
+
+  /** @internal */
+  readonly dataSignal = computed(() =>
+    this.pending() || !this.snapshot ? this._futureSnapshot.data : this.snapshot.data,
+  );
+
   /** @internal */
   constructor(
     /** @internal */
@@ -235,6 +269,32 @@ export class ActivatedRoute {
 
   toString(): string {
     return this.snapshot ? this.snapshot.toString() : `Future(${this._futureSnapshot})`;
+  }
+
+  /** @internal */
+  _setPending(snapshot: ActivatedRouteSnapshot): void {
+    this._futureSnapshot = snapshot;
+    this.pending.set(true);
+  }
+
+  /** @internal */
+  _commit(snapshot: ActivatedRouteSnapshot): void {
+    this.pending.set(false);
+  }
+
+  /** @internal */
+  _rollback(): void {
+    const resources = this._futureSnapshot.resourceResult;
+    if (resources && !this.resources) {
+      // we have no valid thing to roll back to so we instead destroy any loaded resources
+      for (const key in resources) {
+        if (typeof (resources[key] as any).destroy === 'function') {
+          (resources[key] as any).destroy();
+        }
+      }
+      this._resourceInjector?.destroy();
+    }
+    this.pending.set(false);
   }
 }
 
@@ -341,6 +401,11 @@ export class ActivatedRouteSnapshot {
   _queryParamMap?: ParamMap;
   /** @internal */
   readonly _environmentInjector: EnvironmentInjector;
+  /**
+   * The result of running the route's resources function.
+   * @internal
+   */
+  resourceResult?: {[key: string]: Resource<unknown>};
 
   /** The resolved route title */
   get title(): string | undefined {

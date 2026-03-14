@@ -25,6 +25,7 @@ import { Provider } from '@angular/core';
 import { ProviderToken } from '@angular/core';
 import { QueryList } from '@angular/core';
 import { Renderer2 } from '@angular/core';
+import { Resource } from '@angular/core';
 import { Signal } from '@angular/core';
 import { SimpleChanges } from '@angular/core';
 import { Title } from '@angular/platform-browser';
@@ -45,6 +46,9 @@ export class ActivatedRoute {
     get pathFromRoot(): ActivatedRoute[];
     get queryParamMap(): Observable<ParamMap>;
     queryParams: Observable<Params>;
+    resources: {
+        [key: string]: Resource<unknown>;
+    } | undefined;
     get root(): ActivatedRoute;
     get routeConfig(): Route | null;
     snapshot: ActivatedRouteSnapshot;
@@ -670,6 +674,7 @@ export interface Route {
     providers?: Array<Provider | EnvironmentProviders>;
     redirectTo?: string | RedirectFunction;
     resolve?: ResolveData;
+    resources?: (ctx: ResourceContext) => ResourceResult | Promise<ResourceResult>;
     runGuardsAndResolvers?: RunGuardsAndResolvers;
     title?: string | Type<Resolve<string>> | ResolveFn<string>;
 }

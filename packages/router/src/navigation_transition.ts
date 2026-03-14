@@ -64,6 +64,8 @@ import {ActivateRoutes} from './operators/activate_routes';
 import {checkGuards} from './operators/check_guards';
 import {recognize} from './operators/recognize';
 import {resolveData} from './operators/resolve_data';
+import {setupAndRunResources} from './operators/setup_and_run_resources';
+import {waitForBlockingResources} from './operators/wait_for_blocking_resources';
 import {switchTap} from './operators/switch_tap';
 import {TitleStrategy} from './page_title_strategy';
 import {RouteReuseStrategy} from './route_reuse_strategy';
@@ -84,6 +86,7 @@ import {Checks, getAllRouteGuards} from './utils/preactivation';
 import {CREATE_VIEW_TRANSITION} from './utils/view_transition';
 import {abortSignalToObservable} from './utils/abort_signal_to_observable';
 import type {Router} from './router';
+import {TreeNode} from './utils/tree';
 
 /**
  * @description
@@ -328,6 +331,9 @@ export interface NavigationTransition {
 
   routesRecognizeHandler: {deferredHandle?: Promise<void>};
   beforeActivateHandler: {deferredHandle?: Promise<void>};
+
+  newlyCreatedRoutes?: Set<ActivatedRoute>;
+  blockingResources?: Promise<any>[];
 }
 
 export const NAVIGATION_ERROR_HANDLER = new InjectionToken<
@@ -441,6 +447,7 @@ export class NavigationTransitions {
 
       // Using switchMap so we cancel executing navigations when a new one comes in
       switchMap((overallTransitionState) => {
+        let abortable = true;
         let completedOrAborted = false;
         const abortController = new AbortController();
         const shouldContinueNavigation = () => {
@@ -760,18 +767,30 @@ export class NavigationTransitions {
           take(1),
 
           switchMap((t: NavigationTransition) => {
+            const newlyCreatedRoutes = new Set<ActivatedRoute>();
             const targetRouterState = createRouterState(
               router.routeReuseStrategy,
               t.targetSnapshot!,
               t.currentRouterState,
+              newlyCreatedRoutes,
             );
-            this.currentTransition = overallTransitionState = t = {...t, targetRouterState};
+            this.currentTransition =
+              overallTransitionState =
+              t =
+                {...t, targetRouterState, newlyCreatedRoutes};
             this.currentNavigation.update((nav) => {
               nav!.targetRouterState = targetRouterState;
               return nav;
             });
 
+            return of(t);
+          }),
+          setupAndRunResources(),
+          waitForBlockingResources(this.environmentInjector),
+
+          switchMap((t: NavigationTransition) => {
             this.events.next(new BeforeActivateRoutes());
+            abortable = false;
             const deferred = overallTransitionState.beforeActivateHandler.deferredHandle;
             return deferred ? from(deferred.then(() => t)) : of(t);
           }),
@@ -788,6 +807,12 @@ export class NavigationTransitions {
             if (!shouldContinueNavigation()) {
               return;
             }
+
+            const traverse = (node: TreeNode<ActivatedRoute>) => {
+              node.value._commit(node.value.snapshot);
+              node.children.forEach(traverse);
+            };
+            traverse(t.targetRouterState!._root);
 
             completedOrAborted = true;
             this.currentNavigation.update((nav) => {
@@ -809,13 +834,14 @@ export class NavigationTransitions {
           takeUntil(
             abortSignalToObservable(abortController.signal).pipe(
               // Ignore aborts if we are already completed, canceled, or are in the activation stage (we have targetRouterState)
-              filter(() => !completedOrAborted && !overallTransitionState.targetRouterState),
+              filter(() => !completedOrAborted && abortable),
               tap(() => {
                 this.cancelNavigationTransition(
                   overallTransitionState,
                   abortController.signal.reason + '',
                   NavigationCancellationCode.Aborted,
                 );
+                rollbackState(overallTransitionState);
               }),
             ),
           ),
@@ -850,6 +876,9 @@ export class NavigationTransitions {
              * catch-all to make sure the NavigationCancel event is fired when a
              * navigation gets cancelled but not caught by other means. */
             if (!completedOrAborted) {
+              if (abortable) {
+                rollbackState(overallTransitionState);
+              }
               const cancelationReason =
                 typeof ngDevMode === 'undefined' || ngDevMode
                   ? `Navigation ID ${overallTransitionState.id} is not equal to the current navigation id ${this.navigationId}`
@@ -873,10 +902,13 @@ export class NavigationTransitions {
             // execute anything in practice because other resources have already
             // been released and destroyed.
             if (this.destroyed) {
+              rollbackState(overallTransitionState);
               overallTransitionState.resolve(false);
               return EMPTY;
             }
 
+            completedOrAborted = true;
+            rollbackState(overallTransitionState);
             /* This error type is issued during Redirect, and is handled as a
              * cancellation rather than an error. */
             if (isNavigationCancelingError(e)) {
@@ -1018,4 +1050,14 @@ export class NavigationTransitions {
 
 export function isBrowserTriggeredNavigation(source: NavigationTrigger) {
   return source !== IMPERATIVE_NAVIGATION;
+}
+
+function rollbackState(t: NavigationTransition): void {
+  if (t.targetRouterState) {
+    const traverse = (node: TreeNode<ActivatedRoute>) => {
+      node.value._rollback();
+      node.children.forEach(traverse);
+    };
+    traverse(t.targetRouterState._root);
+  }
 }
