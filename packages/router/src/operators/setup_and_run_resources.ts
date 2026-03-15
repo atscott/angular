@@ -23,6 +23,12 @@ import {NavigationTransition} from '../navigation_transition';
 import {ActivatedRoute, ActivatedRouteSnapshot} from '../router_state';
 import {TreeNode} from '../utils/tree';
 import {BLOCKING_SYMBOL, REAL_RESOURCE_SYMBOL} from '../router_resource';
+import {InjectionToken} from '@angular/core';
+
+export const ROUTER_RESOURCES_OPERATOR = new InjectionToken<typeof setupAndRunResources>(
+  ngDevMode ? 'Router Resources Operator' : '',
+  {factory: () => () => (t$) => t$},
+);
 
 export function setupAndRunResources(
   resourceKey: 'resources' | 'eagerResources' = 'resources',

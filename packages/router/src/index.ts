@@ -85,6 +85,7 @@ export {
   RouterFeature,
   RouterFeatures,
   RouterHashLocationFeature,
+  RouterResourcesFeature,
   ViewTransitionsFeature,
   withComponentInputBinding,
   withDebugTracing,
@@ -97,6 +98,7 @@ export {
   withNavigationErrorHandler,
   withPreloading,
   withRouterConfig,
+  withRouterResources,
   withViewTransitions,
 } from './provide_router';
 

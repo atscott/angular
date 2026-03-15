@@ -64,8 +64,8 @@ import {ActivateRoutes} from './operators/activate_routes';
 import {checkGuards} from './operators/check_guards';
 import {recognize} from './operators/recognize';
 import {resolveData} from './operators/resolve_data';
-import {setupAndRunResources} from './operators/setup_and_run_resources';
-import {waitForBlockingResources} from './operators/wait_for_blocking_resources';
+import {ROUTER_RESOURCES_OPERATOR} from './operators/setup_and_run_resources';
+import {WAIT_FOR_BLOCKING_RESOURCES_OPERATOR} from './operators/wait_for_blocking_resources';
 import {switchTap} from './operators/switch_tap';
 import {TitleStrategy} from './page_title_strategy';
 import {RouteReuseStrategy} from './route_reuse_strategy';
@@ -654,7 +654,7 @@ export class NavigationTransitions {
             return t;
           }),
 
-          setupAndRunResources('eagerResources'),
+          this.environmentInjector.get(ROUTER_RESOURCES_OPERATOR)('eagerResources'),
 
           map((t) => {
             const guardsStart = new GuardsCheckStart(
@@ -807,8 +807,10 @@ export class NavigationTransitions {
           // this is done as a safety measure to avoid surfacing this error (#49567).
           take(1),
 
-          setupAndRunResources(),
-          waitForBlockingResources(this.environmentInjector),
+          this.environmentInjector.get(ROUTER_RESOURCES_OPERATOR)(),
+          this.environmentInjector.get(WAIT_FOR_BLOCKING_RESOURCES_OPERATOR)(
+            this.environmentInjector,
+          ),
 
           switchMap((t: NavigationTransition) => {
             this.events.next(new BeforeActivateRoutes());

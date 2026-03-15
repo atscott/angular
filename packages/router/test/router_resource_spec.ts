@@ -7,6 +7,7 @@ import {
   NavigationError,
   withNavigationErrorHandler,
   RedirectCommand,
+  withRouterResources,
 } from '@angular/router';
 import {RouterTestingHarness} from '../testing';
 import {resource, ApplicationRef} from '@angular/core';
@@ -37,23 +38,26 @@ describe('routerResource', () => {
 
       TestBed.configureTestingModule({
         providers: [
-          provideRouter([
-            {
-              path: 'test',
-              component: TestCmp,
-              resources: (ctx) => ({
-                data: routerResource.blocking(
-                  {
-                    loader: async () => {
-                      resolverSpy();
-                      return await promise;
+          provideRouter(
+            [
+              {
+                path: 'test',
+                component: TestCmp,
+                resources: (ctx) => ({
+                  data: routerResource.blocking(
+                    {
+                      loader: async () => {
+                        resolverSpy();
+                        return await promise;
+                      },
                     },
-                  },
-                  TestBed.inject(Router),
-                ),
-              }),
-            },
-          ]),
+                    TestBed.inject(Router),
+                  ),
+                }),
+              },
+            ],
+            withRouterResources(),
+          ),
         ],
       });
 
@@ -88,25 +92,28 @@ describe('routerResource', () => {
 
       TestBed.configureTestingModule({
         providers: [
-          provideRouter([
-            {
-              path: 'test/:id',
-              component: TestCmp,
-              resources: (ctx: any) => ({
-                data: routerResource.blocking(
-                  {
-                    params: () => ctx.params(),
-                    loader: async ({params}: any) => {
-                      loadCount++;
-                      if (params.id === '1') return p1;
-                      return p2;
+          provideRouter(
+            [
+              {
+                path: 'test/:id',
+                component: TestCmp,
+                resources: (ctx: any) => ({
+                  data: routerResource.blocking(
+                    {
+                      params: () => ctx.params(),
+                      loader: async ({params}: any) => {
+                        loadCount++;
+                        if (params.id === '1') return p1;
+                        return p2;
+                      },
                     },
-                  },
-                  TestBed.inject(Router),
-                ),
-              }),
-            },
-          ]),
+                    TestBed.inject(Router),
+                  ),
+                }),
+              },
+            ],
+            withRouterResources(),
+          ),
         ],
       });
 
@@ -156,15 +163,18 @@ describe('routerResource', () => {
 
       TestBed.configureTestingModule({
         providers: [
-          provideRouter([
-            {
-              path: 'test',
-              component: TargetCmp,
-              resources: () => ({
-                data: routerResource({loader: loaderSpy}, TestBed.inject(Router)),
-              }),
-            },
-          ]),
+          provideRouter(
+            [
+              {
+                path: 'test',
+                component: TargetCmp,
+                resources: () => ({
+                  data: routerResource({loader: loaderSpy}, TestBed.inject(Router)),
+                }),
+              },
+            ],
+            withRouterResources(),
+          ),
         ],
       });
 
@@ -187,24 +197,27 @@ describe('routerResource', () => {
 
       TestBed.configureTestingModule({
         providers: [
-          provideRouter([
-            {
-              path: 'test/:id',
-              component: TargetCmp,
-              resources: (ctx) => ({
-                data: routerResource(
-                  {
-                    params: () => ctx.params(),
-                    loader: async () => {
-                      callCount++;
-                      return 'loaded';
+          provideRouter(
+            [
+              {
+                path: 'test/:id',
+                component: TargetCmp,
+                resources: (ctx) => ({
+                  data: routerResource(
+                    {
+                      params: () => ctx.params(),
+                      loader: async () => {
+                        callCount++;
+                        return 'loaded';
+                      },
                     },
-                  },
-                  TestBed.inject(Router),
-                ),
-              }),
-            },
-          ]),
+                    TestBed.inject(Router),
+                  ),
+                }),
+              },
+            ],
+            withRouterResources(),
+          ),
         ],
       });
 
@@ -225,22 +238,25 @@ describe('routerResource', () => {
 
       TestBed.configureTestingModule({
         providers: [
-          provideRouter([
-            {
-              path: 'test/:id',
-              component: TargetCmp,
-              canActivate: [() => canActivate],
-              resources: (ctx) => ({
-                data: routerResource(
-                  {
-                    params: () => ctx.params(),
-                    loader: async ({params}: any) => params.id,
-                  },
-                  TestBed.inject(Router),
-                ),
-              }),
-            },
-          ]),
+          provideRouter(
+            [
+              {
+                path: 'test/:id',
+                component: TargetCmp,
+                canActivate: [() => canActivate],
+                resources: (ctx) => ({
+                  data: routerResource(
+                    {
+                      params: () => ctx.params(),
+                      loader: async ({params}: any) => params.id,
+                    },
+                    TestBed.inject(Router),
+                  ),
+                }),
+              },
+            ],
+            withRouterResources(),
+          ),
         ],
       });
 
@@ -266,20 +282,23 @@ describe('routerResource', () => {
 
       TestBed.configureTestingModule({
         providers: [
-          provideRouter([
-            {
-              path: 'test',
-              component: TargetCmp,
-              resources: () => ({
-                data: routerResource.blocking(
-                  {
-                    loader: () => Promise.reject('test error'),
-                  },
-                  TestBed.inject(Router),
-                ),
-              }),
-            },
-          ]),
+          provideRouter(
+            [
+              {
+                path: 'test',
+                component: TargetCmp,
+                resources: () => ({
+                  data: routerResource.blocking(
+                    {
+                      loader: () => Promise.reject('test error'),
+                    },
+                    TestBed.inject(Router),
+                  ),
+                }),
+              },
+            ],
+            withRouterResources(),
+          ),
         ],
       });
 
@@ -296,20 +315,23 @@ describe('routerResource', () => {
 
       TestBed.configureTestingModule({
         providers: [
-          provideRouter([
-            {
-              path: 'test',
-              component: TargetCmp,
-              resources: () => ({
-                data: routerResource.blocking(
-                  {
-                    loader: () => Promise.reject('test error'),
-                  },
-                  TestBed.inject(Router),
-                ),
-              }),
-            },
-          ]),
+          provideRouter(
+            [
+              {
+                path: 'test',
+                component: TargetCmp,
+                resources: () => ({
+                  data: routerResource.blocking(
+                    {
+                      loader: () => Promise.reject('test error'),
+                    },
+                    TestBed.inject(Router),
+                  ),
+                }),
+              },
+            ],
+            withRouterResources(),
+          ),
         ],
       });
 
@@ -334,22 +356,25 @@ describe('routerResource', () => {
 
       TestBed.configureTestingModule({
         providers: [
-          provideRouter([
-            {
-              path: 'test',
-              component: TargetCmp,
-              resolve: {id: () => '123'},
-              resources: (ctx) => ({
-                data: routerResource(
-                  {
-                    params: () => ctx.data(),
-                    loader: async ({params}: any) => ({name: `user ${params['id']}`}),
-                  },
-                  TestBed.inject(Router),
-                ),
-              }),
-            },
-          ]),
+          provideRouter(
+            [
+              {
+                path: 'test',
+                component: TargetCmp,
+                resolve: {id: () => '123'},
+                resources: (ctx) => ({
+                  data: routerResource(
+                    {
+                      params: () => ctx.data(),
+                      loader: async ({params}: any) => ({name: `user ${params['id']}`}),
+                    },
+                    TestBed.inject(Router),
+                  ),
+                }),
+              },
+            ],
+            withRouterResources(),
+          ),
         ],
       });
 
@@ -376,25 +401,28 @@ describe('routerResource', () => {
 
       TestBed.configureTestingModule({
         providers: [
-          provideRouter([
-            {
-              path: 'user/:id',
-              component: TargetCmp,
-              resources: (ctx) => ({
-                user: routerResource(
-                  {
-                    params: () => ctx.params(),
-                    loader: async ({params, abortSignal}: any) => {
-                      abortSignal.addEventListener('abort', () => (aborted = true));
-                      if (params['id'] === '1') return promise;
-                      return {name: 'user 2'};
+          provideRouter(
+            [
+              {
+                path: 'user/:id',
+                component: TargetCmp,
+                resources: (ctx) => ({
+                  user: routerResource(
+                    {
+                      params: () => ctx.params(),
+                      loader: async ({params, abortSignal}: any) => {
+                        abortSignal.addEventListener('abort', () => (aborted = true));
+                        if (params['id'] === '1') return promise;
+                        return {name: 'user 2'};
+                      },
                     },
-                  },
-                  TestBed.inject(Router),
-                ),
-              }),
-            },
-          ]),
+                    TestBed.inject(Router),
+                  ),
+                }),
+              },
+            ],
+            withRouterResources(),
+          ),
         ],
       });
 
@@ -431,21 +459,24 @@ describe('routerResource', () => {
 
       TestBed.configureTestingModule({
         providers: [
-          provideRouter([
-            {
-              path: 'rx/:id',
-              component: TargetCmp,
-              resources: (ctx) => ({
-                data: createTransactionalResource(
-                  rxResource({
-                    params: () => ctx.params()['id'],
-                    stream: ({params}: any) => of(`rx loaded ${params}`).pipe(delay(10)),
-                  }),
-                  TestBed.inject(Router),
-                ),
-              }),
-            },
-          ]),
+          provideRouter(
+            [
+              {
+                path: 'rx/:id',
+                component: TargetCmp,
+                resources: (ctx) => ({
+                  data: createTransactionalResource(
+                    rxResource({
+                      params: () => ctx.params()['id'],
+                      stream: ({params}: any) => of(`rx loaded ${params}`).pipe(delay(10)),
+                    }),
+                    TestBed.inject(Router),
+                  ),
+                }),
+              },
+            ],
+            withRouterResources(),
+          ),
         ],
       });
 
@@ -478,24 +509,27 @@ describe('routerResource', () => {
 
       TestBed.configureTestingModule({
         providers: [
-          provideRouter([
-            {
-              path: 'test',
-              component: TargetCmp,
-              canActivate: [() => guardPromise],
-              eagerResources: () => ({
-                data: routerResource(
-                  {
-                    loader: async () => {
-                      eagerExecuted = true;
-                      return 'eager loaded';
+          provideRouter(
+            [
+              {
+                path: 'test',
+                component: TargetCmp,
+                canActivate: [() => guardPromise],
+                eagerResources: () => ({
+                  data: routerResource(
+                    {
+                      loader: async () => {
+                        eagerExecuted = true;
+                        return 'eager loaded';
+                      },
                     },
-                  },
-                  TestBed.inject(Router),
-                ),
-              }),
-            },
-          ]),
+                    TestBed.inject(Router),
+                  ),
+                }),
+              },
+            ],
+            withRouterResources(),
+          ),
         ],
       });
 
@@ -525,22 +559,25 @@ describe('routerResource', () => {
 
       TestBed.configureTestingModule({
         providers: [
-          provideRouter([
-            {
-              path: 'test/:id',
-              component: TargetCmp,
-              resolve: {blocker: () => (canActivate ? 'ok' : Promise.reject('fail'))},
-              eagerResources: (ctx) => ({
-                data: routerResource(
-                  {
-                    params: () => ctx.params(),
-                    loader: async ({params}: any) => params.id,
-                  },
-                  TestBed.inject(Router),
-                ),
-              }),
-            },
-          ]),
+          provideRouter(
+            [
+              {
+                path: 'test/:id',
+                component: TargetCmp,
+                resolve: {blocker: () => (canActivate ? 'ok' : Promise.reject('fail'))},
+                eagerResources: (ctx) => ({
+                  data: routerResource(
+                    {
+                      params: () => ctx.params(),
+                      loader: async ({params}: any) => params.id,
+                    },
+                    TestBed.inject(Router),
+                  ),
+                }),
+              },
+            ],
+            withRouterResources(),
+          ),
         ],
       });
 
@@ -573,40 +610,43 @@ describe('routerResource', () => {
 
       TestBed.configureTestingModule({
         providers: [
-          provideRouter([
-            {
-              path: 'test',
-              component: TargetCmp,
-              canActivate: [
-                () => {
-                  executionOrder.push('guard start');
-                  return guardPromise;
-                },
-              ],
-              eagerResources: () => ({
-                eagerData: routerResource(
-                  {
-                    loader: async () => {
-                      executionOrder.push('eagerResource load');
-                      return 'eager';
-                    },
+          provideRouter(
+            [
+              {
+                path: 'test',
+                component: TargetCmp,
+                canActivate: [
+                  () => {
+                    executionOrder.push('guard start');
+                    return guardPromise;
                   },
-                  TestBed.inject(Router),
-                ),
-              }),
-              resources: () => ({
-                lateData: routerResource(
-                  {
-                    loader: async () => {
-                      executionOrder.push('resource load');
-                      return 'late';
+                ],
+                eagerResources: () => ({
+                  eagerData: routerResource(
+                    {
+                      loader: async () => {
+                        executionOrder.push('eagerResource load');
+                        return 'eager';
+                      },
                     },
-                  },
-                  TestBed.inject(Router),
-                ),
-              }),
-            },
-          ]),
+                    TestBed.inject(Router),
+                  ),
+                }),
+                resources: () => ({
+                  lateData: routerResource(
+                    {
+                      loader: async () => {
+                        executionOrder.push('resource load');
+                        return 'late';
+                      },
+                    },
+                    TestBed.inject(Router),
+                  ),
+                }),
+              },
+            ],
+            withRouterResources(),
+          ),
         ],
       });
 
@@ -649,23 +689,26 @@ describe('routerResource', () => {
 
       TestBed.configureTestingModule({
         providers: [
-          provideRouter([
-            {
-              path: 'test',
-              component: TargetCmp,
-              eagerResources: () => ({
-                data: routerResource.blocking(
-                  {
-                    loader: async () => {
-                      await waitPromise;
-                      return 'loaded';
+          provideRouter(
+            [
+              {
+                path: 'test',
+                component: TargetCmp,
+                eagerResources: () => ({
+                  data: routerResource.blocking(
+                    {
+                      loader: async () => {
+                        await waitPromise;
+                        return 'loaded';
+                      },
                     },
-                  },
-                  TestBed.inject(Router),
-                ),
-              }),
-            },
-          ]),
+                    TestBed.inject(Router),
+                  ),
+                }),
+              },
+            ],
+            withRouterResources(),
+          ),
         ],
       });
 
@@ -741,6 +784,7 @@ describe('routerResource', () => {
               errorRef = e.error;
               return new RedirectCommand(TestBed.inject(Router).parseUrl('/error'));
             }),
+            withRouterResources(),
           ),
         ],
       });

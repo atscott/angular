@@ -43,6 +43,11 @@ import {ROUTE_INJECTOR_CLEANUP, routeInjectorCleanup} from './route_injector_cle
 import {Router} from './router';
 import {InMemoryScrollingOptions, ROUTER_CONFIGURATION, RouterConfigOptions} from './router_config';
 import {ROUTES} from './router_config_loader';
+import {ROUTER_RESOURCES_OPERATOR, setupAndRunResources} from './operators/setup_and_run_resources';
+import {
+  WAIT_FOR_BLOCKING_RESOURCES_OPERATOR,
+  waitForBlockingResources,
+} from './operators/wait_for_blocking_resources';
 import {PreloadingStrategy, RouterPreloader} from './router_preloader';
 
 import {ROUTER_SCROLLER, RouterScroller} from './router_scroller';
@@ -824,6 +829,43 @@ export function withComponentInputBinding(): ComponentInputBindingFeature {
 }
 
 /**
+ * A type alias for providers returned by `withRouterResources` for use with `provideRouter`.
+ *
+ * @see {@link withRouterResources}
+ * @see {@link provideRouter}
+ *
+ * @publicApi
+ */
+export type RouterResourcesFeature = RouterFeature<RouterFeatureKind.RouterResourcesFeature>;
+
+/**
+ * Enables `resources` and `eagerResources` capabilities for Route definitions.
+ *
+ * @usageNotes
+ *
+ * Basic example of how you can enable the feature:
+ * ```ts
+ * const appRoutes: Routes = [];
+ * bootstrapApplication(AppComponent,
+ *   {
+ *     providers: [
+ *       provideRouter(appRoutes, withRouterResources())
+ *     ]
+ *   }
+ * );
+ * ```
+ *
+ * @returns A set of providers for use with `provideRouter`.
+ */
+export function withRouterResources(): RouterResourcesFeature {
+  const providers = [
+    {provide: ROUTER_RESOURCES_OPERATOR, useValue: setupAndRunResources},
+    {provide: WAIT_FOR_BLOCKING_RESOURCES_OPERATOR, useValue: waitForBlockingResources},
+  ];
+  return routerFeature(RouterFeatureKind.RouterResourcesFeature, providers);
+}
+
+/**
  * Enables view transitions in the Router by running the route activation and deactivation inside of
  * `document.startViewTransition`.
  *
@@ -886,6 +928,7 @@ export type RouterFeatures =
   | ViewTransitionsFeature
   | ExperimentalAutoCleanupInjectorsFeature
   | RouterHashLocationFeature
+  | RouterResourcesFeature
   | ExperimentalPlatformNavigationFeature;
 
 /**
@@ -903,5 +946,6 @@ export const enum RouterFeatureKind {
   ComponentInputBindingFeature,
   ViewTransitionsFeature,
   ExperimentalAutoCleanupInjectorsFeature,
+  RouterResourcesFeature,
   ExperimentalPlatformNavigationFeature,
 }
