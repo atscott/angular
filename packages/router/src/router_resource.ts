@@ -82,7 +82,7 @@ export function createTransactionalResource<T>(
       previousValue = current.value;
     } else if (current.status === 'loading' && current.value === undefined) {
       if (previousValue !== undefined) {
-        current = {...current, value: previousValue} as any;
+        current = {...current, value: previousValue, status: 'reloading'} as any;
       }
     }
 
