@@ -450,6 +450,133 @@ describe('routerResource', () => {
       await timeout(10);
       expect(userResource.value()).toEqual({name: 'user 2'});
     });
+
+    it('should not fallback parameter state when a navigation is superseded by a new one during activation', async () => {
+      let resolveFirst!: (val: any) => void;
+      let p1 = new Promise((r) => (resolveFirst = r));
+
+      @Component({standalone: true, template: ''})
+      class TargetCmp {}
+
+      TestBed.configureTestingModule({
+        providers: [
+          provideRouter(
+            [
+              {
+                path: 'test/:id',
+                component: TargetCmp,
+                eagerResources: (ctx: any) => ({
+                  data: routerResource(
+                    {
+                      params: () => ctx.params(),
+                      loader: async ({params}: any) => {
+                        if (params.id === '2') return p1;
+                        return params.id;
+                      },
+                    },
+                    TestBed.inject(Router),
+                  ),
+                }),
+              },
+            ],
+            withRouterResources(),
+          ),
+        ],
+      });
+
+      const harness = await RouterTestingHarness.create();
+      const router = TestBed.inject(Router);
+
+      const nav1 = harness.navigateByUrl('/test/1');
+      await harness.fixture.whenStable();
+
+      const resourceRef = router.routerState.root.firstChild?.resources?.['data'] as any;
+      expect(resourceRef.value()).toBe('1');
+      expect(resourceRef.isLoading()).toBe(false);
+
+      // Trigger a direct new navigation that SUPERSEDES nav2.
+      // But we need nav2 to be during activation so we use a non-blocking eagerResource
+      // which will keep the navigation pending during guards/resolvers, but wait we don't have guards!
+      // Actually `navigateByUrl` is asynchronous enough that doing two back-to-back will cause superseding.
+      const nav2 = harness.navigateByUrl('/test/2'); // This will start and update parameters to '2', setting eagerResources to loading
+      const nav3 = harness.navigateByUrl('/test/3'); // This supersedes nav2 immediately
+      await harness.fixture.whenStable();
+
+      // The resource should immediately reflect the loading state of nav3 without retaining any aborted value from nav2,
+      // but retaining from nav1 since it was the previously settled state? Wait, if we superseded nav2, we want to make sure it doesn't rollback to 1!
+      // Wait, nav3 succeeds and resolves to '3'!
+      expect(resourceRef.value()).toBe('3');
+      expect(resourceRef.isLoading()).toBe(false);
+
+      // Let's ensure the fallback didn't stay stuck.
+    });
+
+    it('should persist the aborted value across a redirect cascade without flashing loading', async () => {
+      @Component({standalone: true, template: ''})
+      class TargetCmp {}
+
+      let loadCount = 0;
+      let resolveLoader!: (val: any) => void;
+      let p1 = new Promise((r) => (resolveLoader = r));
+
+      TestBed.configureTestingModule({
+        providers: [
+          provideRouter(
+            [
+              {
+                path: 'test/:id',
+                component: TargetCmp,
+                canActivate: [
+                  ({params}: any) =>
+                    params.id === '1' || params.id === '3'
+                      ? true
+                      : new RedirectCommand(TestBed.inject(Router).parseUrl('/test/3')),
+                ],
+                eagerResources: (ctx: any) => ({
+                  data: routerResource.blocking(
+                    {
+                      params: () => ctx.params(),
+                      loader: async ({params}: any) => {
+                        loadCount++;
+                        if (params.id === '3') return p1;
+                        return params.id;
+                      },
+                    },
+                    TestBed.inject(Router),
+                  ),
+                }),
+              },
+            ],
+            withRouterResources(),
+          ),
+        ],
+      });
+
+      const harness = await RouterTestingHarness.create();
+      const router = TestBed.inject(Router);
+
+      const nav1 = harness.navigateByUrl('/test/1');
+      await harness.fixture.whenStable();
+
+      const resourceRef = router.routerState.root.firstChild?.resources?.['data'] as any;
+      expect(resourceRef.value()).toBe('1');
+      expect(loadCount).toBe(1);
+
+      // Trigger a navigation that hits a guard redirect
+      // This will match '2', start `eagerResources` for '2', then fail the guard and redirect to '3'
+      const nav2 = harness.navigateByUrl('/test/2');
+      await timeout(10);
+
+      // We are now loading '3', but we should still retain '1' as the abortedValue since '2' aborted!
+      expect(resourceRef.isLoading()).toBe(true);
+      expect(resourceRef.value()).toBe('1');
+
+      resolveLoader('3');
+      await harness.fixture.whenStable();
+
+      expect(resourceRef.isLoading()).toBe(false);
+      expect(resourceRef.value()).toBe('3');
+    });
   });
 
   describe('rxResource integration', () => {

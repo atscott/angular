@@ -17,6 +17,7 @@ import {
   untracked,
   DestroyRef,
   ResourceSnapshot,
+  effect,
 } from '@angular/core';
 import {Router} from './router';
 import {
@@ -25,6 +26,7 @@ import {
   NavigationCancel,
   NavigationError,
   NavigationSkipped,
+  NavigationCancellationCode,
 } from './events';
 
 export const BLOCKING_SYMBOL = Symbol(
@@ -54,36 +56,79 @@ export function createTransactionalResource<T>(
     router.getCurrentNavigation() ? untracked(() => sourceResource.snapshot()) : null,
   );
 
+  let recoveringFromAbortion = false;
+  let abortedValue: T | undefined = undefined;
+
+  let activeNavigationId: number | null = router.getCurrentNavigation()?.id ?? null;
+
   const sub = router.events.subscribe((e) => {
     if (e instanceof NavigationStart) {
-      frozenSnapshot.set(untracked(() => sourceResource.snapshot()));
-    } else if (
-      e instanceof NavigationEnd ||
-      e instanceof NavigationCancel ||
-      e instanceof NavigationError ||
-      e instanceof NavigationSkipped
-    ) {
+      activeNavigationId = e.id;
+
+      const snapshot = untracked(() => sourceResource.snapshot());
+      if (recoveringFromAbortion && snapshot.status === 'loading') {
+        frozenSnapshot.set({...snapshot, status: 'reloading', value: abortedValue} as any);
+      } else {
+        frozenSnapshot.set(snapshot);
+      }
+
+      recoveringFromAbortion = false;
+      abortedValue = undefined;
+    } else if (e instanceof NavigationEnd || e instanceof NavigationSkipped) {
+      if (e.id !== activeNavigationId) return;
       frozenSnapshot.set(null);
+      recoveringFromAbortion = false;
+      abortedValue = undefined;
+    } else if (e instanceof NavigationCancel || e instanceof NavigationError) {
+      if (e.id !== activeNavigationId) return;
+      const frozen = untracked(frozenSnapshot);
+      frozenSnapshot.set(null);
+
+      // Only recover if the parameter state was truly rolled back.
+      // E.g. if the navigation was superseded during activation, it's not a rollback,
+      // and we shouldn't attempt to recover the pre-navigation state masking the new route parameters.
+      const isRollback =
+        e instanceof NavigationError ||
+        (e as NavigationCancel).code !== NavigationCancellationCode.SupersededByNewNavigation;
+
+      // Because `rollbackState` runs synchronously immediately prior to `NavigationCancel` (for true rollbacks),
+      // the underlying resource parameters have already reverted.
+      // If those parameters triggered a reload, `isLoading` will synchronously remain true here.
+      if (
+        isRollback &&
+        untracked(sourceResource.isLoading) &&
+        (frozen?.status === 'resolved' ||
+          frozen?.status === 'local' ||
+          frozen?.status === 'reloading')
+      ) {
+        recoveringFromAbortion = true;
+        abortedValue = (frozen as any).value;
+      }
     }
   });
 
   injector.get(DestroyRef).onDestroy(() => sub.unsubscribe());
 
-  let previousValue: T | undefined = undefined;
+  // Clear the recovery state once the resource fully settles (resolves or errors).
+  // The `isLoading` signal synchronously updates to false upon resolution.
+  effect(
+    () => {
+      if (recoveringFromAbortion && !sourceResource.isLoading()) {
+        recoveringFromAbortion = false;
+        abortedValue = undefined;
+      }
+    },
+    {injector},
+  );
 
   const res = resourceFromSnapshots(() => {
-    let current = sourceResource.snapshot();
-
     const frozen = frozenSnapshot();
     if (frozen) return frozen;
 
-    // Retain previous value if currently loading (keepPreviousData behavior)
-    if (current.status === 'resolved') {
-      previousValue = current.value;
-    } else if (current.status === 'loading' && current.value === undefined) {
-      if (previousValue !== undefined) {
-        current = {...current, value: previousValue, status: 'reloading'} as any;
-      }
+    let current = sourceResource.snapshot();
+
+    if (recoveringFromAbortion && current.status === 'loading') {
+      current = {...current, status: 'reloading', value: abortedValue} as any;
     }
 
     return current;
