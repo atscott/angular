@@ -88,6 +88,7 @@ export function toStandalone(
       declarations,
       tracker,
       templateTypeChecker,
+      program.getTsProgram(),
       declarationImportRemapper,
     );
   }
@@ -119,6 +120,7 @@ export function convertNgModuleDeclarationToStandalone(
   allDeclarations: Set<ts.ClassDeclaration>,
   tracker: ChangeTracker,
   typeChecker: TemplateTypeChecker,
+  program: ts.Program,
   importRemapper?: DeclarationImportsRemapper,
 ): void {
   const directiveMeta = typeChecker.getDirectiveMetadata(decl);
@@ -132,6 +134,7 @@ export function convertNgModuleDeclarationToStandalone(
         allDeclarations,
         tracker,
         typeChecker,
+        program,
         importRemapper,
       );
 
@@ -175,9 +178,10 @@ function getComponentImportExpressions(
   allDeclarations: Set<ts.ClassDeclaration>,
   tracker: ChangeTracker,
   typeChecker: TemplateTypeChecker,
+  program: ts.Program,
   importRemapper?: DeclarationImportsRemapper,
 ): ts.Expression[] {
-  const templateDependencies = findTemplateDependencies(decl, typeChecker);
+  const templateDependencies = findTemplateDependencies(decl, typeChecker, program);
   const usedDependenciesInMigration = new Set(
     templateDependencies.filter((dep) => allDeclarations.has(dep.node)),
   );
@@ -656,6 +660,7 @@ export function findTestObjectsToMigrate(sourceFile: ts.SourceFile, typeChecker:
 export function findTemplateDependencies(
   decl: ts.ClassDeclaration,
   typeChecker: TemplateTypeChecker,
+  program: ts.Program,
 ): Reference<NamedClassDeclaration>[] {
   const results: Reference<NamedClassDeclaration>[] = [];
   const usedDirectives = typeChecker.getUsedDirectives(decl);
@@ -663,9 +668,7 @@ export function findTemplateDependencies(
 
   if (usedDirectives !== null) {
     for (const dir of usedDirectives) {
-      if (ts.isClassDeclaration(dir.ref.node)) {
-        results.push(dir.ref as Reference<NamedClassDeclaration>);
-      }
+      results.push(dir.ref as Reference<NamedClassDeclaration>);
     }
   }
 
@@ -673,11 +676,17 @@ export function findTemplateDependencies(
     const potentialPipes = typeChecker.getPotentialPipes(decl);
 
     for (const pipe of potentialPipes) {
-      if (
-        ts.isClassDeclaration(pipe.ref.node) &&
-        usedPipes.some((current) => pipe.name === current)
-      ) {
-        results.push(pipe.ref as Reference<NamedClassDeclaration>);
+      const sourceFile = program.getSourceFile(pipe.ref.filePath);
+      const node = sourceFile ? findTightestNode(sourceFile, pipe.ref.position) : null;
+      const classDecl = node ? closestNode(node, ts.isClassDeclaration) : null;
+      if (classDecl && usedPipes.some((current) => pipe.name === current)) {
+        const owningModule = pipe.ref.moduleSpecifier
+          ? {
+              specifier: pipe.ref.moduleSpecifier,
+              resolutionContext: decl.getSourceFile().fileName,
+            }
+          : null;
+        results.push(new Reference(classDecl as NamedClassDeclaration, owningModule));
       }
     }
   }
@@ -946,4 +955,11 @@ function isStandaloneDeclaration(
   const metadata =
     templateTypeChecker.getDirectiveMetadata(node) || templateTypeChecker.getPipeMetadata(node);
   return metadata != null && metadata.isStandalone;
+}
+
+function findTightestNode(node: ts.Node, position: number): ts.Node | undefined {
+  if (position < node.getStart() || position > node.getEnd()) {
+    return undefined;
+  }
+  return node.forEachChild((c) => findTightestNode(c, position)) ?? node;
 }

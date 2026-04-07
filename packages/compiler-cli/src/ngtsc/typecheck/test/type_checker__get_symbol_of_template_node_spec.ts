@@ -2392,7 +2392,7 @@ runInEachFileSystem(() => {
         const nodes = templateTypeChecker.getTemplate(cmp)!;
         const symbol = templateTypeChecker.getSymbolOfNode(nodes[0] as TmplAstComponent, cmp)!;
         assertSelectorlessComponentSymbol(symbol);
-        expect(symbol.directives.map((d) => d.ref.node.name.text)).toEqual(['Dep']);
+        expect(symbol.directives.map((d) => d.ref.name)).toEqual(['Dep']);
       });
 
       it('should get symbol of a selectorless directive', () => {
@@ -2414,7 +2414,7 @@ runInEachFileSystem(() => {
         const element = nodes[0] as TmplAstElement;
         const symbol = templateTypeChecker.getSymbolOfNode(element.directives[0], cmp)!;
         assertSelectorlessDirectiveSymbol(symbol);
-        expect(symbol.directives.map((d) => d.ref.node.name.text)).toEqual(['Dep']);
+        expect(symbol.directives.map((d) => d.ref.name)).toEqual(['Dep']);
       });
 
       it('should get symbol on a node that has both selectorless components and directives', () => {
@@ -2440,10 +2440,10 @@ runInEachFileSystem(() => {
         const directiveSymbol = templateTypeChecker.getSymbolOfNode(component.directives[0], cmp)!;
 
         assertSelectorlessComponentSymbol(componentSymbol);
-        expect(componentSymbol.directives.map((d) => d.ref.node.name.text)).toEqual(['DepComp']);
+        expect(componentSymbol.directives.map((d) => d.ref.name)).toEqual(['DepComp']);
 
         assertSelectorlessDirectiveSymbol(directiveSymbol);
-        expect(directiveSymbol.directives.map((d) => d.ref.node.name.text)).toEqual(['DepDir']);
+        expect(directiveSymbol.directives.map((d) => d.ref.name)).toEqual(['DepDir']);
       });
 
       it('should get symbol of selectorless directives with host directives', () => {
@@ -2498,16 +2498,13 @@ runInEachFileSystem(() => {
         const directiveSymbol = templateTypeChecker.getSymbolOfNode(component.directives[0], cmp)!;
 
         assertSelectorlessComponentSymbol(componentSymbol);
-        expect(componentSymbol.directives.map((d) => d.ref.node.name.text)).toEqual([
+        expect(componentSymbol.directives.map((d) => d.ref.name)).toEqual([
           'DepCompHost',
           'DepComp',
         ]);
 
         assertSelectorlessDirectiveSymbol(directiveSymbol);
-        expect(directiveSymbol.directives.map((d) => d.ref.node.name.text)).toEqual([
-          'DepDirHost',
-          'DepDir',
-        ]);
+        expect(directiveSymbol.directives.map((d) => d.ref.name)).toEqual(['DepDirHost', 'DepDir']);
       });
 
       it('should get symbol of a selectorless component input', () => {
@@ -3052,7 +3049,7 @@ runInEachFileSystem(() => {
       assertElementSymbol(symbol);
       expect(
         symbol.directives.map((d) => ({
-          name: d.ref.node.name.text,
+          name: d.ref.name,
           matchSource: d.matchSource,
         })),
       ).toEqual([

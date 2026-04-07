@@ -142,17 +142,25 @@ export function findAllMatchingNodes<T extends ts.Node>(tcb: ts.Node, opts: Find
   const withExpressionIdentifier = opts.withExpressionIdentifier;
   const results: T[] = [];
   const stack: ts.Node[] = [tcb];
-  const sf = tcb.getSourceFile();
+  const sf = typeof tcb.getSourceFile === 'function' ? tcb.getSourceFile() : null;
+  if (!sf) {
+    return [];
+  }
 
   while (stack.length > 0) {
-    const node = stack.pop()!;
-
+    const node = stack.pop();
+    if (!node) {
+      continue;
+    }
     if (!opts.filter(node)) {
       stack.push(...node.getChildren());
       continue;
     }
     if (withSpan !== null) {
       const comment = readSpanComment(node, sf);
+      console.log(
+        `findAllMatchingNodes: node=${ts.SyntaxKind[node.kind]}, comment=${comment ? comment.start + '-' + comment.end : 'null'}, withSpan=${withSpan.start}-${withSpan.end}`,
+      );
       if (comment === null || withSpan.start !== comment.start || withSpan.end !== comment.end) {
         stack.push(...node.getChildren());
         continue;
