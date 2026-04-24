@@ -52,11 +52,6 @@ export function destroyDetachedRouteHandle(handle: DetachedRouteHandle): void {
   }
 }
 
-export interface ExperimentalRouteReuseStrategy {
-  shouldDestroyInjector?(route: Route): boolean;
-  retrieveStoredRouteHandles?(): Array<DetachedRouteHandleInternal>;
-}
-
 /**
  * @description
  *
@@ -84,6 +79,12 @@ export abstract class RouteReuseStrategy {
 
   /** Determines if a route should be reused */
   abstract shouldReuseRoute(future: ActivatedRouteSnapshot, curr: ActivatedRouteSnapshot): boolean;
+
+  /** Determines if the injector for the given route should be destroyed. */
+  abstract shouldDestroyInjector?(route: Route): boolean;
+
+  /** Retrieves the stored route handles. */
+  abstract retrieveStoredRouteHandles?(): Array<DetachedRouteHandleInternal>;
 }
 
 /**
