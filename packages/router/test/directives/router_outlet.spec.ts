@@ -7,7 +7,7 @@
  */
 
 import {CommonModule, NgForOf} from '@angular/common';
-import {Component, inject, Input, Type, NgModule, signal} from '@angular/core';
+import {Component, inject, Input, Type, NgModule, signal, resource} from '@angular/core';
 import {ComponentFixture, TestBed} from '@angular/core/testing';
 import {
   provideRouter,
@@ -16,6 +16,8 @@ import {
   RouterOutlet,
   withComponentInputBinding,
   ROUTER_OUTLET_DATA,
+  withRouterResources,
+  nonBlocking,
 } from '../../index';
 import {RouterTestingHarness} from '../../testing';
 import {InjectionToken} from '../../../core/src/di';
@@ -471,6 +473,114 @@ describe('component input binding', () => {
     expect(harness.routeNativeElement!.innerText).toBe('1');
     await harness.navigateByUrl('/root/child?myInput=2');
     expect(harness.routeNativeElement!.innerText).toBe('2');
+  });
+
+  it('when keys conflict, sets inputs based on priority: resources > resolvers > data', async () => {
+    @Component({
+      template: '',
+      standalone: false,
+    })
+    class MyComponent {
+      @Input() result?: any;
+    }
+
+    @Component({
+      template: '',
+      standalone: false,
+    })
+    class MyComponentWithoutResource {
+      @Input() result?: any;
+    }
+
+    @Component({
+      template: '',
+      standalone: false,
+    })
+    class MyComponentWithoutResolver {
+      @Input() result?: any;
+    }
+
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter(
+          [
+            {
+              path: 'all',
+              component: MyComponent,
+              data: {'result': 'from data'},
+              resolve: {'result': () => 'from resolver'},
+              resources: () => ({
+                result: resource({loader: async () => 'from resource'}),
+              }),
+            },
+            {
+              path: 'no-resource',
+              component: MyComponentWithoutResource,
+              data: {'result': 'from data'},
+              resolve: {'result': () => 'from resolver'},
+            },
+            {
+              path: 'no-resolver',
+              component: MyComponentWithoutResolver,
+              data: {'result': 'from data'},
+            },
+          ],
+          withComponentInputBinding(),
+          withRouterResources(),
+        ),
+      ],
+    });
+    const harness = await RouterTestingHarness.create();
+
+    let instance = await harness.navigateByUrl('/all', MyComponent);
+    // Precedence: resources > resolvers > data
+    // resources wins, and it binds ONLY THE VALUE for blocking resources!
+    expect(typeof instance.result).toBe('string');
+    expect(instance.result).toEqual('from resource');
+
+    const instance2 = await harness.navigateByUrl('/no-resource', MyComponentWithoutResource);
+    // No resources, so resolver wins!
+    expect(typeof instance2.result).toBe('string');
+    expect(instance2.result).toEqual('from resolver');
+
+    const instance3 = await harness.navigateByUrl('/no-resolver', MyComponentWithoutResolver);
+    // No resource, no resolver, so data wins!
+    expect(typeof instance3.result).toBe('string');
+    expect(instance3.result).toEqual('from data');
+  });
+
+  it('binds the actual resource object for non-blocking resources', async () => {
+    @Component({
+      template: '',
+      standalone: false,
+    })
+    class MyComponent {
+      @Input() result?: any;
+    }
+
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter(
+          [
+            {
+              path: '**',
+              component: MyComponent,
+              resources: () => ({
+                result: nonBlocking(resource({loader: async () => 'from non-blocking resource'})),
+              }),
+            },
+          ],
+          withComponentInputBinding(),
+          withRouterResources(),
+        ),
+      ],
+    });
+    const harness = await RouterTestingHarness.create();
+
+    const instance = await harness.navigateByUrl('/', MyComponent);
+    await harness.fixture.whenStable();
+    expect(typeof instance.result).toBe('object');
+    expect(instance.result?.value()).toEqual('from non-blocking resource');
   });
 });
 

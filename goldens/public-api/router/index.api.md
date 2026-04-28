@@ -26,6 +26,7 @@ import { Provider } from '@angular/core';
 import { ProviderToken } from '@angular/core';
 import { QueryList } from '@angular/core';
 import { Renderer2 } from '@angular/core';
+import { Resource } from '@angular/core';
 import { Signal } from '@angular/core';
 import { SimpleChanges } from '@angular/core';
 import { Title } from '@angular/platform-browser';
@@ -71,6 +72,7 @@ export class ActivatedRouteSnapshot {
     // (undocumented)
     get queryParamMap(): ParamMap;
     queryParams: Params;
+    resources?: ResourceResult;
     get root(): ActivatedRouteSnapshot;
     readonly routeConfig: Route | null;
     get title(): string | undefined;
@@ -525,6 +527,9 @@ export class NavigationStart extends RouterEvent {
 }
 
 // @public
+export function nonBlocking<T, R extends Resource<T>>(res: R): R;
+
+// @public
 export class NoPreloading implements PreloadingStrategy {
     // (undocumented)
     preload(route: Route, fn: () => Observable<any>): Observable<any>;
@@ -655,6 +660,20 @@ export class ResolveStart extends RouterEvent {
 }
 
 // @public
+export interface ResourceContext {
+    data: Signal<Record<string, any>>;
+    fragment: Signal<string | null>;
+    params: Signal<Params>;
+    queryParams: Signal<Params>;
+    snapshot: ActivatedRouteSnapshot;
+}
+
+// @public
+export type ResourceResult = Record<string, Resource<unknown>> & {
+    title?: Resource<string | undefined>;
+};
+
+// @public
 export interface Route {
     canActivate?: Array<CanActivateFn | DeprecatedGuard>;
     canActivateChild?: Array<CanActivateChildFn | DeprecatedGuard>;
@@ -674,6 +693,7 @@ export interface Route {
     providers?: Array<Provider | EnvironmentProviders>;
     redirectTo?: string | RedirectFunction;
     resolve?: ResolveData;
+    resources?: (ctx: ResourceContext) => ResourceResult | Promise<ResourceResult>;
     runGuardsAndResolvers?: RunGuardsAndResolvers;
     title?: string | Type<Resolve<string>> | ResolveFn<string>;
 }
@@ -791,7 +811,7 @@ export interface RouterFeature<FeatureKind extends RouterFeatureKind> {
 }
 
 // @public
-export type RouterFeatures = PreloadingFeature | DebugTracingFeature | InitialNavigationFeature | InMemoryScrollingFeature | RouterConfigurationFeature | NavigationErrorHandlerFeature | ComponentInputBindingFeature | ViewTransitionsFeature | ExperimentalAutoCleanupInjectorsFeature | RouterHashLocationFeature | ExperimentalPlatformNavigationFeature;
+export type RouterFeatures = PreloadingFeature | DebugTracingFeature | InitialNavigationFeature | InMemoryScrollingFeature | RouterConfigurationFeature | NavigationErrorHandlerFeature | ComponentInputBindingFeature | ViewTransitionsFeature | ExperimentalAutoCleanupInjectorsFeature | RouterHashLocationFeature | RouterResourcesFeature | ExperimentalPlatformNavigationFeature;
 
 // @public
 export type RouterHashLocationFeature = RouterFeature<RouterFeatureKind.RouterHashLocationFeature>;
@@ -959,6 +979,9 @@ export class RouterPreloader implements OnDestroy {
 }
 
 // @public
+export type RouterResourcesFeature = RouterFeature<RouterFeatureKind.RouterResourcesFeature>;
+
+// @public
 export class RouterState extends Tree<ActivatedRoute> {
     snapshot: RouterStateSnapshot;
     // (undocumented)
@@ -1019,6 +1042,7 @@ export class Scroll {
 
 // @public
 export abstract class TitleStrategy {
+    constructor();
     // (undocumented)
     buildTitle(snapshot: RouterStateSnapshot): string | undefined;
     getResolvedTitleForRoute(snapshot: ActivatedRouteSnapshot): string | undefined;
@@ -1168,6 +1192,9 @@ export function withPreloading(preloadingStrategy: Type<PreloadingStrategy>): Pr
 
 // @public
 export function withRouterConfig(options: RouterConfigOptions): RouterConfigurationFeature;
+
+// @public
+export function withRouterResources(): RouterResourcesFeature;
 
 // @public
 export function withViewTransitions(options?: ViewTransitionsFeatureOptions): ViewTransitionsFeature;

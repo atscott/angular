@@ -35,9 +35,14 @@ import {
 } from '@angular/core';
 import {of, Subject} from 'rxjs';
 
-import {INPUT_BINDER, RoutedComponentInputBinder} from './directives/router_outlet';
+import {
+  createResourceEffects,
+  INPUT_BINDER,
+  RoutedComponentInputBinder,
+} from './directives/router_outlet';
 import {Event, NavigationError, stringifyEvent} from './events';
 import {RedirectCommand, Routes} from './models';
+import {initializeTitleStrategy, titleRunner} from './page_title_strategy';
 import {NAVIGATION_ERROR_HANDLER, NavigationTransitions} from './navigation_transition';
 import {ROUTE_INJECTOR_CLEANUP, routeInjectorCleanup} from './route_injector_cleanup';
 import {Router} from './router';
@@ -48,12 +53,13 @@ import {
   RouterConfigOptions,
 } from './router_config';
 import {ROUTES} from './router_config_loader';
+import {setupAndRunResources} from './operators/setup_and_run_resources';
 import {PreloadingStrategy, RouterPreloader} from './router_preloader';
 
 import {ROUTER_SCROLLER, RouterScroller} from './router_scroller';
 
 import {getLoadedRoutes, getRouterInstance, navigateByUrl} from './router_devtools';
-import {ActivatedRoute} from './router_state';
+import {ActivatedRoute, initializeActivatedRoute} from './router_state';
 import {NavigationStateManager} from './statemanager/navigation_state_manager';
 import {StateManager} from './statemanager/state_manager';
 import {afterNextNavigation} from './utils/navigations';
@@ -64,7 +70,6 @@ import {
   ViewTransitionsFeatureOptions,
 } from './utils/view_transition';
 import {ROUTER_RESOURCES_FEATURE} from './router_resource_feature';
-import {setupActivatedRouteInjectors} from './operators/setup_and_run_resources';
 
 /**
  * Sets up providers necessary to enable `Router` functionality for the application.
@@ -840,7 +845,11 @@ export function withComponentInputBinding(
   options: ComponentInputBindingOptions = {},
 ): ComponentInputBindingFeature {
   const providers = [
-    {provide: INPUT_BINDER, useFactory: () => new RoutedComponentInputBinder(options)},
+    {
+      provide: INPUT_BINDER,
+      useFactory: () =>
+        new RoutedComponentInputBinder(options, inject(ROUTER_RESOURCES_FEATURE, {optional: true})),
+    },
   ];
 
   return routerFeature(RouterFeatureKind.ComponentInputBindingFeature, providers);
@@ -888,18 +897,50 @@ export function withViewTransitions(
   return routerFeature(RouterFeatureKind.ViewTransitionsFeature, providers);
 }
 
-export type RouterResourcesFeature =
-  RouterFeature<RouterFeatureKind.ViewTransitionsFeature /* temporary - not public API. Must reuse existing */>;
+/**
+ * A type alias for providers returned by `withRouterResources` for use with `provideRouter`.
+ *
+ * @see {@link withRouterResources}
+ * @see {@link provideRouter}
+ *
+ * @experimental
+ */
+export type RouterResourcesFeature = RouterFeature<RouterFeatureKind.RouterResourcesFeature>;
+
+/**
+ * Enables `resources` capabilities for Route definitions.
+ *
+ * @usageNotes
+ *
+ * Basic example of how you can enable the feature:
+ * ```ts
+ * const appRoutes: Routes = [];
+ * bootstrapApplication(AppComponent,
+ *   {
+ *     providers: [
+ *       provideRouter(appRoutes, withRouterResources())
+ *     ]
+ *   }
+ * );
+ * ```
+ *
+ * @experimental
+ * @returns A set of providers for use with `provideRouter`.
+ */
 export function withRouterResources(): RouterResourcesFeature {
   const providers = [
     {
       provide: ROUTER_RESOURCES_FEATURE,
       useValue: {
-        operator: setupActivatedRouteInjectors,
+        operator: setupAndRunResources,
+        createResourceEffects,
+        initializeTitleStrategy,
+        titleRunner,
+        initializeActivatedRoute,
       },
     },
   ];
-  return routerFeature(RouterFeatureKind.ViewTransitionsFeature, providers);
+  return routerFeature(RouterFeatureKind.RouterResourcesFeature, providers);
 }
 
 /**
@@ -923,6 +964,7 @@ export type RouterFeatures =
   | ViewTransitionsFeature
   | ExperimentalAutoCleanupInjectorsFeature
   | RouterHashLocationFeature
+  | RouterResourcesFeature
   | ExperimentalPlatformNavigationFeature;
 
 /**
@@ -940,5 +982,6 @@ export const enum RouterFeatureKind {
   ComponentInputBindingFeature,
   ViewTransitionsFeature,
   ExperimentalAutoCleanupInjectorsFeature,
+  RouterResourcesFeature,
   ExperimentalPlatformNavigationFeature,
 }
