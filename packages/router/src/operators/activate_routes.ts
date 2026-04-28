@@ -139,6 +139,13 @@ export class ActivateRoutes {
       context.attachRef = null;
       context.route = null;
     }
+
+    // We explicitly invoke destruction of the route's `_resourceInjector` here when the route is
+    // natively unmounted by the Router. Note that this method (`deactivateRouteAndOutlet`) is
+    // expressly skipped when a route is being detached for `RouteReuseStrategy`, allowing its
+    // resources to be preserved. Those preserved injectors are eventually managed and destroyed
+    // manually via `destroyDetachedRouteHandle()`.
+    route.value._resourceInjector?.destroy();
   }
 
   private activateChildRoutes(

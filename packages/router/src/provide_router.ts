@@ -14,6 +14,7 @@ import {
   ViewportScroller,
   ɵNavigationAdapterForLocation,
 } from '@angular/common';
+import {Title} from '@angular/platform-browser';
 import {
   APP_BOOTSTRAP_LISTENER,
   ApplicationRef,
@@ -32,12 +33,19 @@ import {
   runInInjectionContext,
   Type,
   ɵpublishExternalGlobalUtil,
+  effect,
+  Resource,
+  computed,
+  signal,
+  ɵWritable as Writable,
 } from '@angular/core';
 import {of, Subject} from 'rxjs';
 
+import {convertToParamMap} from './shared';
 import {INPUT_BINDER, RoutedComponentInputBinder} from './directives/router_outlet';
 import {Event, NavigationError, stringifyEvent} from './events';
 import {RedirectCommand, Routes} from './models';
+import type {TitleStrategy} from './page_title_strategy';
 import {NAVIGATION_ERROR_HANDLER, NavigationTransitions} from './navigation_transition';
 import {ROUTE_INJECTOR_CLEANUP, routeInjectorCleanup} from './route_injector_cleanup';
 import {Router} from './router';
@@ -48,12 +56,16 @@ import {
   RouterConfigOptions,
 } from './router_config';
 import {ROUTES} from './router_config_loader';
+import {setupAndRunResources} from './operators/setup_and_run_resources';
+import {waitForBlockingResources} from './operators/wait_for_blocking_resources';
 import {PreloadingStrategy, RouterPreloader} from './router_preloader';
 
 import {ROUTER_SCROLLER, RouterScroller} from './router_scroller';
 
 import {getLoadedRoutes, getRouterInstance, navigateByUrl} from './router_devtools';
-import {ActivatedRoute} from './router_state';
+import {ActivatedRoute, ActivatedRouteSnapshot, RouterState} from './router_state';
+import {ROUTER_RESOURCES_FEATURE} from './resource_implementation_tokens';
+import {TreeNode} from './utils/tree';
 import {NavigationStateManager} from './statemanager/navigation_state_manager';
 import {StateManager} from './statemanager/state_manager';
 import {afterNextNavigation} from './utils/navigations';
@@ -845,6 +857,145 @@ export function withComponentInputBinding(
 }
 
 /**
+ * A type alias for providers returned by `withRouterResources` for use with `provideRouter`.
+ *
+ * @see {@link withRouterResources}
+ * @see {@link provideRouter}
+ *
+ * @experimental
+ */
+export type RouterResourcesFeature = RouterFeature<RouterFeatureKind.RouterResourcesFeature>;
+
+/**
+ * Enables `resources` and `eagerResources` capabilities for Route definitions.
+ *
+ * @usageNotes
+ *
+ * Basic example of how you can enable the feature:
+ * ```ts
+ * const appRoutes: Routes = [];
+ * bootstrapApplication(AppComponent,
+ *   {
+ *     providers: [
+ *       provideRouter(appRoutes, withRouterResources())
+ *     ]
+ *   }
+ * );
+ * ```
+ *
+ * @experimental
+ * @returns A set of providers for use with `provideRouter`.
+ */
+export function withRouterResources(): RouterResourcesFeature {
+  const providers = [
+    {
+      provide: ROUTER_RESOURCES_FEATURE,
+      useValue: {
+        operator: setupAndRunResources,
+        waitForBlocking: waitForBlockingResources,
+        initializeTitleStrategy: (strategy: TitleStrategy) => {
+          const original = strategy.getResolvedTitleForRoute.bind(strategy);
+          strategy.getResolvedTitleForRoute = (snapshot: ActivatedRouteSnapshot) => {
+            const res = snapshot.resources?.title ?? snapshot.eagerResources?.title;
+            if (res) {
+              strategy.currentTitleResource = res;
+              const val = res.value();
+              return typeof val === 'string' ? val : undefined;
+            }
+            return original(snapshot);
+          };
+        },
+        titleRunner: (
+          titleResource: Resource<unknown>,
+          titleService: Title,
+          injector: Injector,
+        ) => {
+          let lastTitle: string | undefined = undefined;
+          return effect(
+            () => {
+              const currentVal = titleResource.value();
+              if (typeof currentVal === 'string') {
+                lastTitle = currentVal;
+              }
+              if (lastTitle !== undefined) {
+                titleService.setTitle(lastTitle);
+              }
+            },
+            {injector},
+          );
+        },
+        syncComponent: (
+          loadedComponent: Type<any>,
+          targetRouterState: RouterState | null,
+          route: ActivatedRouteSnapshot,
+        ) => {
+          const routerStateNode = targetRouterState?._root;
+          if (routerStateNode) {
+            const matchRouterState = (node: TreeNode<ActivatedRoute>) => {
+              if (node.value.snapshot === route || node.value._futureSnapshot === route) {
+                node.value.component = loadedComponent;
+              }
+              node.children.forEach(matchRouterState);
+            };
+            matchRouterState(routerStateNode);
+          }
+        },
+        initializeActivatedRoute: (route: ActivatedRoute) => {
+          const writableRoute = route as Writable<ActivatedRoute>;
+          writableRoute.pending = signal(false);
+          writableRoute.paramsSignal = computed(() =>
+            route.pending() || !route.snapshot
+              ? route._futureSnapshot.params
+              : route.snapshot.params,
+          );
+          writableRoute.queryParamsSignal = computed(() =>
+            route.pending() || !route.snapshot
+              ? route._futureSnapshot.queryParams
+              : route.snapshot.queryParams,
+          );
+          writableRoute.paramMapSignal = computed(() => convertToParamMap(route.paramsSignal()));
+          writableRoute.queryParamMapSignal = computed(() =>
+            convertToParamMap(route.queryParamsSignal()),
+          );
+          writableRoute.fragmentSignal = computed(() =>
+            route.pending() || !route.snapshot
+              ? route._futureSnapshot.fragment
+              : route.snapshot.fragment,
+          );
+          writableRoute.dataSignal = computed(() =>
+            route.pending() || !route.snapshot ? route._futureSnapshot.data : route.snapshot.data,
+          );
+
+          writableRoute._setPending = (snapshot: ActivatedRouteSnapshot) => {
+            route._futureSnapshot = snapshot;
+            route.pending.set(true);
+          };
+
+          writableRoute._commit = () => {
+            route.pending.set(false);
+          };
+
+          writableRoute._rollback = () => {
+            for (const key of ['resources', 'eagerResources'] as const) {
+              const futureResources = route._futureSnapshot[key];
+              if (!futureResources || route.snapshot?.[key]) {
+                continue;
+              }
+            }
+
+            if (!route.snapshot?.resources && !route.snapshot?.eagerResources) {
+              route._resourceInjector?.destroy();
+            }
+            route.pending.set(false);
+          };
+        },
+      },
+    },
+  ];
+  return routerFeature(RouterFeatureKind.RouterResourcesFeature, providers);
+}
+
+/**
  * Enables view transitions in the Router by running the route activation and deactivation inside of
  * `document.startViewTransition`.
  *
@@ -907,6 +1058,7 @@ export type RouterFeatures =
   | ViewTransitionsFeature
   | ExperimentalAutoCleanupInjectorsFeature
   | RouterHashLocationFeature
+  | RouterResourcesFeature
   | ExperimentalPlatformNavigationFeature;
 
 /**
@@ -924,5 +1076,6 @@ export const enum RouterFeatureKind {
   ComponentInputBindingFeature,
   ViewTransitionsFeature,
   ExperimentalAutoCleanupInjectorsFeature,
+  RouterResourcesFeature,
   ExperimentalPlatformNavigationFeature,
 }

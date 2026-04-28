@@ -64,6 +64,7 @@ import {ActivateRoutes} from './operators/activate_routes';
 import {checkGuards} from './operators/check_guards';
 import {recognize} from './operators/recognize';
 import {resolveData} from './operators/resolve_data';
+import {ROUTER_RESOURCES_FEATURE} from './resource_implementation_tokens';
 import {switchTap} from './operators/switch_tap';
 import {TitleStrategy} from './page_title_strategy';
 import {ROUTER_CONFIGURATION} from './router_config';
@@ -84,6 +85,8 @@ import {Checks, getAllRouteGuards} from './utils/preactivation';
 import {CREATE_VIEW_TRANSITION} from './utils/view_transition';
 import {abortSignalToObservable} from './utils/abort_signal_to_observable';
 import type {Router} from './router';
+import {TreeNode} from './utils/tree';
+import {ResourceFeatureKind} from './operators/setup_and_run_resources';
 
 /**
  * @description
@@ -331,6 +334,9 @@ export interface NavigationTransition {
 
   routesRecognizeHandler: {deferredHandle?: Promise<void>};
   beforeActivateHandler: {deferredHandle?: Promise<void>};
+
+  newlyCreatedRoutes?: Set<ActivatedRoute>;
+  blockingResources?: Promise<any>[];
 }
 
 export const NAVIGATION_ERROR_HANDLER = new InjectionToken<
@@ -368,6 +374,7 @@ export class NavigationTransitions {
   private readonly urlHandlingStrategy = inject(UrlHandlingStrategy);
   private readonly createViewTransition = inject(CREATE_VIEW_TRANSITION, {optional: true});
   private readonly navigationErrorHandler = inject(NAVIGATION_ERROR_HANDLER, {optional: true});
+  private readonly resourcesFeature = inject(ROUTER_RESOURCES_FEATURE, {optional: true});
 
   navigationId = 0;
   get hasRequestedNavigation() {
@@ -437,6 +444,29 @@ export class NavigationTransitions {
     });
   }
 
+  private updateTargetRouterState(
+    router: Router,
+    t: NavigationTransition,
+    newlyCreatedRoutes?: Set<ActivatedRoute>,
+  ): NavigationTransition {
+    const targetRouterState = createRouterState(
+      router.routeReuseStrategy,
+      t.targetSnapshot!,
+      t.currentRouterState,
+      newlyCreatedRoutes,
+    );
+    this.currentTransition = {
+      ...t,
+      targetRouterState,
+      newlyCreatedRoutes,
+    };
+    this.currentNavigation.update((nav) => {
+      nav!.targetRouterState = targetRouterState;
+      return nav;
+    });
+    return this.currentTransition;
+  }
+
   setupNavigations(router: Router): Observable<NavigationTransition> {
     this.transitions = new BehaviorSubject<NavigationTransition | null>(null);
     return this.transitions.pipe(
@@ -444,6 +474,7 @@ export class NavigationTransitions {
 
       // Using switchMap so we cancel executing navigations when a new one comes in
       switchMap((overallTransitionState) => {
+        let abortable = true;
         let completedOrAborted = false;
         const abortController = new AbortController();
         const shouldContinueNavigation = () => {
@@ -627,6 +658,18 @@ export class NavigationTransitions {
             }
           }),
 
+          map((t: NavigationTransition) => {
+            if (this.resourcesFeature) {
+              const newlyCreatedRoutes = new Set<ActivatedRoute>();
+              t = this.updateTargetRouterState(router, t, newlyCreatedRoutes);
+              overallTransitionState = t;
+              return t;
+            }
+            return t;
+          }),
+
+          this.resourcesFeature?.operator(ResourceFeatureKind.EagerResources) ?? ((t) => t),
+
           map((t) => {
             const guardsStart = new GuardsCheckStart(
               t.id,
@@ -718,8 +761,10 @@ export class NavigationTransitions {
           switchTap((t: NavigationTransition) => {
             const loadComponents = (route: ActivatedRouteSnapshot): Array<Promise<void>> => {
               const loaders: Array<Promise<void>> = [];
+
               if (route.routeConfig?._loadedComponent) {
                 route.component = route.routeConfig?._loadedComponent;
+                this.resourcesFeature?.syncComponent(route.component, t.targetRouterState, route);
               } else if (route.routeConfig?.loadComponent) {
                 const injector = route._environmentInjector;
                 loaders.push(
@@ -727,6 +772,11 @@ export class NavigationTransitions {
                     .loadComponent(injector, route.routeConfig)
                     .then((loadedComponent) => {
                       route.component = loadedComponent;
+                      this.resourcesFeature?.syncComponent(
+                        loadedComponent,
+                        t.targetRouterState,
+                        route,
+                      );
                     }),
                 );
               }
@@ -762,19 +812,20 @@ export class NavigationTransitions {
           // this is done as a safety measure to avoid surfacing this error (#49567).
           take(1),
 
-          switchMap((t: NavigationTransition) => {
-            const targetRouterState = createRouterState(
-              router.routeReuseStrategy,
-              t.targetSnapshot!,
-              t.currentRouterState,
-            );
-            this.currentTransition = overallTransitionState = t = {...t, targetRouterState};
-            this.currentNavigation.update((nav) => {
-              nav!.targetRouterState = targetRouterState;
-              return nav;
-            });
+          map((t: NavigationTransition) => {
+            if (!t.targetRouterState) {
+              t = this.updateTargetRouterState(router, t);
+              overallTransitionState = t;
+            }
+            return t;
+          }),
 
+          this.resourcesFeature?.operator(ResourceFeatureKind.Resources) ?? ((t) => t),
+          this.resourcesFeature?.waitForBlocking(this.environmentInjector) ?? ((t) => t),
+
+          switchMap((t: NavigationTransition) => {
             this.events.next(new BeforeActivateRoutes());
+            abortable = false;
             const deferred = overallTransitionState.beforeActivateHandler.deferredHandle;
             return deferred ? from(deferred.then(() => t)) : of(t);
           }),
@@ -791,6 +842,12 @@ export class NavigationTransitions {
             if (!shouldContinueNavigation()) {
               return;
             }
+
+            const traverse = (node: TreeNode<ActivatedRoute>) => {
+              node.value._commit();
+              node.children.forEach(traverse);
+            };
+            traverse(t.targetRouterState!._root);
 
             completedOrAborted = true;
             this.currentNavigation.update((nav) => {
@@ -811,8 +868,8 @@ export class NavigationTransitions {
 
           takeUntil(
             abortSignalToObservable(abortController.signal).pipe(
-              // Ignore aborts if we are already completed, canceled, or are in the activation stage (we have targetRouterState)
-              filter(() => !completedOrAborted && !overallTransitionState.targetRouterState),
+              // Ignore aborts if we are already completed, canceled, or the transition has entered the non-abortable activation stage
+              filter(() => !completedOrAborted && abortable),
               tap(() => {
                 this.cancelNavigationTransition(
                   overallTransitionState,
@@ -876,10 +933,13 @@ export class NavigationTransitions {
             // execute anything in practice because other resources have already
             // been released and destroyed.
             if (this.destroyed) {
+              rollbackState(overallTransitionState);
               overallTransitionState.resolve(false);
               return EMPTY;
             }
 
+            completedOrAborted = true;
+            rollbackState(overallTransitionState);
             /* This error type is issued during Redirect, and is handled as a
              * cancellation rather than an error. */
             if (isNavigationCancelingError(e)) {
@@ -970,6 +1030,7 @@ export class NavigationTransitions {
     reason: string,
     code: NavigationCancellationCode,
   ) {
+    rollbackState(t);
     const navCancel = new NavigationCancel(
       t.id,
       this.urlSerializer.serialize(t.extractedUrl),
@@ -1021,4 +1082,14 @@ export class NavigationTransitions {
 
 export function isBrowserTriggeredNavigation(source: NavigationTrigger) {
   return source !== IMPERATIVE_NAVIGATION;
+}
+
+function rollbackState(t: NavigationTransition): void {
+  if (t.targetRouterState) {
+    const traverse = (node: TreeNode<ActivatedRoute>) => {
+      node.value._rollback();
+      node.children.forEach(traverse);
+    };
+    traverse(t.targetRouterState._root);
+  }
 }

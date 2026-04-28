@@ -12,12 +12,63 @@ import {
   NgModuleFactory,
   Provider,
   ProviderToken,
+  Signal,
   Type,
+  Resource,
 } from '@angular/core';
 import {Observable} from 'rxjs';
 
 import type {ActivatedRouteSnapshot, RouterStateSnapshot} from './router_state';
+import {ParamMap, Params} from './shared';
 import type {UrlSegment, UrlSegmentGroup, UrlTree} from './url_tree';
+
+/**
+ * The expected return type of a `resources` function.
+ * @experimental
+ */
+export type ResourceResult = Record<string, Resource<unknown>> & {
+  title?: Resource<string | undefined>;
+};
+
+// Developer notes: properties are exposed as a plain Record (`Params`) rather than a `ParamMap`
+// to allow future type-check layers to infer exact keys (e.g., `{ id: string }`).
+// Same applies to data and queryparams.
+/**
+ * The contextual information provided to a `resources` function.
+ * @experimental
+ */
+export interface ResourceContext {
+  /**
+   * The matrix parameters of the route.
+   *
+   * @experimental
+   */
+  params: Signal<Params>;
+  /**
+   * The query parameters of the route.
+   *
+   * @experimental
+   */
+  queryParams: Signal<Params>;
+  /**
+   * The URL fragment.
+   * @experimental
+   */
+  fragment: Signal<string | null>;
+  /**
+   * Data provided in the route configuration.
+   *
+   * @experimental
+   */
+  data: Signal<Record<string, any>>;
+  /**
+   * The static activated route snapshot for this navigation.
+   * Useful for reading initial static configuration statically without
+   * reacting to future parameter changes on reused routes.
+   * @experimental
+   */
+  snapshot: ActivatedRouteSnapshot;
+}
 
 /**
  * How to handle a navigation request to the current URL. One of:
@@ -724,6 +775,19 @@ export interface Route {
    * @see [Resolve](guide/routing/data-resolvers#what-are-data-resolvers)
    */
   resolve?: ResolveData;
+  /**
+   * A function that returns a map of resources.
+   * This function is executed during the Main Loading Phase of a navigation.
+   * @experimental
+   */
+  resources?: (ctx: ResourceContext) => ResourceResult | Promise<ResourceResult>;
+  /**
+   * A function that returns a map of resources.
+   * This function is executed immediately after matching (early in the navigation).
+   *
+   * @experimental
+   */
+  eagerResources?: (ctx: ResourceContext) => ResourceResult | Promise<ResourceResult>;
   /**
    * An array of child `Route` objects that specifies a nested route
    * configuration.

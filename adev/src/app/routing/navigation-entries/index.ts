@@ -400,6 +400,12 @@ export const DOCS_SUB_NAVIGATION_DATA: NavigationItem[] = [
             contentPath: 'guide/routing/route-guards',
           },
           {
+            label: 'Data fetching with resources',
+            path: 'guide/routing/data-fetching-with-resources',
+            contentPath: 'guide/routing/data-fetching-with-resources',
+            status: 'new',
+          },
+          {
             label: 'Route data resolvers',
             path: 'guide/routing/data-resolvers',
             contentPath: 'guide/routing/data-resolvers',

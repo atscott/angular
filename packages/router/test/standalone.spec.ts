@@ -233,6 +233,7 @@ describe('standalone in Router API', () => {
       @Component({
         template: `child`,
         standalone: false,
+        host: {'ng-id': 'StandaloneChildCmp'},
       })
       class ChildCmp {
         constructor(readonly service: ServiceBase) {}
@@ -241,6 +242,7 @@ describe('standalone in Router API', () => {
       @Component({
         template: `child2`,
         standalone: false,
+        host: {'ng-id': 'StandaloneChildCmp2'},
       })
       class ChildCmp2 {
         constructor(readonly service: ServiceBase) {}

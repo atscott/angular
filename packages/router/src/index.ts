@@ -60,6 +60,8 @@ export {
   Resolve,
   ResolveData,
   ResolveFn,
+  ResourceContext,
+  ResourceResult,
   Route,
   Routes,
   RunGuardsAndResolvers,
@@ -85,6 +87,7 @@ export {
   RouterFeature,
   RouterFeatures,
   RouterHashLocationFeature,
+  RouterResourcesFeature,
   ViewTransitionsFeature,
   withComponentInputBinding,
   withDebugTracing,
@@ -97,6 +100,7 @@ export {
   withNavigationErrorHandler,
   withPreloading,
   withRouterConfig,
+  withRouterResources,
   withViewTransitions,
 } from './provide_router';
 
@@ -132,6 +136,7 @@ export {
 } from './router_state';
 export {convertToParamMap, defaultUrlMatcher, ParamMap, Params, PRIMARY_OUTLET} from './shared';
 export {UrlHandlingStrategy} from './url_handling_strategy';
+export {nonBlocking} from './router_resource';
 export {
   DefaultUrlSerializer,
   isActive,

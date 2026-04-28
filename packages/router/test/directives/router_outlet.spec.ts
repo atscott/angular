@@ -7,7 +7,7 @@
  */
 
 import {CommonModule, NgForOf} from '@angular/common';
-import {Component, inject, Input, Type, NgModule, signal} from '@angular/core';
+import {Component, inject, Input, Type, NgModule, signal, resource} from '@angular/core';
 import {ComponentFixture, TestBed} from '@angular/core/testing';
 import {
   provideRouter,
@@ -16,6 +16,7 @@ import {
   RouterOutlet,
   withComponentInputBinding,
   ROUTER_OUTLET_DATA,
+  withRouterResources,
 } from '../../index';
 import {RouterTestingHarness} from '../../testing';
 import {InjectionToken} from '../../../core/src/di';
@@ -104,16 +105,19 @@ describe('router outlet name', () => {
 
     @Component({
       template: 'component 1',
+      host: {'ng-id': 'RouterOutletCmp1'},
     })
     class Cmp1 {}
 
     @Component({
       template: 'component 2',
+      host: {'ng-id': 'RouterOutletCmp2'},
     })
     class Cmp2 {}
 
     @Component({
       template: 'component 3',
+      host: {'ng-id': 'RouterOutletCmp3'},
     })
     class Cmp3 {}
 
@@ -442,6 +446,89 @@ describe('component input binding', () => {
     expect(harness.routeNativeElement!.innerText).toBe('1');
     await harness.navigateByUrl('/root/child?myInput=2');
     expect(harness.routeNativeElement!.innerText).toBe('2');
+  });
+
+  it('when keys conflict, sets inputs based on priority: resources > resolvers > eager resources > data', async () => {
+    @Component({
+      template: '',
+      standalone: false,
+    })
+    class MyComponent {
+      @Input() result?: any;
+    }
+
+    @Component({
+      template: '',
+      standalone: false,
+    })
+    class MyComponentWithoutResource {
+      @Input() result?: any;
+    }
+
+    @Component({
+      template: '',
+      standalone: false,
+    })
+    class MyComponentWithoutResolver {
+      @Input() result?: any;
+    }
+
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter(
+          [
+            {
+              path: 'all',
+              component: MyComponent,
+              data: {'result': 'from data'},
+              resolve: {'result': () => 'from resolver'},
+              eagerResources: () => ({
+                result: resource({loader: async () => 'from eager resource'}),
+              }),
+              resources: () => ({
+                result: resource({loader: async () => 'from resource'}),
+              }),
+            },
+            {
+              path: 'no-resource',
+              component: MyComponentWithoutResource,
+              data: {'result': 'from data'},
+              resolve: {'result': () => 'from resolver'},
+              eagerResources: () => ({
+                result: resource({loader: async () => 'from eager resource'}),
+              }),
+            },
+            {
+              path: 'no-resolver',
+              component: MyComponentWithoutResolver,
+              data: {'result': 'from data'},
+              eagerResources: () => ({
+                result: resource({loader: async () => 'from eager resource'}),
+              }),
+            },
+          ],
+          withComponentInputBinding(),
+          withRouterResources(),
+        ),
+      ],
+    });
+    const harness = await RouterTestingHarness.create();
+
+    let instance = await harness.navigateByUrl('/all', MyComponent);
+    // Precedence: resources > eager resources > resolvers > data
+    // resources wins, and it binds the actual resource object!
+    expect(typeof instance.result).toBe('object');
+    expect(instance.result?.value()).toEqual('from resource');
+
+    const instance2 = await harness.navigateByUrl('/no-resource', MyComponentWithoutResource);
+    // No resources, so eager resource wins! (It overrides resolvers).
+    expect(typeof instance2.result).toBe('object');
+    expect(instance2.result?.value()).toEqual('from eager resource');
+
+    const instance3 = await harness.navigateByUrl('/no-resolver', MyComponentWithoutResolver);
+    // No resource, no resolver, so eager resource wins!
+    expect(typeof instance3.result).toBe('object');
+    expect(instance3.result?.value()).toEqual('from eager resource');
   });
 });
 

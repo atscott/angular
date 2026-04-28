@@ -481,7 +481,13 @@ export class RoutedComponentInputBinder {
     ])
       .pipe(
         switchMap(([queryParams, params, data], index) => {
-          data = {...queryParams, ...params, ...data};
+          data = {
+            ...queryParams,
+            ...params,
+            ...data,
+            ...(activatedRoute.eagerResources || {}),
+            ...(activatedRoute.resources || {}),
+          };
           // Get the first result from the data subscription synchronously so it's available to
           // the component as soon as possible (and doesn't require a second change detection).
           if (index === 0) {
