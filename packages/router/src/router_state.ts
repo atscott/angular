@@ -6,12 +6,25 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 
-import {EnvironmentInjector, Type} from '@angular/core';
+import {
+  computed,
+  EnvironmentInjector,
+  inject,
+  signal,
+  Signal,
+  Type,
+  WritableSignal,
+  ɵWritable as Writable,
+} from '@angular/core';
 import {BehaviorSubject, Observable, of} from 'rxjs';
 import {map} from 'rxjs/operators';
 
-import {Data, ResolveData, Route} from './models';
+import {Data, ResourceResult, ResolveData, Route} from './models';
 import {convertToParamMap, ParamMap, Params, PRIMARY_OUTLET, RouteTitleKey} from './shared';
+import {
+  ROUTER_RESOURCES_FEATURE,
+  RouterResourcesFeatureImplementation,
+} from './resource_implementation_tokens';
 import {equalSegments, UrlSegment} from './url_tree';
 import {shallowEqual, shallowEqualArrays} from './utils/collection';
 import {Tree, TreeNode} from './utils/tree';
@@ -73,15 +86,18 @@ export function createEmptyState(
   const emptyData = new BehaviorSubject({});
   const emptyQueryParams = new BehaviorSubject({});
   const fragment = new BehaviorSubject<string | null>('');
-  const activated = new ActivatedRoute(
-    emptyUrl,
-    emptyParams,
-    emptyQueryParams,
-    fragment,
-    emptyData,
-    PRIMARY_OUTLET,
-    rootComponent,
-    snapshot.root,
+  const activated = injector.runInContext(
+    () =>
+      new ActivatedRoute(
+        emptyUrl,
+        emptyParams,
+        emptyQueryParams,
+        fragment,
+        emptyData,
+        PRIMARY_OUTLET,
+        rootComponent,
+        snapshot.root,
+      ),
   );
   activated.snapshot = snapshot.root;
   return new RouterState(new TreeNode<ActivatedRoute>(activated, []), snapshot);
@@ -154,6 +170,50 @@ export class ActivatedRoute {
   /** An observable of the static and resolved data of this route. */
   public data: Observable<Data>;
 
+  // =================================
+  // ===== Resource integration ======
+  // =================================
+
+  // Note for framework developers: Unlike `data` and `params`, the `resources` property
+  // is assigned once when the route is first initialized and its reference remains stable
+  // for the entire lifetime of the `ActivatedRoute` instance. Do NOT replace or swap this
+  // reference during pending navigations or route reuse, as doing so breaks reactivity
+  // for components subscribed to the underlying resource signals.
+  /**
+   * A map of resources for this route.
+   *
+   * @experimental
+   * @internal don't expose while experimental
+   */
+  resources?: ResourceResult;
+  /** @internal */
+  _resourceInjector?: EnvironmentInjector;
+  /** @internal */
+  readonly pending!: WritableSignal<boolean>;
+  // Note for framework developers: `paramsSignal`, `queryParamsSignal`, and `dataSignal`
+  // do NOT use `{equal: shallowEqual}`. Even though navigations can re-emit structurally
+  // identical parameters, we rely on the default strict equality (`===`) so that any consumer
+  // depending on the entire object is correctly invalidated. This encourages developers to properly
+  // project nested scalar properties (e.g. `paramMap().get('id')`) instead of subscribing to the
+  // naked object. Furthermore, `shallowEqual` unsafely relies on mutations (`.sort()`) for generic
+  // arrays, making it unsuitable for signals that might carry complex `data` objects.
+  /** @internal */
+  readonly paramsSignal!: Signal<Params>;
+  /** @internal */
+  readonly queryParamsSignal!: Signal<Params>;
+  /** @internal */
+  readonly paramMapSignal!: Signal<ParamMap>;
+  /** @internal */
+  readonly queryParamMapSignal!: Signal<ParamMap>;
+  /** @internal */
+  readonly fragmentSignal!: Signal<string | null>;
+  /** @internal */
+  readonly dataSignal!: Signal<Data>;
+  /** @internal */
+  _commit() {}
+  /** @internal */
+  _rollback() {}
+
   /** @internal */
   constructor(
     /** @internal */
@@ -180,6 +240,15 @@ export class ActivatedRoute {
     this.queryParams = queryParamsSubject;
     this.fragment = fragmentSubject;
     this.data = dataSubject;
+
+    let feature: RouterResourcesFeatureImplementation | null = null;
+    try {
+      feature = inject(ROUTER_RESOURCES_FEATURE, {optional: true});
+    } catch {
+      // Ignored because we need to be non-breaking
+    }
+
+    feature?.initializeActivatedRoute(this);
   }
 
   /** The configuration used to match this route. */
@@ -235,6 +304,12 @@ export class ActivatedRoute {
 
   toString(): string {
     return this.snapshot ? this.snapshot.toString() : `Future(${this._futureSnapshot})`;
+  }
+
+  /** @internal */
+  _setPending(snapshot: ActivatedRouteSnapshot): void {
+    this._futureSnapshot = snapshot;
+    this.pending?.set(true);
   }
 }
 
@@ -344,6 +419,11 @@ export class ActivatedRouteSnapshot {
   _queryParamMap?: ParamMap;
   /** @internal */
   readonly _environmentInjector: EnvironmentInjector;
+  /**
+   * The result of running the route's resources function.
+   * @experimental
+   */
+  resources?: ResourceResult;
 
   /** The resolved route title */
   get title(): string | undefined {
@@ -480,7 +560,7 @@ export class RouterStateSnapshot extends Tree<ActivatedRouteSnapshot> {
   }
 }
 
-function setRouterState<U, T extends {_routerState: U}>(state: U, node: TreeNode<T>): void {
+export function setRouterState<U, T extends {_routerState: U}>(state: U, node: TreeNode<T>): void {
   node.value._routerState = state;
   node.children.forEach((c) => setRouterState(state, c));
 }
@@ -521,6 +601,48 @@ export function advanceActivatedRoute(route: ActivatedRoute): void {
     // this is for resolved data
     route.dataSubject.next(route._futureSnapshot.data);
   }
+}
+
+export function initializeActivatedRoute(route: ActivatedRoute): void {
+  const writableRoute = route as Writable<ActivatedRoute>;
+  writableRoute.pending = signal(false);
+
+  writableRoute.paramsSignal = computed(() =>
+    route.pending() || !route.snapshot ? route._futureSnapshot.params : route.snapshot.params,
+  );
+
+  writableRoute.queryParamsSignal = computed(() =>
+    route.pending() || !route.snapshot
+      ? route._futureSnapshot.queryParams
+      : route.snapshot.queryParams,
+  );
+
+  writableRoute.paramMapSignal = computed(() => convertToParamMap(route.paramsSignal()));
+  writableRoute.queryParamMapSignal = computed(() => convertToParamMap(route.queryParamsSignal()));
+
+  writableRoute.fragmentSignal = computed(() =>
+    route.pending() || !route.snapshot ? route._futureSnapshot.fragment : route.snapshot.fragment,
+  );
+
+  writableRoute.dataSignal = computed(() =>
+    route.pending() || !route.snapshot ? route._futureSnapshot.data : route.snapshot.data,
+  );
+
+  writableRoute._setPending = (snapshot: ActivatedRouteSnapshot) => {
+    route._futureSnapshot = snapshot;
+    route.pending.set(true);
+  };
+
+  writableRoute._commit = () => {
+    route.pending.set(false);
+  };
+
+  writableRoute._rollback = () => {
+    if (!route.snapshot?.resources) {
+      route._resourceInjector?.destroy();
+    }
+    route.pending.set(false);
+  };
 }
 
 export function equalParamsAndUrlSegments(

@@ -36,7 +36,7 @@ describe('create router state', () => {
   const emptyState = () => createEmptyState(RootComponent, TestBed.inject(EnvironmentInjector));
 
   it('should create new state', async () => {
-    const state = createRouterState(
+    const {state} = createRouterState(
       reuseStrategy,
       await createState(
         [
@@ -64,13 +64,13 @@ describe('create router state', () => {
       {path: 'c', component: ComponentC, outlet: 'left'},
     ];
 
-    const prevState = createRouterState(
+    const {state: prevState} = createRouterState(
       reuseStrategy,
       await createState(config, 'a(left:b)'),
       emptyState(),
     );
     advanceState(prevState);
-    const state = createRouterState(
+    const {state} = createRouterState(
       reuseStrategy,
       await createState(config, 'a(left:c)'),
       prevState,
@@ -96,13 +96,13 @@ describe('create router state', () => {
       },
     ];
 
-    const prevState = createRouterState(
+    const {state: prevState} = createRouterState(
       reuseStrategy,
       await createState(config, 'a/1;p=11/(b//right:c)'),
       emptyState(),
     );
     advanceState(prevState);
-    const state = createRouterState(
+    const {state} = createRouterState(
       reuseStrategy,
       await createState(config, 'a/2;p=22/(b//right:c)'),
       prevState,
@@ -130,7 +130,7 @@ describe('create router state', () => {
     ];
     spyOn(reuseStrategy, 'retrieve');
 
-    const prevState = createRouterState(
+    const {state: prevState} = createRouterState(
       reuseStrategy,
       await createState(config, 'a(left:b)'),
       emptyState(),
@@ -146,7 +146,7 @@ describe('create router state', () => {
       {path: 'product/:id', component: ComponentB},
     ];
     spyOn(reuseStrategy, 'shouldReuseRoute').and.callThrough();
-    const previousState = createRouterState(
+    const {state: previousState} = createRouterState(
       reuseStrategy,
       await createState(config, ''),
       emptyState(),

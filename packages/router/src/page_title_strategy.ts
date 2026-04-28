@@ -6,11 +6,15 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 
-import {inject, Injectable, Service} from '@angular/core';
+import {inject, EffectRef, Injector, Resource, effect, Service} from '@angular/core';
 import {Title} from '@angular/platform-browser';
 
 import {ActivatedRouteSnapshot, RouterStateSnapshot} from './router_state';
 import {PRIMARY_OUTLET, RouteTitleKey} from './shared';
+import {
+  ROUTER_RESOURCES_FEATURE,
+  RouterResourcesFeatureImplementation,
+} from './resource_implementation_tokens';
 
 /**
  * Provides a strategy for setting the page title after a router navigation.
@@ -40,6 +44,22 @@ export abstract class TitleStrategy {
   /** Performs the application title update. */
   abstract updateTitle(snapshot: RouterStateSnapshot): void;
 
+  /** @internal */
+  currentTitleResource?: Resource<unknown>;
+
+  /** @internal */
+  protected readonly resourcesFeature?: RouterResourcesFeatureImplementation | null;
+
+  constructor() {
+    try {
+      this.resourcesFeature = inject(ROUTER_RESOURCES_FEATURE, {optional: true});
+    } catch {
+      // ignore injection errors
+    }
+
+    this.resourcesFeature?.initializeTitleStrategy(this);
+  }
+
   /**
    * @returns The `title` of the deepest primary route.
    */
@@ -58,16 +78,29 @@ export abstract class TitleStrategy {
    * `Route.title` property, which can either be a static string or a resolved value.
    */
   getResolvedTitleForRoute(snapshot: ActivatedRouteSnapshot): string | undefined {
+<<<<<<< HEAD
     return snapshot.data[RouteTitleKey];
+=======
+    const defaultTitle = snapshot.data[RouteTitleKey];
+    if (defaultTitle !== undefined) {
+      this.currentTitleResource = undefined; // Clear it! Static title wins!
+      return defaultTitle;
+    }
+    return undefined;
+>>>>>>> 66f0934653 (wip)
   }
 }
 
 /**
  * The default `TitleStrategy` used by the router that updates the title using the `Title` service.
  */
-@Injectable({providedIn: 'root'})
+@Service()
 export class DefaultTitleStrategy extends TitleStrategy {
-  constructor(readonly title: Title) {
+  private currentEffect?: EffectRef;
+  private injector = inject(Injector);
+  private readonly title = inject(Title);
+
+  constructor() {
     super();
   }
 
@@ -77,9 +110,53 @@ export class DefaultTitleStrategy extends TitleStrategy {
    * @param title The `pageTitle` from the deepest primary route.
    */
   override updateTitle(snapshot: RouterStateSnapshot): void {
+    this.currentEffect?.destroy();
+    this.currentTitleResource = undefined; // Reset before buildTitle!
+
     const title = this.buildTitle(snapshot);
-    if (title !== undefined) {
+
+    if (this.currentTitleResource) {
+      this.currentEffect = this.resourcesFeature?.titleRunner(
+        this.currentTitleResource,
+        this.title,
+        this.injector,
+      );
+    } else if (title !== undefined) {
+      // It's a static string! No effect needed!
       this.title.setTitle(title);
     }
   }
+}
+
+export function initializeTitleStrategy(strategy: TitleStrategy): void {
+  const original = strategy.getResolvedTitleForRoute.bind(strategy);
+  strategy.getResolvedTitleForRoute = (snapshot: ActivatedRouteSnapshot) => {
+    const res = snapshot.resources?.title;
+    if (res) {
+      strategy.currentTitleResource = res;
+      const val = res.value();
+      return typeof val === 'string' ? val : undefined;
+    }
+    return original(snapshot);
+  };
+}
+
+export function titleRunner(
+  titleResource: Resource<unknown>,
+  titleService: Title,
+  injector: Injector,
+): EffectRef {
+  let lastTitle: string | undefined = undefined;
+  return effect(
+    () => {
+      const currentVal = titleResource.value();
+      if (typeof currentVal === 'string') {
+        lastTitle = currentVal;
+      }
+      if (lastTitle !== undefined) {
+        titleService.setTitle(lastTitle);
+      }
+    },
+    {injector},
+  );
 }

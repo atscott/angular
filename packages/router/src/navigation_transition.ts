@@ -63,6 +63,7 @@ import {ActivateRoutes} from './operators/activate_routes';
 import {checkGuards} from './operators/check_guards';
 import {recognize} from './operators/recognize';
 import {resolveData} from './operators/resolve_data';
+import {ROUTER_RESOURCES_FEATURE} from './resource_implementation_tokens';
 import {switchTap} from './operators/switch_tap';
 import {TitleStrategy} from './page_title_strategy';
 import type {Router} from './router';
@@ -83,6 +84,7 @@ import {UrlSerializer, UrlTree} from './url_tree';
 import {abortSignalToObservable} from './utils/abort_signal_to_observable';
 import {Checks, getAllRouteGuards} from './utils/preactivation';
 import {CREATE_VIEW_TRANSITION} from './utils/view_transition';
+import {TreeNode} from './utils/tree';
 
 /**
  * @description
@@ -330,6 +332,8 @@ export interface NavigationTransition {
 
   routesRecognizeHandler: {deferredHandle?: Promise<void>};
   beforeActivateHandler: {deferredHandle?: Promise<void>};
+
+  newlyCreatedRoutes?: Set<ActivatedRoute>;
 }
 
 export const NAVIGATION_ERROR_HANDLER = new InjectionToken<
@@ -367,6 +371,7 @@ export class NavigationTransitions {
   private readonly urlHandlingStrategy = inject(UrlHandlingStrategy);
   private readonly createViewTransition = inject(CREATE_VIEW_TRANSITION, {optional: true});
   private readonly navigationErrorHandler = inject(NAVIGATION_ERROR_HANDLER, {optional: true});
+  private readonly resourcesFeature = inject(ROUTER_RESOURCES_FEATURE, {optional: true});
 
   navigationId = 0;
   get hasRequestedNavigation() {
@@ -718,6 +723,7 @@ export class NavigationTransitions {
           switchTap((t: NavigationTransition) => {
             const loadComponents = (route: ActivatedRouteSnapshot): Array<Promise<void>> => {
               const loaders: Array<Promise<void>> = [];
+
               if (route.routeConfig?._loadedComponent) {
                 route.component = route.routeConfig?._loadedComponent;
               } else if (route.routeConfig?.loadComponent) {
@@ -740,22 +746,30 @@ export class NavigationTransitions {
           }),
 
           switchMap((t: NavigationTransition) => {
-            const targetRouterState = createRouterState(
+            const {newlyCreatedRoutes, state} = createRouterState(
               router.routeReuseStrategy,
               t.targetSnapshot!,
               t.currentRouterState,
             );
-            this.currentTransition = overallTransitionState = t = {...t, targetRouterState};
+            this.currentTransition =
+              overallTransitionState =
+              t =
+                {
+                  ...t,
+                  targetRouterState: state,
+                  newlyCreatedRoutes,
+                };
             this.currentNavigation.update((nav) => {
-              nav!.targetRouterState = targetRouterState;
+              nav!.targetRouterState = state;
               return nav;
             });
             return of(t);
           }),
 
+          this.resourcesFeature?.operator(abortController.signal) ?? ((t) => t),
+
           switchTap(() => this.afterPreactivation()),
 
-          // TODO(atscott): Move this into the last block below.
           switchMap(() => {
             const {currentSnapshot, targetSnapshot} = overallTransitionState;
             const viewTransitionStarted = this.createViewTransition?.(
@@ -796,6 +810,12 @@ export class NavigationTransitions {
               return;
             }
 
+            const traverse = (node: TreeNode<ActivatedRoute>) => {
+              node.value._commit();
+              node.children.forEach(traverse);
+            };
+            traverse(t.targetRouterState!._root);
+
             completedOrAborted = true;
             this.currentNavigation.update((nav) => {
               (nav as Writable<Navigation>).abort = noop;
@@ -815,7 +835,7 @@ export class NavigationTransitions {
 
           takeUntil(
             abortSignalToObservable(abortController.signal).pipe(
-              // Ignore aborts if we are already completed, canceled, or are in the activation stage (we have targetRouterState)
+              // Ignore aborts if we are already completed, canceled, or the transition has entered the non-abortable activation stage
               filter(() => !completedOrAborted && abortable),
               tap(() => {
                 this.cancelNavigationTransition(
@@ -876,6 +896,7 @@ export class NavigationTransitions {
           }),
           catchError((e) => {
             completedOrAborted = true;
+            rollbackState(overallTransitionState);
             // If the application is already destroyed, the catch block should not
             // execute anything in practice because other resources have already
             // been released and destroyed.
@@ -974,6 +995,7 @@ export class NavigationTransitions {
     reason: string,
     code: NavigationCancellationCode,
   ) {
+    rollbackState(t);
     const navCancel = new NavigationCancel(
       t.id,
       this.urlSerializer.serialize(t.extractedUrl),
@@ -1025,4 +1047,14 @@ export class NavigationTransitions {
 
 export function isBrowserTriggeredNavigation(source: NavigationTrigger) {
   return source !== IMPERATIVE_NAVIGATION;
+}
+
+function rollbackState(t: NavigationTransition): void {
+  if (t.targetRouterState) {
+    const traverse = (node: TreeNode<ActivatedRoute>) => {
+      node.value._rollback();
+      node.children.forEach(traverse);
+    };
+    traverse(t.targetRouterState._root);
+  }
 }
