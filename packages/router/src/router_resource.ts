@@ -32,6 +32,9 @@ import {
 export const NON_BLOCKING_SYMBOL = Symbol(
   typeof ngDevMode === 'undefined' || ngDevMode ? '__isNonBlocking' : '',
 );
+export const BLOCKING_SYMBOL = Symbol(
+  typeof ngDevMode === 'undefined' || ngDevMode ? '__isBlocking' : '',
+);
 export const SOURCE_RESOURCE_SYMBOL = Symbol();
 
 /**
@@ -209,6 +212,8 @@ export const routerResource: RouterResourceFn = Object.assign(
     (res as any)[SOURCE_RESOURCE_SYMBOL] = source;
     if ((source as any)[NON_BLOCKING_SYMBOL]) {
       (res as any)[NON_BLOCKING_SYMBOL] = true;
+    } else {
+      (res as any)[BLOCKING_SYMBOL] = true;
     }
 
     // Create a wrapper object that inherits from the read-only resource

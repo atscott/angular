@@ -28,7 +28,7 @@ bootstrapApplication(AppComponent, {
 You can then define resources globally in your route definitions and access them directly as component inputs.
 
 ```angular-ts
-import {Component, input, Resource} from '@angular/core';
+import {Component, input} from '@angular/core';
 import {Routes} from '@angular/router';
 
 const routes: Routes = [
@@ -45,19 +45,11 @@ const routes: Routes = [
 ];
 
 @Component({
-  template: `
-    @if (user().isLoading()) {
-      <p>Loading...</p>
-    } @else if (user().error()) {
-      <p>Error! {{ user().error()?.message }}</p>
-    } @else {
-      <p>User: {{ user().value()?.name }}</p>
-    }
-  `,
+  template: ` <p>User: {{ user().name }}</p> `,
 })
 export class UserProfileComponent {
-  // The router automatically binds the resource to the input matching its key.
-  user = input.required<Resource<User>>();
+  // The router automatically binds only the value for blocking resources.
+  user = input.required<User>();
 }
 ```
 
@@ -82,10 +74,17 @@ You can natively pass `rxResource()` interchangeably with `resource()` into the 
 
 By default, all resources returned from `resources` or `eagerResources` are **blocking**. The Router will wait until the data is fully loaded prior to activating the new component.
 
+**For blocking resources, the router binds only the resolved value to the component input.** This means the input type in your component will be `T` instead of `Resource<T>`.
+
+This simplifies your component because it does not need to handle loading or error states. Because the router blocks navigation until the resource is loaded, the component never observes a `loading` state. Similarly, if the resource throws an error, the router aborts the navigation, so the component never observes an `error` state. Exposing the full `Resource` API in this case provides little value.
+
 If you prefer to handle loading states in the UI, you can use the `nonBlocking()` wrapper utility. Non-blocking resources do not halt the navigation stream. The Router will finish activating the component immediately, relying on the UI to handle the deferred skeletal or `loading` states exposed by the `ResourceStatus`.
 
-```ts
-import {nonBlocking} from '@angular/router';
+**For non-blocking resources, the router binds the full `Resource<T>` object to the component input.** This allows you to access `.isLoading()`, `.error()`, and other resource signals in your component.
+
+```angular-ts
+import {Component, input, Resource} from '@angular/core';
+import {Routes, nonBlocking} from '@angular/router';
 
 const routes: Routes = [
   {
@@ -100,6 +99,19 @@ const routes: Routes = [
     }),
   },
 ];
+
+@Component({
+  template: `
+    @if (reportData().isLoading()) {
+      <p>Loading...</p>
+    } @else {
+      <report-view [data]="reportData().value()" />
+    }
+  `,
+})
+export class ReportsComponent {
+  reportData = input.required<Resource<ReportData>>();
+}
 ```
 
 NOTE: If a blocking resource throws an error, the router will cancel the navigation and emit a `NavigationError` event. Resources wrapped in `nonBlocking()` that error will complete navigation and expose the error via the `resource.error()` signal.

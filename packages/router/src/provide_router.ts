@@ -34,14 +34,17 @@ import {
   Type,
   ɵpublishExternalGlobalUtil,
   effect,
+  EffectRef,
   Resource,
   computed,
   signal,
+  reflectComponentType,
   ɵWritable as Writable,
 } from '@angular/core';
 import {of, Subject} from 'rxjs';
 
 import {convertToParamMap} from './shared';
+import {BLOCKING_SYMBOL} from './router_resource';
 import {INPUT_BINDER, RoutedComponentInputBinder} from './directives/router_outlet';
 import {Event, NavigationError, stringifyEvent} from './events';
 import {RedirectCommand, Routes} from './models';
@@ -850,7 +853,11 @@ export function withComponentInputBinding(
   options: ComponentInputBindingOptions = {},
 ): ComponentInputBindingFeature {
   const providers = [
-    {provide: INPUT_BINDER, useFactory: () => new RoutedComponentInputBinder(options)},
+    {
+      provide: INPUT_BINDER,
+      useFactory: () =>
+        new RoutedComponentInputBinder(options, inject(ROUTER_RESOURCES_FEATURE, {optional: true})),
+    },
   ];
 
   return routerFeature(RouterFeatureKind.ComponentInputBindingFeature, providers);
@@ -892,6 +899,32 @@ export function withRouterResources(): RouterResourcesFeature {
       provide: ROUTER_RESOURCES_FEATURE,
       useValue: {
         operator: setupAndRunResources,
+        createResourceEffects: (
+          componentRef: ComponentRef<unknown>,
+          route: ActivatedRoute,
+          injector: Injector,
+        ) => {
+          const effects: EffectRef[] = [];
+          const handledKeys: string[] = [];
+          const mirror = route.component ? reflectComponentType(route.component) : null;
+          if (mirror) {
+            for (const {templateName} of mirror.inputs) {
+              const resource =
+                route.resources?.[templateName] ?? route.eagerResources?.[templateName];
+              if (resource && (resource as any)[BLOCKING_SYMBOL]) {
+                const effectRef = effect(
+                  () => {
+                    componentRef.setInput(templateName, resource.value());
+                  },
+                  {injector},
+                );
+                effects.push(effectRef);
+                handledKeys.push(templateName);
+              }
+            }
+          }
+          return {effects, handledKeys};
+        },
         waitForBlocking: waitForBlockingResources,
         initializeTitleStrategy: (strategy: TitleStrategy) => {
           const original = strategy.getResolvedTitleForRoute.bind(strategy);

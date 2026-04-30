@@ -7,6 +7,7 @@
  */
 
 import {
+  ComponentRef,
   EffectRef,
   EnvironmentInjector,
   InjectionToken,
@@ -25,6 +26,11 @@ export interface RouterResourcesFeatureImplementation {
   operator(
     kind?: ResourceFeatureKind,
   ): OperatorFunction<NavigationTransition, NavigationTransition>;
+  createResourceEffects?: (
+    componentRef: ComponentRef<unknown>,
+    route: ActivatedRoute,
+    injector: Injector,
+  ) => {effects: EffectRef[]; handledKeys: string[]};
   waitForBlocking(
     injector: EnvironmentInjector,
   ): OperatorFunction<NavigationTransition, NavigationTransition>;

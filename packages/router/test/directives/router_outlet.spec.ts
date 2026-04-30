@@ -17,6 +17,7 @@ import {
   withComponentInputBinding,
   ROUTER_OUTLET_DATA,
   withRouterResources,
+  nonBlocking,
 } from '../../index';
 import {RouterTestingHarness} from '../../testing';
 import {InjectionToken} from '../../../core/src/di';
@@ -516,19 +517,53 @@ describe('component input binding', () => {
 
     let instance = await harness.navigateByUrl('/all', MyComponent);
     // Precedence: resources > eager resources > resolvers > data
-    // resources wins, and it binds the actual resource object!
-    expect(typeof instance.result).toBe('object');
-    expect(instance.result?.value()).toEqual('from resource');
+    // resources wins, and it binds ONLY THE VALUE for blocking resources!
+    expect(typeof instance.result).toBe('string');
+    expect(instance.result).toEqual('from resource');
 
     const instance2 = await harness.navigateByUrl('/no-resource', MyComponentWithoutResource);
     // No resources, so eager resource wins! (It overrides resolvers).
-    expect(typeof instance2.result).toBe('object');
-    expect(instance2.result?.value()).toEqual('from eager resource');
+    expect(typeof instance2.result).toBe('string');
+    expect(instance2.result).toEqual('from eager resource');
 
     const instance3 = await harness.navigateByUrl('/no-resolver', MyComponentWithoutResolver);
     // No resource, no resolver, so eager resource wins!
-    expect(typeof instance3.result).toBe('object');
-    expect(instance3.result?.value()).toEqual('from eager resource');
+    expect(typeof instance3.result).toBe('string');
+    expect(instance3.result).toEqual('from eager resource');
+  });
+
+  it('binds the actual resource object for non-blocking resources', async () => {
+    @Component({
+      template: '',
+      standalone: false,
+    })
+    class MyComponent {
+      @Input() result?: any;
+    }
+
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter(
+          [
+            {
+              path: '**',
+              component: MyComponent,
+              resources: () => ({
+                result: nonBlocking(resource({loader: async () => 'from non-blocking resource'})),
+              }),
+            },
+          ],
+          withComponentInputBinding(),
+          withRouterResources(),
+        ),
+      ],
+    });
+    const harness = await RouterTestingHarness.create();
+
+    const instance = await harness.navigateByUrl('/', MyComponent);
+    await harness.fixture.whenStable();
+    expect(typeof instance.result).toBe('object');
+    expect(instance.result?.value()).toEqual('from non-blocking resource');
   });
 });
 

@@ -14,7 +14,12 @@ import {
 } from '@angular/router';
 import {RouterTestingHarness} from '../testing';
 import {resource, DestroyRef, WritableResource, inject, Resource, signal} from '@angular/core';
-import {nonBlocking, SOURCE_RESOURCE_SYMBOL} from '../src/router_resource';
+import {
+  nonBlocking,
+  SOURCE_RESOURCE_SYMBOL,
+  BLOCKING_SYMBOL,
+  NON_BLOCKING_SYMBOL,
+} from '../src/router_resource';
 import {timeout, useAutoTick} from '../../private/testing/src/utils';
 import {rxResource} from '@angular/core/rxjs-interop';
 import {of} from 'rxjs';
@@ -246,6 +251,45 @@ describe('routerResource', () => {
       const resourceRef = (router.routerState.root.firstChild as ActivatedRouteInternal)
         ?.resources?.['data'] as any;
       expect(resourceRef.value()).toBe('loaded');
+    });
+
+    it('should attach BLOCKING_SYMBOL to blocking resources and NON_BLOCKING_SYMBOL to non-blocking resources', async () => {
+      @Component({standalone: true, template: ''})
+      class TargetCmp {}
+
+      TestBed.configureTestingModule({
+        providers: [
+          provideRouter(
+            [
+              {
+                path: 'test',
+                component: TargetCmp,
+                resources: () => ({
+                  blocking: resource({loader: async () => 'blocking'}),
+                  nonBlocking: nonBlocking(resource({loader: async () => 'non-blocking'})),
+                }),
+              },
+            ],
+            withRouterResources(),
+          ),
+        ],
+      });
+
+      const harness = await RouterTestingHarness.create();
+      const router = TestBed.inject(Router);
+
+      await harness.navigateByUrl('/test');
+      await harness.fixture.whenStable();
+
+      const route = router.routerState.root.firstChild as ActivatedRouteInternal;
+      const blockingRes = route.resources?.['blocking'] as any;
+      const nonBlockingRes = route.resources?.['nonBlocking'] as any;
+
+      expect(blockingRes[BLOCKING_SYMBOL]).toBe(true);
+      expect(blockingRes[NON_BLOCKING_SYMBOL]).toBeUndefined();
+
+      expect(nonBlockingRes[NON_BLOCKING_SYMBOL]).toBe(true);
+      expect(nonBlockingRes[BLOCKING_SYMBOL]).toBeUndefined();
     });
 
     it('should not recreate and re-execute resources on subsequent navigations to the same route', async () => {

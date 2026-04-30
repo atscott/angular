@@ -10,6 +10,8 @@ import {
   ChangeDetectorRef,
   ComponentRef,
   Directive,
+  effect,
+  EffectRef,
   EnvironmentInjector,
   EventEmitter,
   inject,
@@ -31,6 +33,10 @@ import {combineLatest, Observable, of, Subscription} from 'rxjs';
 import {switchMap} from 'rxjs/operators';
 
 import {RuntimeErrorCode} from '../errors';
+import {
+  ROUTER_RESOURCES_FEATURE,
+  RouterResourcesFeatureImplementation,
+} from '../resource_implementation_tokens';
 import {Data} from '../models';
 import {ChildrenOutletContexts} from '../router_outlet_context';
 import {ActivatedRoute} from '../router_state';
@@ -364,7 +370,7 @@ export class RouterOutlet implements OnDestroy, OnInit, RouterOutletContract {
     this.activated = ref;
     this._activatedRoute = activatedRoute;
     this.location.insert(ref.hostView);
-    this.inputBinder?.bindActivatedRouteToOutletComponent(this);
+    this.inputBinder?.bindActivatedRouteToOutletComponent(this, this.location.injector);
     this.attachEvents.emit(ref.instance);
   }
 
@@ -406,7 +412,7 @@ export class RouterOutlet implements OnDestroy, OnInit, RouterOutletContract {
     // Calling `markForCheck` to make sure we will run the change detection when the
     // `RouterOutlet` is inside a `ChangeDetectionStrategy.OnPush` component.
     this.changeDetector.markForCheck();
-    this.inputBinder?.bindActivatedRouteToOutletComponent(this);
+    this.inputBinder?.bindActivatedRouteToOutletComponent(this, this.location.injector);
     this.activateEvents.emit(this.activated.instance);
   }
 }
@@ -457,23 +463,47 @@ export const INPUT_BINDER = new InjectionToken<RoutedComponentInputBinder>(
 @Injectable()
 export class RoutedComponentInputBinder {
   private outletDataSubscriptions = new Map<RouterOutlet, Subscription>();
+  private outletEffects = new Map<RouterOutlet, EffectRef[]>();
 
-  constructor(private options: ComponentInputBindingOptions) {
+  constructor(
+    private options: ComponentInputBindingOptions,
+    private feature: RouterResourcesFeatureImplementation | null = null,
+  ) {
     this.options.queryParams ??= true;
   }
 
-  bindActivatedRouteToOutletComponent(outlet: RouterOutlet): void {
+  bindActivatedRouteToOutletComponent(outlet: RouterOutlet, injector: Injector): void {
     this.unsubscribeFromRouteData(outlet);
-    this.subscribeToRouteData(outlet);
+    this.subscribeToRouteData(outlet, injector);
   }
 
   unsubscribeFromRouteData(outlet: RouterOutlet): void {
     this.outletDataSubscriptions.get(outlet)?.unsubscribe();
     this.outletDataSubscriptions.delete(outlet);
+    this.outletEffects.get(outlet)?.forEach((effect) => effect.destroy());
+    this.outletEffects.delete(outlet);
   }
 
-  private subscribeToRouteData(outlet: RouterOutlet) {
+  private subscribeToRouteData(outlet: RouterOutlet, injector: Injector) {
     const {activatedRoute} = outlet;
+
+    const effects: EffectRef[] = [];
+    let handledKeys: string[] = [];
+
+    if (this.feature?.createResourceEffects && outlet.activatedComponentRef) {
+      const result = this.feature.createResourceEffects(
+        outlet.activatedComponentRef,
+        activatedRoute,
+        injector,
+      );
+      effects.push(...result.effects);
+      handledKeys = result.handledKeys;
+    }
+
+    if (effects.length > 0) {
+      this.outletEffects.set(outlet, effects);
+    }
+
     const dataSubscription = combineLatest([
       this.options.queryParams ? activatedRoute.queryParams : of({}),
       activatedRoute.params,
@@ -512,13 +542,16 @@ export class RoutedComponentInputBinder {
           return;
         }
 
-        const mirror = reflectComponentType(activatedRoute.component);
-        if (!mirror) {
+        const currentMirror = reflectComponentType(activatedRoute.component);
+        if (!currentMirror) {
           this.unsubscribeFromRouteData(outlet);
           return;
         }
 
-        for (const {templateName} of mirror.inputs) {
+        for (const {templateName} of currentMirror.inputs) {
+          if (handledKeys.includes(templateName)) {
+            continue;
+          }
           outlet.activatedComponentRef.setInput(templateName, data[templateName]);
         }
       });
