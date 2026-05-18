@@ -581,51 +581,81 @@ function serializeQueryParams(params: {[key: string]: any}): string {
   return strParams.length ? `?${strParams.join('&')}` : '';
 }
 
-const SEGMENT_RE = /^[^\/()?;#]+/;
-function matchSegments(str: string): string {
-  const match = str.match(SEGMENT_RE);
-  return match ? match[0] : '';
+function matchSegments(str: string, index: number): string {
+  const len = str.length;
+  let i = index;
+  while (i < len) {
+    const char = str.charCodeAt(i);
+    if (char === 47 || char === 40 || char === 41 || char === 63 || char === 59 || char === 35) {
+      break;
+    }
+    i++;
+  }
+  return str.substring(index, i);
 }
 
-const MATRIX_PARAM_SEGMENT_RE = /^[^\/()?;=#]+/;
-function matchMatrixKeySegments(str: string): string {
-  const match = str.match(MATRIX_PARAM_SEGMENT_RE);
-  return match ? match[0] : '';
+function matchMatrixKeySegments(str: string, index: number): string {
+  const len = str.length;
+  let i = index;
+  while (i < len) {
+    const char = str.charCodeAt(i);
+    if (
+      char === 47 ||
+      char === 40 ||
+      char === 41 ||
+      char === 63 ||
+      char === 59 ||
+      char === 35 ||
+      char === 61
+    ) {
+      break;
+    }
+    i++;
+  }
+  return str.substring(index, i);
 }
 
-const QUERY_PARAM_RE = /^[^=?&#]+/;
-// Return the name of the query param at the start of the string or an empty string
-function matchQueryParams(str: string): string {
-  const match = str.match(QUERY_PARAM_RE);
-  return match ? match[0] : '';
+function matchQueryParams(str: string, index: number): string {
+  const len = str.length;
+  let i = index;
+  while (i < len) {
+    const char = str.charCodeAt(i);
+    if (char === 61 || char === 63 || char === 38 || char === 35) {
+      break;
+    }
+    i++;
+  }
+  return str.substring(index, i);
 }
 
-const QUERY_PARAM_VALUE_RE = /^[^&#]+/;
-// Return the value of the query param at the start of the string or an empty string
-function matchUrlQueryParamValue(str: string): string {
-  const match = str.match(QUERY_PARAM_VALUE_RE);
-  return match ? match[0] : '';
+function matchUrlQueryParamValue(str: string, index: number): string {
+  const len = str.length;
+  let i = index;
+  while (i < len) {
+    const char = str.charCodeAt(i);
+    if (char === 38 || char === 35) {
+      break;
+    }
+    i++;
+  }
+  return str.substring(index, i);
 }
 
 class UrlParser {
-  private remaining: string;
+  private index = 0;
+  private length: number;
 
   constructor(private url: string) {
-    this.remaining = url;
+    this.length = url.length;
   }
 
   parseRootSegment(): UrlSegmentGroup {
-    // Consume all leading slashes. Multiple consecutive leading slashes (e.g. `///path`)
-    // are not meaningful and would otherwise produce a `//path`-style serialized URL,
-    // which browsers interpret as protocol-relative (resolving to a different origin)
-    // and reject with a SecurityError when passed to `history.pushState`/`replaceState`.
     while (this.consumeOptional('/')) {}
 
-    if (this.remaining === '' || this.peekStartsWith('?') || this.peekStartsWith('#')) {
+    if (this.index >= this.length || this.peekStartsWith('?') || this.peekStartsWith('#')) {
       return new UrlSegmentGroup([], {});
     }
 
-    // The root segment group never has segments
     return new UrlSegmentGroup([], this.parseChildren());
   }
 
@@ -640,7 +670,7 @@ class UrlParser {
   }
 
   parseFragment(): string | null {
-    return this.consumeOptional('#') ? decodeURIComponent(this.remaining) : null;
+    return this.consumeOptional('#') ? decode(this.url.substring(this.index)) : null;
   }
 
   private parseChildren(depth = 0): {[outlet: string]: UrlSegmentGroup} {
@@ -650,7 +680,7 @@ class UrlParser {
         (typeof ngDevMode === 'undefined' || ngDevMode) && 'URL is too deep',
       );
     }
-    if (this.remaining === '') {
+    if (this.index >= this.length) {
       return {};
     }
 
@@ -684,15 +714,13 @@ class UrlParser {
     return res;
   }
 
-  // parse a segment with its matrix parameters
-  // ie `name;k1=v1;k2`
   private parseSegment(): UrlSegment {
-    const path = matchSegments(this.remaining);
+    const path = matchSegments(this.url, this.index);
     if (path === '' && this.peekStartsWith(';')) {
       throw new RuntimeError(
         RuntimeErrorCode.EMPTY_PATH_WITH_PARAMS,
         (typeof ngDevMode === 'undefined' || ngDevMode) &&
-          `Empty path url segment cannot have parameters: '${this.remaining}'.`,
+          `Empty path url segment cannot have parameters: '${this.url.substring(this.index)}'.`,
       );
     }
 
@@ -709,14 +737,14 @@ class UrlParser {
   }
 
   private parseParam(params: {[key: string]: string}): void {
-    const key = matchMatrixKeySegments(this.remaining);
+    const key = matchMatrixKeySegments(this.url, this.index);
     if (!key) {
       return;
     }
     this.capture(key);
     let value: any = '';
     if (this.consumeOptional('=')) {
-      const valueMatch = matchSegments(this.remaining);
+      const valueMatch = matchSegments(this.url, this.index);
       if (valueMatch) {
         value = valueMatch;
         this.capture(value);
@@ -726,16 +754,15 @@ class UrlParser {
     params[decode(key)] = decode(value);
   }
 
-  // Parse a single query parameter `name[=value]`
   private parseQueryParam(params: Params): void {
-    const key = matchQueryParams(this.remaining);
+    const key = matchQueryParams(this.url, this.index);
     if (!key) {
       return;
     }
     this.capture(key);
     let value: any = '';
     if (this.consumeOptional('=')) {
-      const valueMatch = matchUrlQueryParamValue(this.remaining);
+      const valueMatch = matchUrlQueryParamValue(this.url, this.index);
       if (valueMatch) {
         value = valueMatch;
         this.capture(value);
@@ -746,7 +773,6 @@ class UrlParser {
     const decodedVal = decodeQuery(value);
 
     if (params.hasOwnProperty(decodedKey)) {
-      // Append to existing values
       let currentVal = params[decodedKey];
       if (!Array.isArray(currentVal)) {
         currentVal = [currentVal];
@@ -754,23 +780,18 @@ class UrlParser {
       }
       currentVal.push(decodedVal);
     } else {
-      // Create a new value
       params[decodedKey] = decodedVal;
     }
   }
 
-  // parse `(a/b//outlet_name:c/d)`
   private parseParens(allowPrimary: boolean, depth: number): {[outlet: string]: UrlSegmentGroup} {
     const segments: {[key: string]: UrlSegmentGroup} = {};
     this.capture('(');
 
-    while (!this.consumeOptional(')') && this.remaining.length > 0) {
-      const path = matchSegments(this.remaining);
+    while (!this.consumeOptional(')') && this.index < this.length) {
+      const path = matchSegments(this.url, this.index);
+      const next = this.url[this.index + path.length];
 
-      const next = this.remaining[path.length];
-
-      // if is is not one of these characters, then the segment was unescaped
-      // or the group was not closed
       if (next !== '/' && next !== ')' && next !== ';') {
         throw new RuntimeError(
           RuntimeErrorCode.UNPARSABLE_URL,
@@ -799,13 +820,12 @@ class UrlParser {
   }
 
   private peekStartsWith(str: string): boolean {
-    return this.remaining.startsWith(str);
+    return this.url.startsWith(str, this.index);
   }
 
-  // Consumes the prefix when it is present and returns whether it has been consumed
   private consumeOptional(str: string): boolean {
     if (this.peekStartsWith(str)) {
-      this.remaining = this.remaining.substring(str.length);
+      this.index += str.length;
       return true;
     }
     return false;
