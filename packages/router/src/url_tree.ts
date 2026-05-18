@@ -564,21 +564,37 @@ export function serializePath(path: UrlSegment): string {
 }
 
 function serializeMatrixParams(params: {[key: string]: string}): string {
-  return Object.entries(params)
-    .map(([key, value]) => `;${encodeUriSegment(key)}=${encodeUriSegment(value)}`)
-    .join('');
+  let res = '';
+  for (const key in params) {
+    if (Object.prototype.hasOwnProperty.call(params, key)) {
+      res += `;${encodeUriSegment(key)}=${encodeUriSegment(params[key])}`;
+    }
+  }
+  return res;
 }
 
 function serializeQueryParams(params: {[key: string]: any}): string {
-  const strParams: string[] = Object.entries(params)
-    .map(([name, value]) => {
-      return Array.isArray(value)
-        ? value.map((v) => `${encodeUriQuery(name)}=${encodeUriQuery(v)}`).join('&')
-        : `${encodeUriQuery(name)}=${encodeUriQuery(value)}`;
-    })
-    .filter((s) => s);
-
-  return strParams.length ? `?${strParams.join('&')}` : '';
+  let res = '';
+  for (const key in params) {
+    if (Object.prototype.hasOwnProperty.call(params, key)) {
+      const value = params[key];
+      if (Array.isArray(value)) {
+        for (let i = 0; i < value.length; i++) {
+          const v = value[i];
+          if (res !== '') {
+            res += '&';
+          }
+          res += `${encodeUriQuery(key)}=${encodeUriQuery(v)}`;
+        }
+      } else {
+        if (res !== '') {
+          res += '&';
+        }
+        res += `${encodeUriQuery(key)}=${encodeUriQuery(value)}`;
+      }
+    }
+  }
+  return res !== '' ? `?${res}` : '';
 }
 
 function matchSegments(str: string, index: number): string {
