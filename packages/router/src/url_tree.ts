@@ -510,13 +510,33 @@ function serializeSegment(segment: UrlSegmentGroup, root: boolean): string {
  * a custom encoding because encodeURIComponent is too aggressive and encodes stuff that doesn't
  * have to be encoded per https://url.spec.whatwg.org.
  */
-function encodeUriString(s: string): string {
-  return encodeURIComponent(s)
-    .replace(/%40/g, '@')
-    .replace(/%3A/gi, ':')
-    .replace(/%24/g, '$')
-    .replace(/%2C/gi, ',');
-}
+// Pre-compiled static lookup tables for fast O(1) single-pass replacement
+const SEGMENT_ENCODE_MAP: Record<string, string> = {
+  '%40': '@',
+  '%3A': ':',
+  '%3a': ':',
+  '%24': '$',
+  '%2C': ',',
+  '%2c': ',',
+  '(': '%28',
+  ')': '%29',
+  '%26': '&',
+};
+
+const SEGMENT_REGEX = /%40|%3[aA]|%24|%2[cC]|\(|\)|%26/g;
+
+const QUERY_ENCODE_MAP: Record<string, string> = {
+  '%40': '@',
+  '%3A': ':',
+  '%3a': ':',
+  '%24': '$',
+  '%2C': ',',
+  '%2c': ',',
+  '%3B': ';',
+  '%3b': ';',
+};
+
+const QUERY_REGEX = /%40|%3[aA]|%24|%2[cC]|%3[bB]/g;
 
 /**
  * This function should be used to encode both keys and values in a query string key/value. In
@@ -525,7 +545,7 @@ function encodeUriString(s: string): string {
  * http://www.site.org/html;mk=mv?k=v#f
  */
 export function encodeUriQuery(s: string): string {
-  return encodeUriString(s).replace(/%3B/gi, ';');
+  return encodeURIComponent(s).replace(QUERY_REGEX, (match) => QUERY_ENCODE_MAP[match]);
 }
 
 /**
@@ -546,9 +566,8 @@ export function encodeUriFragment(s: string): string {
  * http://www.site.org/html;mk=mv?k=v#f
  */
 export function encodeUriSegment(s: string): string {
-  return encodeUriString(s).replace(/\(/g, '%28').replace(/\)/g, '%29').replace(/%26/gi, '&');
+  return encodeURIComponent(s).replace(SEGMENT_REGEX, (match) => SEGMENT_ENCODE_MAP[match]);
 }
-
 export function decode(s: string): string {
   return decodeURIComponent(s);
 }
