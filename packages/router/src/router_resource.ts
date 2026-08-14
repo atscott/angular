@@ -35,11 +35,15 @@ export const NON_BLOCKING_SYMBOL: unique symbol = Symbol(
 export const BLOCKING_SYMBOL: unique symbol = Symbol(
   typeof ngDevMode === 'undefined' || ngDevMode ? '__isBlocking' : '',
 );
+export const SOURCE_RESOURCE_SYMBOL: unique symbol = Symbol(
+  typeof ngDevMode === 'undefined' || ngDevMode ? '__sourceResource' : '',
+);
 
 /**
  * @internal
  */
 export interface InternalRouterResource<T = unknown> extends Resource<T> {
+  [SOURCE_RESOURCE_SYMBOL]: Resource<T>;
   [NON_BLOCKING_SYMBOL]?: boolean;
   [BLOCKING_SYMBOL]?: boolean;
   reload(): boolean;
@@ -72,6 +76,7 @@ export function routerResource<T>(source: Resource<T>): Resource<T> & {reload():
 
   const res = resourceFromSnapshots(snapshotSignal) as unknown as InternalRouterResource<T>;
 
+  res[SOURCE_RESOURCE_SYMBOL] = source;
   if ((source as unknown as InternalRouterResource<T>)[NON_BLOCKING_SYMBOL]) {
     res[NON_BLOCKING_SYMBOL] = true;
   } else {

@@ -5,13 +5,24 @@
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.dev/license
  */
-import {createEnvironmentInjector, runInInjectionContext, Resource} from '@angular/core';
+import {
+  createEnvironmentInjector,
+  runInInjectionContext,
+  Resource,
+  effect,
+  DestroyRef,
+} from '@angular/core';
 import {OperatorFunction, pipe} from 'rxjs';
 import {ResourceContext, ResourceResult} from '../models';
 import {NavigationTransition} from '../navigation_transition';
 import {ActivatedRoute, ActivatedRouteSnapshot} from '../router_state';
 import {TreeNode} from '../utils/tree';
-import {InternalRouterResource, NON_BLOCKING_SYMBOL, routerResource} from '../router_resource';
+import {
+  InternalRouterResource,
+  NON_BLOCKING_SYMBOL,
+  routerResource,
+  SOURCE_RESOURCE_SYMBOL,
+} from '../router_resource';
 import {switchTap} from './switch_tap';
 
 export function setupAndRunResources(
@@ -24,11 +35,12 @@ export function setupAndRunResources(
       }
 
       const resourceSetupPromises: Array<Promise<void>> = [];
+      const blockingResourcePromises: Array<Promise<void>> = [];
 
       const traverse = (stateNode: TreeNode<ActivatedRoute>) => {
         const route = stateNode.value;
         if (route) {
-          processRoute(route, newlyCreatedRoutes, resourceSetupPromises);
+          processRoute(route, newlyCreatedRoutes, resourceSetupPromises, blockingResourcePromises);
         }
 
         for (const childState of stateNode.children) {
@@ -44,8 +56,11 @@ export function setupAndRunResources(
         }
       }
 
-      return Promise.all(resourceSetupPromises).then(throwIfAborted);
-      // TODO: wait for blocking resources
+      return Promise.all(resourceSetupPromises)
+        .then(throwIfAborted)
+
+        .then(() => Promise.all(blockingResourcePromises))
+        .then(throwIfAborted);
     }),
   );
 }
@@ -54,6 +69,7 @@ function processRoute(
   route: ActivatedRoute,
   newlyCreatedRoutes: Set<ActivatedRoute>,
   resourceSetupPromises: Array<Promise<void>>,
+  blockingResourcePromises: Array<Promise<void>>,
 ) {
   const resources = route.routeConfig?.resources;
   if (!resources) {
@@ -62,13 +78,19 @@ function processRoute(
 
   if (newlyCreatedRoutes.has(route)) {
     // This route is new. We need to run its resources function once.
-    resourceSetupPromises.push(setupNewRouterResources(route._futureSnapshot, route));
+    resourceSetupPromises.push(
+      setupNewRouterResources(route._futureSnapshot, route, blockingResourcePromises),
+    );
   } else {
-    updateExistingResources(route);
+    updateExistingResources(route, blockingResourcePromises);
   }
 }
 
-async function setupNewRouterResources(snapshot: ActivatedRouteSnapshot, route: ActivatedRoute) {
+async function setupNewRouterResources(
+  snapshot: ActivatedRouteSnapshot,
+  route: ActivatedRoute,
+  blockingResourcePromises: Promise<void>[],
+) {
   const resourcesFn = snapshot?.routeConfig?.resources;
   const parentInjector = snapshot?._environmentInjector;
   if (!resourcesFn || !parentInjector) {
@@ -123,10 +145,10 @@ async function setupNewRouterResources(snapshot: ActivatedRouteSnapshot, route: 
   }
 
   route.resources = route._futureSnapshot.resources = snapshot.resources = wrappedResult;
-  prohibitBlockingResources(route, wrappedResult);
+  setupBlocking(route, wrappedResult, blockingResourcePromises);
 }
 
-function updateExistingResources(route: ActivatedRoute) {
+function updateExistingResources(route: ActivatedRoute, blockingResourcePromises: Promise<void>[]) {
   // This route is reused. We must eagerly update the resource context signals
   // so that resources can react and fetch new data during the pending navigation.
   const currentResources = route.snapshot?.resources;
@@ -134,11 +156,25 @@ function updateExistingResources(route: ActivatedRoute) {
     return;
   }
 
+  Object.values(currentResources).forEach((r) => {
+    const underlyingRes = (r as InternalRouterResource)[SOURCE_RESOURCE_SYMBOL];
+    if (underlyingRes.status() === 'error') {
+      // If a resource previously failed and the route is reused identically,
+      // the parameter signals won't change, meaning the internal effect won't automatically refetch.
+      // We must manually trigger a reload to ensure the new navigation attempts a retry.
+      (underlyingRes as unknown as {reload?: () => boolean}).reload?.();
+    }
+  });
+
   route._futureSnapshot.resources = currentResources;
-  prohibitBlockingResources(route, currentResources);
+  setupBlocking(route, currentResources, blockingResourcePromises);
 }
 
-function prohibitBlockingResources(route: ActivatedRoute, resourceResult: ResourceResult) {
+function setupBlocking(
+  route: ActivatedRoute,
+  resourceResult: ResourceResult,
+  blockingResourcePromises: Array<Promise<void>>,
+) {
   const childInjector = route._localInjector;
   if (!childInjector || !resourceResult) return;
 
@@ -147,6 +183,39 @@ function prohibitBlockingResources(route: ActivatedRoute, resourceResult: Resour
     if (res[NON_BLOCKING_SYMBOL]) {
       continue;
     }
-    throw new Error('blocking resources not implemented yet');
+    const promise = new Promise<void>((resolve, reject) => {
+      const underlyingRes: Resource<unknown> = res[SOURCE_RESOURCE_SYMBOL] || res;
+      let isDestroyed = false;
+      let unregisterOnDestroy: (() => void) | undefined;
+
+      const blockingEffect = effect(
+        () => {
+          if (isDestroyed) {
+            return;
+          }
+          const status = underlyingRes.status();
+          if (status === 'error') {
+            reject(underlyingRes.error());
+            blockingEffect.destroy();
+            unregisterOnDestroy?.();
+          } else if (
+            underlyingRes.hasValue() ||
+            (status !== 'idle' && status !== 'loading' && status !== 'reloading')
+          ) {
+            resolve();
+            blockingEffect.destroy();
+            unregisterOnDestroy?.();
+          }
+        },
+        {injector: childInjector, manualCleanup: true},
+      );
+
+      unregisterOnDestroy = childInjector.get(DestroyRef).onDestroy(() => {
+        isDestroyed = true;
+        resolve();
+        blockingEffect.destroy();
+      });
+    });
+    blockingResourcePromises.push(promise);
   }
 }

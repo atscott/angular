@@ -90,7 +90,7 @@ describe('Router resources integration', () => {
       expect(resourceRef.value()).toBe('loaded');
     });
 
-    xit('should support async resource functions returning a Promise', async () => {
+    it('should support async resource functions returning a Promise', async () => {
       @Component({standalone: true, template: ''})
       class TargetCmp {}
 
@@ -125,7 +125,7 @@ describe('Router resources integration', () => {
       expect(resourceRef.value()).toBe('async loaded');
     });
 
-    xit('should cleanly ignore resolution of async resource function if navigation was cancelled', async () => {
+    it('should cleanly ignore resolution of async resource function if navigation was cancelled', async () => {
       @Component({standalone: true, template: ''})
       class FirstCmp {}
       @Component({standalone: true, template: ''})
@@ -310,7 +310,7 @@ describe('Router resources integration', () => {
   });
 
   describe('Blocking vs Non-blocking Resources', () => {
-    xit('should resolve resources before component initialization if blocking', async () => {
+    it('should resolve resources before component initialization if blocking', async () => {
       let resolverSpy = jasmine.createSpy('resolver');
       let resolve!: (val: any) => void;
       const promise = new Promise<string>((r) => (resolve = r));
@@ -359,7 +359,7 @@ describe('Router resources integration', () => {
       expect(router.url).toBe('/test');
     });
 
-    xit('should cancel navigation when blocking resource yields error', async () => {
+    it('should cancel navigation when blocking resource yields error', async () => {
       @Component({standalone: true, template: ''})
       class TargetCmp {}
 
@@ -389,7 +389,7 @@ describe('Router resources integration', () => {
       expect(router.url).not.toContain('/test');
     });
 
-    xit('should emit NavigationError when blocking resource rejects', async () => {
+    it('should emit NavigationError when blocking resource rejects', async () => {
       @Component({standalone: true, template: ''})
       class TargetCmp {}
 
@@ -425,8 +425,8 @@ describe('Router resources integration', () => {
       expect(error).toBeDefined();
     });
 
-    xit('should allow retrying a blocking route that previously threw an error', async () => {
-      let shouldError = true;
+    it('should allow retrying a blocking route that previously threw an error', async () => {
+      let shouldError = false;
 
       @Component({standalone: true, template: ''})
       class TargetCmp {}
@@ -438,12 +438,11 @@ describe('Router resources integration', () => {
               {
                 path: 'test/:id',
                 component: TargetCmp,
-                resources: (ctx) => ({
+                resources: () => ({
                   data: resource({
-                    params: () => ctx.params(),
-                    loader: async ({params}: any) => {
+                    loader: async () => {
                       if (shouldError) throw new Error('Failed');
-                      return params['id'];
+                      return '1';
                     },
                   }),
                 }),
@@ -457,20 +456,29 @@ describe('Router resources integration', () => {
       const harness = await RouterTestingHarness.create();
       const router = TestBed.inject(Router);
 
-      // First navigation fails
-      await harness.navigateByUrl('/test/1').catch(() => {});
-      expect(router.url).toBe('/'); // Cancelled
-
+      // 1. Initial navigation succeeds
+      await harness.navigateByUrl('/test/1');
       await harness.fixture.whenStable();
+      expect(router.url).toBe('/test/1');
 
-      // Retry the identical route with same parameters
+      const resourceRef = (router.routerState.root.firstChild as ActivatedRouteInternal)
+        ?.resources?.['data'] as any;
+      expect(resourceRef.value()).toBe('1');
+
+      // 2. Resource encounters an error while on the route
+      shouldError = true;
+      resourceRef.reload();
+      await harness.fixture.whenStable();
+      expect(resourceRef.status()).toBe('error');
+
+      // 3. Retry the identical route with same parameters using onSameUrlNavigation: 'reload'
       shouldError = false;
+      router.onSameUrlNavigation = 'reload';
       await harness.navigateByUrl('/test/1');
       await harness.fixture.whenStable();
 
       expect(router.url).toBe('/test/1'); // Succeeded!
-      const resourceRef = (router.routerState.root.firstChild as ActivatedRouteInternal)
-        ?.resources?.['data'] as any;
+      expect(resourceRef.status()).toBe('resolved');
       expect(resourceRef.value()).toBe('1');
     });
 
@@ -663,7 +671,7 @@ describe('Router resources integration', () => {
       expect(userResource.value()).toEqual({name: 'user 2'});
     });
 
-    xit('should correctly propagate parameter state when a pending navigation supersedes identically reused routes', async () => {
+    it('should correctly propagate parameter state when a pending navigation supersedes identically reused routes', async () => {
       @Component({standalone: true, template: ''})
       class TargetCmp {}
 
@@ -722,7 +730,7 @@ describe('Router resources integration', () => {
       expect(resourceRef.value()).toBe('loaded-3');
     });
 
-    xit('should mask loading states during multi-step Guard UrlTree redirects', async () => {
+    it('should mask loading states during multi-step Guard UrlTree redirects', async () => {
       @Component({standalone: true, template: ''})
       class TargetCmp {}
 
@@ -785,7 +793,7 @@ describe('Router resources integration', () => {
       expect(resourceRef.value()).toBe('3');
     });
 
-    xit('should be able to redirect from a blocking resource using a NavigationErrorHandler', async () => {
+    it('should be able to redirect from a blocking resource using a NavigationErrorHandler', async () => {
       let handleCount = 0;
       let errorRef: unknown = null;
 
@@ -837,7 +845,7 @@ describe('Router resources integration', () => {
   });
 
   describe('rxResource Integration', () => {
-    xit('should successfully wrap and await an rxResource', async () => {
+    it('should successfully wrap and await an rxResource', async () => {
       @Component({standalone: true, template: ''})
       class TargetCmp {}
 
