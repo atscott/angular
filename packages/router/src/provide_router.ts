@@ -48,12 +48,13 @@ import {
   RouterConfigOptions,
 } from './router_config';
 import {ROUTES} from './router_config_loader';
+import {setupAndRunResources} from './operators/setup_and_run_resources';
 import {PreloadingStrategy, RouterPreloader} from './router_preloader';
 
 import {ROUTER_SCROLLER, RouterScroller} from './router_scroller';
 
 import {getLoadedRoutes, getRouterInstance, navigateByUrl} from './router_devtools';
-import {ActivatedRoute} from './router_state';
+import {ActivatedRoute, initializeActivatedRoute} from './router_state';
 import {NavigationStateManager} from './statemanager/navigation_state_manager';
 import {StateManager} from './statemanager/state_manager';
 import {afterNextNavigation} from './utils/navigations';
@@ -64,7 +65,6 @@ import {
   ViewTransitionsFeatureOptions,
 } from './utils/view_transition';
 import {ROUTER_RESOURCES_FEATURE} from './router_resource_feature';
-import {setupActivatedRouteInjectors} from './operators/setup_and_run_resources';
 
 /**
  * Sets up providers necessary to enable `Router` functionality for the application.
@@ -888,14 +888,43 @@ export function withViewTransitions(
   return routerFeature(RouterFeatureKind.ViewTransitionsFeature, providers);
 }
 
-export type RouterResourcesFeature =
-  RouterFeature<RouterFeatureKind.ViewTransitionsFeature /* temporary - not public API. Must reuse existing */>;
+/**
+ * A type alias for providers returned by `withRouterResources` for use with `provideRouter`.
+ *
+ * @see {@link withRouterResources}
+ * @see {@link provideRouter}
+ *
+ * @experimental
+ */
+export type RouterResourcesFeature = RouterFeature<RouterFeatureKind.ViewTransitionsFeature>;
+
+/**
+ * Enables `resources` capabilities for Route definitions.
+ *
+ * @usageNotes
+ *
+ * Basic example of how you can enable the feature:
+ * ```ts
+ * const appRoutes: Routes = [];
+ * bootstrapApplication(AppComponent,
+ *   {
+ *     providers: [
+ *       provideRouter(appRoutes, withRouterResources())
+ *     ]
+ *   }
+ * );
+ * ```
+ *
+ * @experimental
+ * @returns A set of providers for use with `provideRouter`.
+ */
 export function withRouterResources(): RouterResourcesFeature {
   const providers = [
     {
       provide: ROUTER_RESOURCES_FEATURE,
       useValue: {
-        operator: setupActivatedRouteInjectors,
+        operator: setupAndRunResources,
+        initializeActivatedRoute,
       },
     },
   ];
