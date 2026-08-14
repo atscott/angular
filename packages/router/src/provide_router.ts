@@ -35,7 +35,11 @@ import {
 } from '@angular/core';
 import {of, Subject} from 'rxjs';
 
-import {INPUT_BINDER, RoutedComponentInputBinder} from './directives/router_outlet';
+import {
+  createResourceOutletBindingEffects,
+  INPUT_BINDER,
+  RoutedComponentInputBinder,
+} from './directives/router_outlet';
 import {Event, NavigationError, stringifyEvent} from './events';
 import {RedirectCommand, Routes} from './models';
 import {NAVIGATION_ERROR_HANDLER, NavigationTransitions} from './navigation_transition';
@@ -840,7 +844,11 @@ export function withComponentInputBinding(
   options: ComponentInputBindingOptions = {},
 ): ComponentInputBindingFeature {
   const providers = [
-    {provide: INPUT_BINDER, useFactory: () => new RoutedComponentInputBinder(options)},
+    {
+      provide: INPUT_BINDER,
+      useFactory: () =>
+        new RoutedComponentInputBinder(options, inject(ROUTER_RESOURCES_FEATURE, {optional: true})),
+    },
   ];
 
   return routerFeature(RouterFeatureKind.ComponentInputBindingFeature, providers);
@@ -924,6 +932,7 @@ export function withRouterResources(): RouterResourcesFeature {
       provide: ROUTER_RESOURCES_FEATURE,
       useValue: {
         operator: setupAndRunResources,
+        createResourceOutletBindingEffects,
         initializeActivatedRoute,
       },
     },

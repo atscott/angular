@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 
-import {InjectionToken} from '@angular/core';
+import {ComponentRef, EffectRef, InjectionToken, Injector} from '@angular/core';
 import {OperatorFunction} from 'rxjs';
 import {NavigationTransition} from './navigation_transition';
 
@@ -14,6 +14,11 @@ import {ActivatedRoute} from './router_state';
 
 export interface RouterResourcesFeatureImplementation {
   operator(abortSignal: AbortSignal): OperatorFunction<NavigationTransition, NavigationTransition>;
+  createResourceOutletBindingEffects?: (
+    componentRef: ComponentRef<unknown>,
+    route: ActivatedRoute,
+    injector: Injector,
+  ) => {effects: EffectRef[]; handledKeys: string[]};
   /**
    * Initializes an `ActivatedRoute` with the necessary router resources infrastructure.
    * This is required because `ActivatedRoute` is created before the router's lazy-loading phase,
