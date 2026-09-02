@@ -1160,29 +1160,12 @@ export class ComponentDecoratorHandler implements DecoratorHandler<
     if (analysis.isPoisoned && !this.usePoisonedData) {
       return null;
     }
-    const typeCheckScope = this.typeCheckScopeRegistry.getTypeCheckScope(new Reference(node));
-    const scope = this.scopeReader.getScopeForComponent(node);
-    const selector = analysis.meta.selector;
-    let matcher: DirectiveMatcher<DirectiveMeta> | null = null;
-    if (scope !== null) {
-      const isPoisoned =
-        scope.kind === ComponentScopeKind.NgModule
-          ? scope.compilation.isPoisoned
-          : scope.isPoisoned;
-
-      if (
-        (isPoisoned || (scope.kind === ComponentScopeKind.NgModule && scope.exported.isPoisoned)) &&
-        !this.usePoisonedData
-      ) {
-        // Don't bother indexing components which had erroneous scopes, unless specifically
-        // requested.
-        return null;
-      }
-
-      matcher = createMatcherFromScope(scope, this.hostDirectivesResolver);
+    const scope = this.typeCheckScopeRegistry.getTypeCheckScope(new Reference(node));
+    if (scope.isPoisoned && !this.usePoisonedData) {
+      return null;
     }
 
-    const binder = new R3TargetBinder<DirectiveMeta>(matcher);
+    const binder = new R3TargetBinder<DirectiveMeta>(scope.matcher, scope.foreignMatcher);
     const boundTemplate = binder.bind({template: analysis.template.diagNodes});
 
     const abstractBoundTemplate: AbstractBoundTemplate<DeclarationNode> = {
@@ -1212,14 +1195,14 @@ export class ComponentDecoratorHandler implements DecoratorHandler<
         return boundTemplate.target.template;
       },
       getPipe(name) {
-        const pipe = typeCheckScope.pipes.get(name);
+        const pipe = scope.pipes.get(name);
         return pipe ? {ref: {node: pipe.ref.node}} : null;
       },
     };
 
     context.addComponent({
       declaration: node,
-      selector,
+      selector: analysis.meta.selector,
       boundTemplate: abstractBoundTemplate,
       templateMeta: {
         isInline: analysis.template.declaration.isInline,

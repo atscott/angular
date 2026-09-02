@@ -5,10 +5,12 @@
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.dev/license
  */
+import ts from 'typescript';
 import {AbsoluteFsPath, getFileSystem, PathManipulation} from '../../src/ngtsc/file_system';
 import {runInEachFileSystem} from '../../src/ngtsc/file_system/testing';
 import {
   AbsoluteSourceSpan,
+  ElementIdentifier,
   IdentifierKind,
   IndexedComponent,
   TopLevelIdentifier,
@@ -198,6 +200,44 @@ runInEachFileSystem(() => {
         const testImportComp = indexedComps.find((cmp) => cmp.name === 'TestImportCmp');
         expect(testComp).toBeDefined();
         expect(testImportComp).toBeDefined();
+      });
+
+      it('should index host directives applied to elements', () => {
+        const componentContent = `
+        import {Component, Directive} from '@angular/core';
+
+        @Directive({
+          selector: '[hostDir]',
+        })
+        export class HostDir {}
+
+        @Directive({
+          selector: '[myDir]',
+          hostDirectives: [HostDir],
+        })
+        export class MyDir {}
+
+        @Component({
+          selector: 'test-cmp',
+          imports: [MyDir],
+          template: '<div myDir></div>',
+        })
+        export class TestCmp {}
+      `;
+        env.write(testSourceFile, componentContent);
+        const indexed = env.driveIndexer();
+        const indexedComps = Array.from(indexed.values());
+        const testComp = indexedComps.find((comp) => comp.name === 'TestCmp')!;
+        const elementId = Array.from(testComp.template.identifiers).find(
+          (id): id is ElementIdentifier => id.kind === IdentifierKind.Element,
+        )!;
+
+        expect(elementId).toBeDefined();
+        const usedDirNames = Array.from(elementId.usedDirectives).map(
+          (dir) => (dir.node as ts.ClassDeclaration).name!.text,
+        );
+        expect(usedDirNames).toContain('MyDir');
+        expect(usedDirNames).toContain('HostDir');
       });
     });
   });
