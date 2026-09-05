@@ -514,7 +514,13 @@ export abstract class AbstractEmitterVisitor
 
   visitReadKeyExpr(ast: o.ReadKeyExpr, ctx: EmitterVisitorContext): void {
     this.printLeadingComments(ast, ctx);
-    ast.receiver.visitExpression(this, ctx);
+    if (this.printTypes) {
+      ctx.print(ast, '(');
+      ast.receiver.visitExpression(this, ctx);
+      ctx.print(ast, ' as any)');
+    } else {
+      ast.receiver.visitExpression(this, ctx);
+    }
     ctx.print(ast, ast.isOptional ? `?.[` : `[`);
     ast.index.visitExpression(this, ctx);
     ctx.print(ast, `]`);
