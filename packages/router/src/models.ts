@@ -321,6 +321,29 @@ export type LoadChildrenCallback = () =>
 export type LoadChildren = LoadChildrenCallback;
 
 /**
+ * The route configuration that can be loaded lazily via `Route.loadConfig`.
+ *
+ * Route matching, redirection, hierarchy, and component properties (`path`, `pathMatch`,
+ * `matcher`, `outlet`, `redirectTo`, `loadConfig`, `children`, `loadChildren`, `component`,
+ * and `loadComponent`) cannot be defined in `loadConfig`.
+ *
+ * @publicApi
+ */
+export type LoadConfigRoute = Omit<
+  Route,
+  | 'path'
+  | 'pathMatch'
+  | 'matcher'
+  | 'outlet'
+  | 'redirectTo'
+  | 'loadConfig'
+  | 'children'
+  | 'loadChildren'
+  | 'component'
+  | 'loadComponent'
+>;
+
+/**
  *
  * How to handle query parameters in a router link.
  * One of:
@@ -672,6 +695,33 @@ export interface Route {
   _loadedComponent?: Type<unknown>;
 
   /**
+   * An object specifying lazy-loaded route configuration.
+   *
+   * Route matching, redirection, hierarchy, and component properties (`path`, `pathMatch`, `matcher`,
+   * `outlet`, `redirectTo`, `children`, `loadChildren`, `component`, and `loadComponent`) must be specified
+   * on the route directly. The lazy configuration can provide `providers`, `canActivate`, `canActivateChild`,
+   * `canDeactivate`, `canMatch`, `resolve`, `resources`, `data`, `title`, and `runGuardsAndResolvers`.
+   *
+   * ```ts
+   * [{
+   *   path: 'feature',
+   *   loadComponent: () => import('./feature.component'),
+   *   loadConfig: () => import('./feature.config').then(mod => mod.CONFIG),
+   * }];
+   * ```
+   *
+   * If the lazy-loaded config is exported via a `default` export, the `.then` can be omitted:
+   * ```ts
+   * [{
+   *   path: 'feature',
+   *   loadComponent: () => import('./feature.component'),
+   *   loadConfig: () => import('./feature.config'),
+   * }];
+   * ```
+   */
+  loadConfig?: () => LoadConfigRoute | Promise<LoadConfigRoute | DefaultExport<LoadConfigRoute>>;
+
+  /**
    * A URL or function that returns a URL to redirect to when the path matches.
    *
    * Absolute if the URL begins with a slash (/) or the function returns a `UrlTree`, otherwise
@@ -835,6 +885,11 @@ export interface Route {
    * @internal
    */
   _loadedNgModuleFactory?: NgModuleFactory<any>;
+  /**
+   * Whether the route configuration from `loadConfig` has been loaded.
+   * @internal
+   */
+  _configLoaded?: boolean;
 }
 
 export interface LoadedRouterConfig {
