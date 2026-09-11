@@ -52,6 +52,8 @@ export async function recognize(
   urlSerializer: UrlSerializer,
   paramsInheritanceStrategy: ParamsInheritanceStrategy,
   abortSignal: AbortSignal,
+  // TODO: Remove this parameter when the deprecated `canLoad` guard is removed.
+  skipCanLoadGuards = false,
 ): Promise<{state: RouterStateSnapshot; tree: UrlTree}> {
   return new Recognizer(
     injector,
@@ -62,10 +64,11 @@ export async function recognize(
     paramsInheritanceStrategy,
     urlSerializer,
     abortSignal,
+    skipCanLoadGuards,
   ).recognize();
 }
 
-const MAX_ALLOWED_REDIRECTS = 31;
+export const MAX_ALLOWED_REDIRECTS = 31;
 
 export class Recognizer {
   private applyRedirects: ApplyRedirects;
@@ -81,6 +84,8 @@ export class Recognizer {
     private paramsInheritanceStrategy: ParamsInheritanceStrategy,
     private readonly urlSerializer: UrlSerializer,
     private readonly abortSignal: AbortSignal,
+    // TODO: Remove this parameter when the deprecated `canLoad` guard is removed.
+    private readonly skipCanLoadGuards = false,
   ) {
     this.applyRedirects = new ApplyRedirects(this.urlSerializer, this.urlTree);
   }
@@ -514,17 +519,19 @@ export class Recognizer {
       if (this.abortSignal.aborted) {
         throw new Error(this.abortSignal.reason);
       }
-      const shouldLoadResult = await firstValueFrom(
-        runCanLoadGuards(injector, route, segments, this.urlSerializer, this.abortSignal),
-      );
-      if (shouldLoadResult) {
-        const cfg = await this.configLoader.loadChildren(injector, route);
-        route._loadedRoutes = cfg.routes;
-        route._loadedInjector = cfg.injector;
-        route._loadedNgModuleFactory = cfg.factory;
-        return cfg;
+      if (!this.skipCanLoadGuards) {
+        const shouldLoadResult = await firstValueFrom(
+          runCanLoadGuards(injector, route, segments, this.urlSerializer, this.abortSignal),
+        );
+        if (!shouldLoadResult) {
+          throw canLoadFails(route);
+        }
       }
-      throw canLoadFails(route);
+      const cfg = await this.configLoader.loadChildren(injector, route);
+      route._loadedRoutes = cfg.routes;
+      route._loadedInjector = cfg.injector;
+      route._loadedNgModuleFactory = cfg.factory;
+      return cfg;
     }
 
     return {routes: [], injector};

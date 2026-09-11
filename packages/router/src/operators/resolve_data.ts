@@ -7,7 +7,16 @@
  */
 
 import {EnvironmentInjector, ProviderToken, runInInjectionContext} from '@angular/core';
-import {defer, EMPTY, from, MonoTypeOperatorFunction, Observable, of, throwError} from 'rxjs';
+import {
+  defer,
+  EMPTY,
+  firstValueFrom,
+  from,
+  MonoTypeOperatorFunction,
+  Observable,
+  of,
+  throwError,
+} from 'rxjs';
 import {catchError, concatMap, first, map, mergeMap, takeLast, tap} from 'rxjs/operators';
 
 import {RedirectCommand, ResolveData} from '../models';
@@ -71,12 +80,12 @@ export function resolveData(
 /**
  *  Returns the `ActivatedRouteSnapshot` tree as an array, using DFS to traverse the route tree.
  */
-function flattenRouteTree(route: ActivatedRouteSnapshot): ActivatedRouteSnapshot[] {
+export function flattenRouteTree(route: ActivatedRouteSnapshot): ActivatedRouteSnapshot[] {
   const descendants = route.children.map((child) => flattenRouteTree(child)).flat();
   return [route, ...descendants];
 }
 
-function runResolve(
+export function runResolve(
   futureARS: ActivatedRouteSnapshot,
   futureRSS: RouterStateSnapshot,
   paramsInheritanceStrategy: 'emptyOnly' | 'always',
@@ -137,4 +146,26 @@ function getResolver(
     ? resolver.resolve(futureARS, futureRSS)
     : runInInjectionContext(closestInjector, () => resolver(futureARS, futureRSS));
   return wrapIntoObservable(resolverValue);
+}
+
+/**
+ * Resolves data for all routes in a route snapshot tree in top-down DFS order.
+ *
+ * Note that `runResolve` can complete without emitting when a resolver returns an empty
+ * observable, so a `defaultValue` is required to avoid rejecting with an `EmptyError`.
+ */
+export async function resolveAllData(
+  targetSnapshot: RouterStateSnapshot,
+  paramsInheritanceStrategy: 'emptyOnly' | 'always',
+  abortSignal?: AbortSignal,
+): Promise<void> {
+  const allRoutes = flattenRouteTree(targetSnapshot.root);
+  for (const route of allRoutes) {
+    if (abortSignal?.aborted) {
+      return;
+    }
+    await firstValueFrom(runResolve(route, targetSnapshot, paramsInheritanceStrategy), {
+      defaultValue: null,
+    });
+  }
 }

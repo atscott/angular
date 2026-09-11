@@ -11,11 +11,20 @@ import {
   Resource,
   effect,
   DestroyRef,
+  EnvironmentInjector,
 } from '@angular/core';
 import {OperatorFunction, pipe} from 'rxjs';
 import {ResourceContext, ResourceResult} from '../models';
+import {createRouterState} from '../create_router_state';
+import {RouteReuseStrategy} from '../route_reuse_strategy';
 import {NavigationTransition} from '../navigation_transition';
-import {ActivatedRoute, ActivatedRouteSnapshot, initializeActivatedRoute} from '../router_state';
+import {
+  ActivatedRoute,
+  ActivatedRouteSnapshot,
+  initializeActivatedRoute,
+  RouterState,
+  RouterStateSnapshot,
+} from '../router_state';
 import {TreeNode} from '../utils/tree';
 import {
   BLOCKING_SYMBOL,
@@ -30,36 +39,59 @@ export function setupAndRunResources(
 ): OperatorFunction<NavigationTransition, NavigationTransition> {
   return pipe(
     switchTap(({newlyCreatedRoutes, targetRouterState}) => {
-      if (!newlyCreatedRoutes || !targetRouterState || abortSignal.aborted) {
+      if (!newlyCreatedRoutes || !targetRouterState) {
         return;
       }
-
-      const resourceSetupPromises: Array<Promise<void>> = [];
-      const blockingResourcePromises: Array<Promise<void>> = [];
-
-      const traverse = (stateNode: TreeNode<ActivatedRoute>) => {
-        const route = stateNode.value;
-        if (route) {
-          initializeActivatedRoute(route);
-          processRoute(
-            route,
-            newlyCreatedRoutes,
-            resourceSetupPromises,
-            abortSignal,
-            blockingResourcePromises,
-          );
-        }
-
-        for (const childState of stateNode.children) {
-          traverse(childState);
-        }
-      };
-
-      traverse(targetRouterState._root);
-
-      return Promise.all(resourceSetupPromises).then(() => Promise.all(blockingResourcePromises));
+      return runResources(newlyCreatedRoutes, targetRouterState, abortSignal);
     }),
   );
+}
+
+export function runResources(
+  newlyCreatedRoutes: Set<ActivatedRoute>,
+  targetRouterState: RouterState,
+  abortSignal: AbortSignal,
+  /**
+   * When `true`, the returned promise also waits for non-blocking resources to settle. This is
+   * used when preloading, where the caller destroys the resource injectors as soon as the promise
+   * resolves and would otherwise abort in-flight requests for non-blocking resources.
+   */
+  awaitNonBlockingResources = false,
+): Promise<void> {
+  if (abortSignal.aborted) {
+    return Promise.resolve();
+  }
+
+  const resourceSetupPromises: Array<Promise<void>> = [];
+  const settledResourcePromises: Array<Promise<void>> = [];
+
+  const traverse = (stateNode: TreeNode<ActivatedRoute>) => {
+    const route = stateNode.value;
+    if (route) {
+      initializeActivatedRoute(route);
+      processRoute(
+        route,
+        newlyCreatedRoutes,
+        resourceSetupPromises,
+        abortSignal,
+        settledResourcePromises,
+        awaitNonBlockingResources,
+      );
+    }
+
+    for (const childState of stateNode.children) {
+      traverse(childState);
+    }
+  };
+
+  traverse(targetRouterState._root);
+
+  // Note that `settledResourcePromises` must be read lazily: an async `resources` function pushes
+  // its promises after the setup promise resolves. Rejections that happen before the array is
+  // awaited are handled where the promises are created (see `waitForResources`).
+  return Promise.all(resourceSetupPromises)
+    .then(() => Promise.all(settledResourcePromises))
+    .then(() => {});
 }
 
 function processRoute(
@@ -67,7 +99,8 @@ function processRoute(
   newlyCreatedRoutes: Set<ActivatedRoute>,
   resourceSetupPromises: Array<Promise<void>>,
   abortSignal: AbortSignal,
-  blockingResourcePromises: Array<Promise<void>>,
+  settledResourcePromises: Array<Promise<void>>,
+  awaitNonBlockingResources: boolean,
 ) {
   const resources = route.routeConfig?.resources;
   if (!resources) {
@@ -77,10 +110,16 @@ function processRoute(
   if (newlyCreatedRoutes.has(route)) {
     // This route is new. We need to run its resources function once.
     resourceSetupPromises.push(
-      setupNewRouterResources(route._futureSnapshot, route, abortSignal, blockingResourcePromises),
+      setupNewRouterResources(
+        route._futureSnapshot,
+        route,
+        abortSignal,
+        settledResourcePromises,
+        awaitNonBlockingResources,
+      ),
     );
   } else {
-    updateExistingResources(route, blockingResourcePromises, abortSignal);
+    updateExistingResources(route, settledResourcePromises, abortSignal, awaitNonBlockingResources);
   }
 }
 
@@ -88,7 +127,8 @@ async function setupNewRouterResources(
   snapshot: ActivatedRouteSnapshot,
   route: ActivatedRoute,
   abortSignal: AbortSignal,
-  blockingResourcePromises: Promise<void>[],
+  settledResourcePromises: Promise<void>[],
+  awaitNonBlockingResources: boolean,
 ) {
   const resourcesFn = snapshot?.routeConfig?.resources;
   const parentInjector = snapshot?._environmentInjector;
@@ -140,13 +180,20 @@ async function setupNewRouterResources(
   }
 
   route.resources = route._futureSnapshot.resources = snapshot.resources = wrappedResult;
-  setupBlocking(route, wrappedResult, blockingResourcePromises, abortSignal);
+  waitForResources(
+    route,
+    wrappedResult,
+    settledResourcePromises,
+    abortSignal,
+    awaitNonBlockingResources,
+  );
 }
 
 function updateExistingResources(
   route: ActivatedRoute,
-  blockingResourcePromises: Promise<void>[],
+  settledResourcePromises: Promise<void>[],
   abortSignal: AbortSignal,
+  awaitNonBlockingResources: boolean,
 ) {
   // This route is reused. We must eagerly update the resource context signals
   // so that resources can react and fetch new data during the pending navigation.
@@ -166,14 +213,27 @@ function updateExistingResources(
   });
 
   route._futureSnapshot.resources = currentResources;
-  setupBlocking(route, currentResources, blockingResourcePromises, abortSignal);
+  waitForResources(
+    route,
+    currentResources,
+    settledResourcePromises,
+    abortSignal,
+    awaitNonBlockingResources,
+  );
 }
 
-function setupBlocking(
+/**
+ * Creates a promise for each resource of the given route that resolves when the resource settles
+ * (or rejects if a blocking resource errors) and pushes it onto `settledResourcePromises`.
+ *
+ * Only blocking resources are awaited unless `awaitNonBlockingResources` is set.
+ */
+function waitForResources(
   route: ActivatedRoute,
   resourceResult: ResourceResult,
-  blockingResourcePromises: Array<Promise<void>>,
+  settledResourcePromises: Array<Promise<void>>,
   abortSignal: AbortSignal,
+  awaitNonBlockingResources: boolean,
 ) {
   if (abortSignal.aborted) return;
   const childInjector = route._localInjector;
@@ -181,7 +241,8 @@ function setupBlocking(
 
   for (const r of Object.values(resourceResult)) {
     const res = r as InternalRouterResource;
-    if (res[BLOCKING_SYMBOL] === false) {
+    const isBlocking = res[BLOCKING_SYMBOL] !== false;
+    if (!isBlocking && !awaitNonBlockingResources) {
       continue;
     }
     const promise = new Promise<void>((resolve, reject) => {
@@ -211,7 +272,12 @@ function setupBlocking(
           const status = underlyingRes.status();
           if (status === 'error') {
             cleanup();
-            reject(underlyingRes.error());
+            // A failing non-blocking resource must not fail the navigation (or the preload).
+            if (isBlocking) {
+              reject(underlyingRes.error());
+            } else {
+              resolve();
+            }
           } else if (!underlyingRes.isLoading()) {
             cleanup();
             resolve();
@@ -225,6 +291,54 @@ function setupBlocking(
         resolve();
       });
     });
-    blockingResourcePromises.push(promise);
+    // The promise may reject before the caller awaits the collected promises (in particular when
+    // the `resources` function of another route is still being set up). Attaching a no-op handler
+    // here marks the rejection as handled without swallowing it for `Promise.all` below.
+    promise.catch(() => {});
+    settledResourcePromises.push(promise);
+  }
+}
+
+/**
+ * A `RouteReuseStrategy` that never reuses, stores, or retrieves routes.
+ *
+ * Preloading must not interact with the routes of the live application: retrieving a stored
+ * `DetachedRouteHandle` would mark real `ActivatedRoute`s as pending (they would never be
+ * advanced, because preloading does not activate anything), replace the children of the stored
+ * handle, and reload the resources of the live route.
+ */
+const NO_REUSE_STRATEGY: RouteReuseStrategy = {
+  shouldDetach: () => false,
+  store: () => {},
+  shouldAttach: () => false,
+  retrieve: () => null,
+  shouldReuseRoute: () => false,
+};
+
+/**
+ * Preloads resources for routes in a route snapshot tree, waiting for all resources (blocking and
+ * non-blocking) to settle and destroying transient injectors upon completion.
+ *
+ * All resources are awaited because the injectors are destroyed as soon as this promise resolves;
+ * destroying a resource that is still loading aborts its request, which would defeat the purpose
+ * of preloading.
+ */
+export async function preloadResources(
+  snapshot: RouterStateSnapshot,
+  abortSignal: AbortSignal,
+): Promise<void> {
+  const {newlyCreatedRoutes, state} = createRouterState(NO_REUSE_STRATEGY, snapshot);
+  try {
+    await runResources(
+      newlyCreatedRoutes,
+      state,
+      abortSignal,
+      /* awaitNonBlockingResources */ true,
+    );
+  } finally {
+    for (const r of newlyCreatedRoutes) {
+      r._localInjector?.destroy();
+      r._localInjector = undefined;
+    }
   }
 }

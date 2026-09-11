@@ -61,6 +61,7 @@ import {
 } from './navigation_canceling_error';
 import {ActivateRoutes} from './operators/activate_routes';
 import {checkGuards} from './operators/check_guards';
+import {loadComponents} from './load_components';
 import {recognize} from './operators/recognize';
 import {resolveData} from './operators/resolve_data';
 import {ROUTER_RESOURCES_FEATURE} from './router_resource_feature';
@@ -723,29 +724,9 @@ export class NavigationTransitions {
           }),
 
           // --- LOAD COMPONENTS ---
-          switchTap((t: NavigationTransition) => {
-            const loadComponents = (route: ActivatedRouteSnapshot): Array<Promise<void>> => {
-              const loaders: Array<Promise<void>> = [];
-              if (route.routeConfig?._loadedComponent) {
-                route.component = route.routeConfig?._loadedComponent;
-              } else if (route.routeConfig?.loadComponent) {
-                const injector = route._environmentInjector;
-                loaders.push(
-                  this.configLoader
-                    .loadComponent(injector, route.routeConfig)
-                    .then((loadedComponent) => {
-                      route.component = loadedComponent;
-                    }),
-                );
-              }
-              for (const child of route.children) {
-                loaders.push(...loadComponents(child));
-              }
-              return loaders;
-            };
-            const loaders = loadComponents(t.targetSnapshot!.root);
-            return loaders.length === 0 ? of(t) : from(Promise.all(loaders).then(() => t));
-          }),
+          switchTap((t: NavigationTransition) =>
+            loadComponents(t.targetSnapshot!.root, this.configLoader),
+          ),
 
           switchMap((t: NavigationTransition) => {
             const {newlyCreatedRoutes, state} = createRouterState(

@@ -20,7 +20,7 @@ import {TreeNode} from './utils/tree';
 export function createRouterState(
   routeReuseStrategy: RouteReuseStrategy,
   curr: RouterStateSnapshot,
-  prevState: RouterState,
+  prevState?: RouterState,
 ): {newlyCreatedRoutes: Set<ActivatedRoute>; state: RouterState} {
   const newlyCreatedRoutes = new Set<ActivatedRoute>();
   const root = createNode(

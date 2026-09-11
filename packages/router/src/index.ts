@@ -131,6 +131,7 @@ export {
   PreloadingStrategy,
   RouterPreloader,
 } from './router_preloader';
+export {injectPreloadRoute, type PreloadRouteFn, type PreloadRouteOptions} from './preload_route';
 export {
   ActivatedRoute,
   ActivatedRouteSnapshot,

@@ -368,6 +368,9 @@ export type InitialNavigation = 'disabled' | 'enabledBlocking' | 'enabledNonBloc
 export type InitialNavigationFeature = EnabledBlockingInitialNavigationFeature | DisabledInitialNavigationFeature;
 
 // @public
+export function injectPreloadRoute(): PreloadRouteFn;
+
+// @public
 export type InMemoryScrollingFeature = RouterFeature<RouterFeatureKind.InMemoryScrollingFeature>;
 
 // @public
@@ -597,6 +600,14 @@ export type PreloadingFeature = RouterFeature<RouterFeatureKind.PreloadingFeatur
 export abstract class PreloadingStrategy {
     // (undocumented)
     abstract preload(route: Route, fn: () => Observable<any>): Observable<any>;
+}
+
+// @public
+export type PreloadRouteFn = (url: string | UrlTree, options?: PreloadRouteOptions) => Promise<void>;
+
+// @public
+export interface PreloadRouteOptions {
+    signal?: AbortSignal;
 }
 
 // @public

@@ -10,7 +10,7 @@ import {ComponentRef, EffectRef, InjectionToken} from '@angular/core';
 import {OperatorFunction} from 'rxjs';
 import type {NavigationTransition} from './navigation_transition';
 
-import type {ActivatedRoute} from './router_state';
+import type {ActivatedRoute, RouterStateSnapshot} from './router_state';
 
 export interface RouterResourcesFeatureImplementation {
   setupAndRunResources(
@@ -20,6 +20,7 @@ export interface RouterResourcesFeatureImplementation {
     componentRef: ComponentRef<unknown>,
     route: ActivatedRoute,
   ) => {createdEffects: EffectRef[]; handledKeys: string[]};
+  preloadResources: (snapshot: RouterStateSnapshot, abortSignal: AbortSignal) => Promise<void>;
 }
 
 export const ROUTER_RESOURCES_FEATURE = new InjectionToken<RouterResourcesFeatureImplementation>(

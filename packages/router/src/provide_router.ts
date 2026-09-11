@@ -49,7 +49,7 @@ import {
   RouterConfigOptions,
 } from './router_config';
 import {ROUTES} from './router_config_loader';
-import {setupAndRunResources} from './operators/setup_and_run_resources';
+import {preloadResources, setupAndRunResources} from './operators/setup_and_run_resources';
 import {PreloadingStrategy, RouterPreloader} from './router_preloader';
 
 import {ROUTER_SCROLLER, RouterScroller} from './router_scroller';
@@ -940,6 +940,7 @@ export function withRouterResources(): RouterResourcesFeature {
       useValue: {
         setupAndRunResources,
         createResourceOutletBindingEffects,
+        preloadResources,
       },
     },
   ];
