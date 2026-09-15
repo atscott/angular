@@ -432,11 +432,14 @@ describe('standalone in Router API', () => {
   });
 
   describe('injection context for loadComponent/loadChildren', () => {
-    it('should allow loadComponent to inject route-level providers', async () => {
-      @Injectable()
-      class RouteService {
-        value = 'route-service';
-      }
+    it('should run loadComponent in the injection context of the Router, not the route', async () => {
+      const ROOT_TOKEN = new InjectionToken<string>('root', {
+        providedIn: 'root',
+        factory: () => 'root',
+      });
+      const ROUTE_TOKEN = new InjectionToken<string>('route');
+      let rootValue: string | undefined;
+      let routeValue: string | null | undefined;
       @Component({
         template: ``,
       })
@@ -446,9 +449,10 @@ describe('standalone in Router API', () => {
           RouterModule.forRoot([
             {
               path: 'with-provider',
-              providers: [RouteService],
+              providers: [{provide: ROUTE_TOKEN, useValue: 'route'}],
               loadComponent: () => {
-                expect(inject(RouteService).value).toBe('route-service');
+                rootValue = inject(ROOT_TOKEN);
+                routeValue = inject(ROUTE_TOKEN, {optional: true});
                 return Cmp;
               },
             },
@@ -456,22 +460,29 @@ describe('standalone in Router API', () => {
         ],
       });
       await TestBed.inject(Router).navigateByUrl('/with-provider');
+
       expect(TestBed.inject(Router).url).toContain('with-provider');
+      expect(rootValue).toBe('root');
+      expect(routeValue).toBeNull();
     });
 
-    it('should allow loadChildren to inject route-level providers', async () => {
-      @Injectable()
-      class RouteService {
-        value = 'route-service';
-      }
+    it('should run loadChildren in the injection context of the Router, not the route', async () => {
+      const ROOT_TOKEN = new InjectionToken<string>('root', {
+        providedIn: 'root',
+        factory: () => 'root',
+      });
+      const ROUTE_TOKEN = new InjectionToken<string>('route');
+      let rootValue: string | undefined;
+      let routeValue: string | null | undefined;
       TestBed.configureTestingModule({
         imports: [
           RouterModule.forRoot([
             {
               path: 'with-provider',
-              providers: [RouteService],
+              providers: [{provide: ROUTE_TOKEN, useValue: 'route'}],
               loadChildren: () => {
-                expect(inject(RouteService).value).toEqual('route-service');
+                rootValue = inject(ROOT_TOKEN);
+                routeValue = inject(ROUTE_TOKEN, {optional: true});
                 return [];
               },
             },
@@ -479,69 +490,45 @@ describe('standalone in Router API', () => {
         ],
       });
       await TestBed.inject(Router).navigateByUrl('/with-provider');
+
       expect(TestBed.inject(Router).url).toContain('with-provider');
+      expect(rootValue).toBe('root');
+      expect(routeValue).toBeNull();
     });
 
-    it('should use the injector for the route, not its parent, in loadComponent', async () => {
-      const TOKEN = new InjectionToken<string>('token');
+    it('should create a lazy loaded NgModule with the injector of the route as its parent', async () => {
+      const ROUTE_TOKEN = new InjectionToken<string>('route');
+      const MODULE_TOKEN = new InjectionToken<string>('module');
       @Component({
-        template: ``,
+        template: `{{ value }}`,
       })
       class Cmp {
-        constructor(public service: any) {}
+        readonly value = inject(MODULE_TOKEN);
       }
-      TestBed.configureTestingModule({
-        imports: [
-          RouterModule.forRoot([
-            {
-              path: 'parent',
-              providers: [{provide: TOKEN, useValue: 'parent'}],
-              children: [
-                {
-                  path: 'child',
-                  providers: [{provide: TOKEN, useValue: 'child'}],
-                  loadComponent: () => {
-                    expect(inject(TOKEN)).toBe('child');
-                    return Cmp;
-                  },
-                },
-              ],
-            },
-          ]),
-        ],
-      });
-      await TestBed.inject(Router).navigateByUrl('/parent/child');
-      expect(TestBed.inject(Router).url).toContain('parent/child');
-    });
-
-    it('should use the injector for the route, not its parent, in loadChildren', async () => {
-      const TOKEN = new InjectionToken<string>('token');
-      @Component({
-        template: ``,
+      @NgModule({
+        imports: [RouterModule.forChild([{path: '', component: Cmp}])],
+        // Resolved from the injector the `NgModule` is created in, which must be the injector of
+        // the route that declares `loadChildren`.
+        providers: [{provide: MODULE_TOKEN, useFactory: () => inject(ROUTE_TOKEN)}],
       })
-      class Cmp {}
+      class LazyModule {}
+
       TestBed.configureTestingModule({
         imports: [
           RouterModule.forRoot([
             {
-              path: 'parent',
-              providers: [{provide: TOKEN, useValue: 'parent'}],
-              children: [
-                {
-                  path: 'child',
-                  providers: [{provide: TOKEN, useValue: 'child'}],
-                  loadChildren: () => {
-                    expect(inject(TOKEN)).toBe('child');
-                    return [{path: '', component: Cmp}];
-                  },
-                },
-              ],
+              path: 'lazy',
+              providers: [{provide: ROUTE_TOKEN, useValue: 'from-route'}],
+              loadChildren: () => LazyModule,
             },
           ]),
         ],
       });
-      await TestBed.inject(Router).navigateByUrl('/parent/child');
-      expect(TestBed.inject(Router).url).toContain('parent/child');
+      const root = TestBed.createComponent(RootCmp);
+      await TestBed.inject(Router).navigateByUrl('/lazy');
+      await root.whenStable();
+
+      expect(root.nativeElement.innerHTML).toContain('from-route');
     });
   });
 });

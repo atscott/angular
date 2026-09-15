@@ -26,9 +26,8 @@ export function loadComponents(
     if (route.routeConfig?._loadedComponent) {
       route.component = route.routeConfig?._loadedComponent;
     } else if (route.routeConfig?.loadComponent) {
-      const injector = route._environmentInjector;
       loaders.push(
-        configLoader.loadComponent(injector, route.routeConfig).then((loadedComponent) => {
+        configLoader.loadComponent(route.routeConfig).then((loadedComponent) => {
           route.component = loadedComponent;
         }),
       );

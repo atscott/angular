@@ -197,7 +197,7 @@ export class RouterPreloader implements OnDestroy {
       );
       loaders.push(recursiveLoadChildren$);
       if (route.loadComponent && !route._loadedComponent) {
-        loaders.push(from(this.loader.loadComponent(injector, route)));
+        loaders.push(from(this.loader.loadComponent(route)));
       }
       return from(loaders).pipe(mergeAll()) as Observable<void>;
     });

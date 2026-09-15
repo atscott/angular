@@ -675,6 +675,12 @@ export interface Route {
   /**
    * An object specifying a lazy-loaded component.
    *
+   * The callback runs in the injection context of the injector the `Router` was created in, not in
+   * the injection context of the route it is declared on. Route `providers`, including any
+   * contributed by `loadConfig`, are not available to it. This keeps loading a component
+   * independent of resolving the route's configuration and providers so that the two can happen
+   * concurrently.
+   *
    * @see [Injection context lazy loading](guide/routing/loading-strategies)
    *
    */
@@ -832,6 +838,11 @@ export interface Route {
   children?: Routes;
   /**
    * An object specifying lazy-loaded child routes.
+   *
+   * The callback runs in the injection context of the injector the `Router` was created in, not in
+   * the injection context of the route it is declared on. If the callback returns an `NgModule`,
+   * that module is still created with the route's injector as its parent; only the injection
+   * context of the callback itself differs.
    *
    * @see [Injection context lazy loading](guide/routing/loading-strategies)
    *
