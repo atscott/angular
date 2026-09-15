@@ -52,8 +52,13 @@ export async function recognize(
   urlSerializer: UrlSerializer,
   paramsInheritanceStrategy: ParamsInheritanceStrategy,
   abortSignal: AbortSignal,
-  // TODO: Remove this parameter when the deprecated `canLoad` guard is removed.
-  skipCanLoadGuards = false,
+  /**
+   * Whether route matching is performed for a preload rather than for a navigation. Preloading is
+   * speculative and its results are discarded, which allows it to do work that a navigation
+   * cannot: it skips the deprecated `canLoad` guards and starts loading the component of a route
+   * as soon as that route matches.
+   */
+  preload = false,
 ): Promise<{state: RouterStateSnapshot; tree: UrlTree}> {
   return new Recognizer(
     injector,
@@ -64,7 +69,7 @@ export async function recognize(
     paramsInheritanceStrategy,
     urlSerializer,
     abortSignal,
-    skipCanLoadGuards,
+    preload,
   ).recognize();
 }
 
@@ -84,8 +89,8 @@ export class Recognizer {
     private paramsInheritanceStrategy: ParamsInheritanceStrategy,
     private readonly urlSerializer: UrlSerializer,
     private readonly abortSignal: AbortSignal,
-    // TODO: Remove this parameter when the deprecated `canLoad` guard is removed.
-    private readonly skipCanLoadGuards = false,
+    /** See the `preload` parameter of `recognize`. */
+    private readonly preload = false,
   ) {
     this.applyRedirects = new ApplyRedirects(this.urlSerializer, this.urlTree);
   }
@@ -427,6 +432,7 @@ export class Recognizer {
       createSnapshot,
       this.abortSignal,
       this.configLoader,
+      this.preload,
     );
     if (route.path === '**') {
       // Prior versions of the route matching algorithm would stop matching at the wildcard route.
@@ -519,7 +525,8 @@ export class Recognizer {
       if (this.abortSignal.aborted) {
         throw new Error(this.abortSignal.reason);
       }
-      if (!this.skipCanLoadGuards) {
+      // TODO: Remove this check when the deprecated `canLoad` guard is removed.
+      if (!this.preload) {
         const shouldLoadResult = await firstValueFrom(
           runCanLoadGuards(injector, route, segments, this.urlSerializer, this.abortSignal),
         );

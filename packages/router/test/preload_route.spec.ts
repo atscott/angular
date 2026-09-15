@@ -80,6 +80,51 @@ describe('injectPreloadRoute', () => {
     expect((router.config[0] as any)._loadedComponent).toBe(ComponentA);
   });
 
+  it('starts loading the component of a route as soon as that route matches', async () => {
+    let parentConfigLoaded = false;
+    let parentComponentStarted = false;
+    let childComponentStarted = false;
+
+    const routes: Route[] = [
+      {
+        path: 'parent',
+        loadConfig: async () => {
+          // The component does not depend on the configuration, so it is already being loaded.
+          expect(parentComponentStarted).toBeTrue();
+          // The child route has not been matched yet.
+          expect(childComponentStarted).toBeFalse();
+          await timeout(10);
+          parentConfigLoaded = true;
+          return {};
+        },
+        loadComponent: () => {
+          parentComponentStarted = true;
+          return Promise.resolve(ComponentA);
+        },
+        children: [
+          {
+            path: 'child',
+            loadConfig: async () => {
+              expect(parentConfigLoaded).toBeTrue();
+              expect(childComponentStarted).toBeTrue();
+              return {};
+            },
+            loadComponent: () => {
+              childComponentStarted = true;
+              return Promise.resolve(ComponentB);
+            },
+          },
+        ],
+      },
+    ];
+    const {router, preload} = await setup(routes);
+
+    await preload('/parent/child');
+
+    expect((router.config[0] as any)._loadedComponent).toBe(ComponentA);
+    expect((router.config[0].children![0] as any)._loadedComponent).toBe(ComponentB);
+  });
+
   it('returns a function that can be called outside of an injection context', async () => {
     let loaderCalled = false;
     const routes: Route[] = [

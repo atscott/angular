@@ -60,10 +60,21 @@ export async function matchWithChecks(
   createSnapshot: (result: MatchResult) => ActivatedRouteSnapshot,
   abortSignal: AbortSignal,
   configLoader: RouterConfigLoader,
+  preload = false,
 ): Promise<MatchResult> {
   const result = match(segmentGroup, route, segments);
   if (!result.matched) {
     return result;
+  }
+
+  // Preloading is speculative, so it can start loading the component as soon as the path matches
+  // instead of waiting for the rest of the route tree to be recognized. The result is picked up
+  // later by `loadComponents`, which shares the same in-flight request. Rejections are ignored
+  // here because `loadComponents` reports them for the routes that are part of the final tree.
+  // Navigation does not do this: it loads components only after the guards have run, so that a
+  // route the user cannot activate does not load its component.
+  if (preload && route.loadComponent && !route._loadedComponent) {
+    configLoader.loadComponent(route).catch(() => {});
   }
 
   if (route.loadConfig && !isConfigLoaded(route)) {

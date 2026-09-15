@@ -141,33 +141,41 @@ export class RoutePreloadRunner {
     const key = this.urlSerializer.serialize(urlTree);
 
     let entry = this.inFlight.get(key);
+    const isNewEntry = entry === undefined;
     if (entry === undefined) {
-      const abortController = new AbortController();
-      const newEntry: InFlightPreload = {
-        abortController,
+      entry = {
+        abortController: new AbortController(),
         consumers: 0,
         promise: Promise.resolve(),
       };
-      newEntry.promise = this.runPreload(urlTree, abortController.signal).finally(() => {
-        if (this.inFlight.get(key) === newEntry) {
-          this.inFlight.delete(key);
-        }
-      });
-      this.inFlight.set(key, newEntry);
-      entry = newEntry;
+      this.inFlight.set(key, entry);
     }
 
     // The in-flight preload is shared, so it may only be aborted once _all_ of the callers that
     // are waiting on it have aborted. Callers that did not provide a signal never abort.
     const currentEntry = entry;
     currentEntry.consumers++;
+    const release = () => {
+      if (--currentEntry.consumers === 0) {
+        currentEntry.abortController.abort();
+      }
+    };
+    signal?.addEventListener('abort', release, {once: true});
+
+    // Start the work in a microtask rather than synchronously. Preloading runs synchronously until
+    // it reaches its first pending request, which is far enough to load a component and to observe
+    // an abort. Waiting gives every caller made in this task the chance to register above, so that
+    // one caller aborting cannot discard work the others are still waiting for.
+    if (isNewEntry) {
+      currentEntry.promise = Promise.resolve()
+        .then(() => this.runPreload(urlTree, currentEntry.abortController.signal))
+        .finally(() => {
+          if (this.inFlight.get(key) === currentEntry) {
+            this.inFlight.delete(key);
+          }
+        });
+    }
     if (signal) {
-      const release = () => {
-        if (--currentEntry.consumers === 0) {
-          currentEntry.abortController.abort();
-        }
-      };
-      signal.addEventListener('abort', release, {once: true});
       void currentEntry.promise.then(() => signal.removeEventListener('abort', release));
     }
 
@@ -193,9 +201,7 @@ export class RoutePreloadRunner {
           this.urlSerializer,
           this.paramsInheritanceStrategy,
           abortSignal,
-          // `canLoad` is deprecated and pending removal. Unlike `canMatch`, it cannot affect which
-          // route matches, so preloading always loads the config without running it.
-          /* skipCanLoadGuards */ true,
+          /* preload */ true,
         );
         if (abortSignal.aborted) {
           return;
