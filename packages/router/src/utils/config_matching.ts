@@ -34,6 +34,22 @@ const noMatch: MatchResult = {
   positionalParamSegments: {},
 };
 
+/**
+ * What route matching is being used for.
+ *
+ * - `navigation`: matching for a navigation. Guards run and a route's configuration is applied
+ *   before its children are matched.
+ * - `preload`: matching for a preload. The result is discarded, so guards are not run, but the
+ *   configurations are still applied in order because the snapshots built from them are used to
+ *   run the resolvers and resources.
+ * - `preload-warmup`: a first pass over the same routes as `preload` whose only purpose is to get
+ *   the lazy loading requests started. It does not wait for a configuration before matching the
+ *   children of a route, so the configurations along a URL load together rather than one per
+ *   level. Everything it produces is discarded and re-derived by the `preload` pass, which then
+ *   needs no requests of its own.
+ */
+export type RecognizeMode = 'navigation' | 'preload' | 'preload-warmup';
+
 export function createPreMatchRouteSnapshot(
   snapshot: ActivatedRouteSnapshot,
 ): PartialMatchRouteSnapshot {
@@ -60,38 +76,56 @@ export async function matchWithChecks(
   createSnapshot: (result: MatchResult) => ActivatedRouteSnapshot,
   abortSignal: AbortSignal,
   configLoader: RouterConfigLoader,
-  preload = false,
+  mode: RecognizeMode = 'navigation',
 ): Promise<MatchResult> {
   const result = match(segmentGroup, route, segments);
   if (!result.matched) {
     return result;
   }
 
-  // Preloading is speculative, so it can start loading the component as soon as the path matches
-  // instead of waiting for the rest of the route tree to be recognized. The result is picked up
-  // later by `loadComponents`, which shares the same in-flight request. Rejections are ignored
-  // here because `loadComponents` reports them for the routes that are part of the final tree.
-  // Navigation does not do this: it loads components only after the guards have run, so that a
-  // route the user cannot activate does not load its component.
-  if (preload && route.loadComponent && !route._loadedComponent) {
+  if (mode === 'navigation') {
+    if (route.loadConfig && !isConfigLoaded(route)) {
+      await configLoader.loadConfig(route);
+      if (abortSignal.aborted) {
+        throw new Error(abortSignal.reason);
+      }
+    }
+
+    const currentSnapshot = createPreMatchRouteSnapshot(createSnapshot(result));
+    // Only create the Route's `EnvironmentInjector` if it matches the attempted
+    // navigation
+    injector = getOrCreateRouteInjectorIfNeeded(route, injector);
+    const canMatch = await firstValueFrom(
+      runCanMatchGuards(injector, route, segments, urlSerializer, currentSnapshot, abortSignal),
+    );
+    return canMatch === true ? result : {...noMatch};
+  }
+
+  // Preloading is speculative and its results are discarded, so it does not run `canMatch`. That
+  // also means it does not need the route's `EnvironmentInjector`, and that it can start loading
+  // the component as soon as the path matches instead of waiting for the guards. The component is
+  // picked up later by `loadComponents`, which shares the same in-flight request; rejections are
+  // ignored here because `loadComponents` reports them for the routes that are part of the tree.
+  if (route.loadComponent && !route._loadedComponent) {
     configLoader.loadComponent(route).catch(() => {});
   }
 
   if (route.loadConfig && !isConfigLoaded(route)) {
-    await configLoader.loadConfig(route);
-    if (abortSignal.aborted) {
-      throw new Error(abortSignal.reason);
+    const config = configLoader.loadConfig(route);
+    if (mode === 'preload') {
+      await config;
+      if (abortSignal.aborted) {
+        throw new Error(abortSignal.reason);
+      }
+    } else {
+      // Nothing that a configuration contributes is needed to keep matching, so the warm-up pass
+      // moves on without it. This is what lets the configurations along the URL load together
+      // rather than one per level of the route tree.
+      config.catch(() => {});
     }
   }
 
-  const currentSnapshot = createPreMatchRouteSnapshot(createSnapshot(result));
-  // Only create the Route's `EnvironmentInjector` if it matches the attempted
-  // navigation
-  injector = getOrCreateRouteInjectorIfNeeded(route, injector);
-  const canMatch = await firstValueFrom(
-    runCanMatchGuards(injector, route, segments, urlSerializer, currentSnapshot, abortSignal),
-  );
-  return canMatch === true ? result : {...noMatch};
+  return result;
 }
 
 export function match(

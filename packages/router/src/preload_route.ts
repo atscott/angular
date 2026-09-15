@@ -50,7 +50,9 @@ export type PreloadRouteFn = (
  *
  * Preloading performs the work that can be done ahead of time for a URL:
  *
- * 1. loads the dynamic imports needed to render the route (`loadChildren` and `loadComponent`)
+ * 1. loads the dynamic imports needed to render the route (`loadConfig`, `loadChildren`, and
+ *    `loadComponent`). The configurations and components along the URL are loaded together rather
+ *    than one route at a time.
  * 2. executes the route's resolvers
  * 3. executes the route's resources, when `withRouterResources()` is configured
  *
@@ -78,10 +80,12 @@ export type PreloadRouteFn = (
  *   loading (an HTTP cache, a service worker, or a cache in the application's own data layer).
  *   Preloading a resolver or resource that does not read through such a cache only costs an extra
  *   request.
- * * **Guards are not executed**, aside from `canMatch`, because guards such as `canActivate` can
- *   prompt the user and would stall the preload. As a result, resolvers and resources run for
- *   routes that the user may not be allowed to activate. Do not preload routes whose data loading
- *   has side effects or whose requests would fail authorization.
+ * * **Guards are not executed.** Guards such as `canActivate` can prompt the user and would stall
+ *   the preload, and `canMatch` is skipped as well so that preloading runs no guard code at all.
+ *   Preloading therefore loads routes that a `canMatch` guard would have rejected, does not follow
+ *   the redirects such a guard would have issued, and runs resolvers and resources for routes that
+ *   the user may not be allowed to activate. Do not preload routes whose data loading has side
+ *   effects or whose requests would fail authorization.
  * * **Failures are ignored.** The returned promise resolves when preloading completes and never
  *   rejects; a failure to preload (an unmatched URL, a failing resolver, etc.) is reported with a
  *   warning in development mode only.
@@ -191,6 +195,26 @@ export class RoutePreloadRunner {
       }
 
       try {
+        // Matching applies the configuration of a route before matching that route's children, so
+        // on its own it would request the configurations along the URL one after another. This
+        // first pass walks the same routes without waiting for them, which gets every request in
+        // flight. Its result is discarded; everything it loaded is cached on the `Route`s, so the
+        // pass below repeats the work without making any requests of its own.
+        await recognize(
+          this.injector,
+          this.configLoader,
+          this.navigationTransitions.rootComponentType,
+          this.router.config,
+          currentTree,
+          this.urlSerializer,
+          this.paramsInheritanceStrategy,
+          abortSignal,
+          'preload-warmup',
+        ).catch(() => {});
+        if (abortSignal.aborted) {
+          return;
+        }
+
         // Route matching also loads the lazy `loadChildren` configs of the matched routes.
         const {state: targetSnapshot} = await recognize(
           this.injector,
@@ -201,7 +225,7 @@ export class RoutePreloadRunner {
           this.urlSerializer,
           this.paramsInheritanceStrategy,
           abortSignal,
-          /* preload */ true,
+          'preload',
         );
         if (abortSignal.aborted) {
           return;

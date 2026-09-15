@@ -80,8 +80,10 @@ describe('injectPreloadRoute', () => {
     expect((router.config[0] as any)._loadedComponent).toBe(ComponentA);
   });
 
-  it('starts loading the component of a route as soon as that route matches', async () => {
+  it('loads the configurations and components along the URL in parallel', async () => {
+    let parentConfigStarted = false;
     let parentConfigLoaded = false;
+    let childConfigStarted = false;
     let parentComponentStarted = false;
     let childComponentStarted = false;
 
@@ -89,10 +91,7 @@ describe('injectPreloadRoute', () => {
       {
         path: 'parent',
         loadConfig: async () => {
-          // The component does not depend on the configuration, so it is already being loaded.
-          expect(parentComponentStarted).toBeTrue();
-          // The child route has not been matched yet.
-          expect(childComponentStarted).toBeFalse();
+          parentConfigStarted = true;
           await timeout(10);
           parentConfigLoaded = true;
           return {};
@@ -105,8 +104,9 @@ describe('injectPreloadRoute', () => {
           {
             path: 'child',
             loadConfig: async () => {
-              expect(parentConfigLoaded).toBeTrue();
-              expect(childComponentStarted).toBeTrue();
+              // Nothing below the parent waits for the parent's configuration to arrive.
+              expect(parentConfigLoaded).toBeFalse();
+              childConfigStarted = true;
               return {};
             },
             loadComponent: () => {
@@ -119,7 +119,15 @@ describe('injectPreloadRoute', () => {
     ];
     const {router, preload} = await setup(routes);
 
-    await preload('/parent/child');
+    const preloaded = preload('/parent/child');
+    await timeout(0);
+
+    expect(parentConfigStarted).toBeTrue();
+    expect(childConfigStarted).toBeTrue();
+    expect(parentComponentStarted).toBeTrue();
+    expect(childComponentStarted).toBeTrue();
+
+    await preloaded;
 
     expect((router.config[0] as any)._loadedComponent).toBe(ComponentA);
     expect((router.config[0].children![0] as any)._loadedComponent).toBe(ComponentB);
@@ -194,101 +202,6 @@ describe('injectPreloadRoute', () => {
     expect(loadChildrenCalled).toBeTrue();
     expect(canLoadCalled).toBeFalse();
     expect((router.config[0] as any)._loadedRoutes).toBeDefined();
-  });
-
-  it('executes canMatch guards during preloading', async () => {
-    let canMatchACalled = false;
-    let canMatchBCalled = false;
-    let resolverBCalled = false;
-
-    const routes: Route[] = [
-      {
-        path: 'feature',
-        canMatch: [
-          () => {
-            canMatchACalled = true;
-            return false;
-          },
-        ],
-        component: ComponentA,
-      },
-      {
-        path: 'feature',
-        canMatch: [
-          () => {
-            canMatchBCalled = true;
-            return true;
-          },
-        ],
-        resolve: {
-          data: () => {
-            resolverBCalled = true;
-            return 'b-data';
-          },
-        },
-        component: ComponentB,
-      },
-    ];
-    const {preload} = await setup(routes);
-
-    await preload('/feature');
-
-    expect(canMatchACalled).toBeTrue();
-    expect(canMatchBCalled).toBeTrue();
-    expect(resolverBCalled).toBeTrue();
-  });
-
-  it('follows canMatch redirects (UrlTree)', async () => {
-    let targetResolved = false;
-
-    const routes: Route[] = [
-      {
-        path: 'source',
-        canMatch: [
-          () => {
-            const router = inject(Router);
-            return router.parseUrl('/target');
-          },
-        ],
-        component: ComponentA,
-      },
-      {
-        path: 'target',
-        resolve: {
-          data: () => {
-            targetResolved = true;
-            return 'target-data';
-          },
-        },
-        component: ComponentB,
-      },
-    ];
-    const {preload} = await setup(routes);
-
-    await preload('/source');
-
-    expect(targetResolved).toBeTrue();
-  });
-
-  it('gives up (without throwing) when redirects never settle', async () => {
-    const warnSpy = spyOn(console, 'warn');
-    const routes: Route[] = [
-      {
-        path: 'ping',
-        canMatch: [() => inject(Router).parseUrl('/pong')],
-        component: ComponentA,
-      },
-      {
-        path: 'pong',
-        canMatch: [() => inject(Router).parseUrl('/ping')],
-        component: ComponentB,
-      },
-    ];
-    const {preload} = await setup(routes);
-
-    await expectAsync(preload('/ping')).toBeResolved();
-    expect(warnSpy).toHaveBeenCalled();
-    expect(warnSpy.calls.mostRecent().args[0]).toContain('redirects');
   });
 
   it('follows route config redirectTo', async () => {

@@ -30,6 +30,7 @@ import {
   MatchResult,
   matchWithChecks,
   noLeftoversInUrl,
+  RecognizeMode,
   split,
 } from './utils/config_matching';
 import {TreeNode} from './utils/tree';
@@ -52,13 +53,7 @@ export async function recognize(
   urlSerializer: UrlSerializer,
   paramsInheritanceStrategy: ParamsInheritanceStrategy,
   abortSignal: AbortSignal,
-  /**
-   * Whether route matching is performed for a preload rather than for a navigation. Preloading is
-   * speculative and its results are discarded, which allows it to do work that a navigation
-   * cannot: it skips the deprecated `canLoad` guards and starts loading the component of a route
-   * as soon as that route matches.
-   */
-  preload = false,
+  mode: RecognizeMode = 'navigation',
 ): Promise<{state: RouterStateSnapshot; tree: UrlTree}> {
   return new Recognizer(
     injector,
@@ -69,7 +64,7 @@ export async function recognize(
     paramsInheritanceStrategy,
     urlSerializer,
     abortSignal,
-    preload,
+    mode,
   ).recognize();
 }
 
@@ -89,8 +84,8 @@ export class Recognizer {
     private paramsInheritanceStrategy: ParamsInheritanceStrategy,
     private readonly urlSerializer: UrlSerializer,
     private readonly abortSignal: AbortSignal,
-    /** See the `preload` parameter of `recognize`. */
-    private readonly preload = false,
+    /** See the `mode` parameter of `recognize`. */
+    private readonly mode: RecognizeMode = 'navigation',
   ) {
     this.applyRedirects = new ApplyRedirects(this.urlSerializer, this.urlTree);
   }
@@ -432,7 +427,7 @@ export class Recognizer {
       createSnapshot,
       this.abortSignal,
       this.configLoader,
-      this.preload,
+      this.mode,
     );
     if (route.path === '**') {
       // Prior versions of the route matching algorithm would stop matching at the wildcard route.
@@ -525,8 +520,18 @@ export class Recognizer {
       if (this.abortSignal.aborted) {
         throw new Error(this.abortSignal.reason);
       }
+
+      // The warm-up pass does not wait for the configurations of the routes it walks, so the
+      // providers of this route and of its parents may not be known yet. Loading an `NgModule`
+      // here would instantiate it with an injector that is missing those providers, and that
+      // module is cached for the pass that follows. Stop instead and leave the loading to that
+      // pass, which has the injectors it needs.
+      if (this.mode === 'preload-warmup') {
+        return {routes: [], injector};
+      }
+
       // TODO: Remove this check when the deprecated `canLoad` guard is removed.
-      if (!this.preload) {
+      if (this.mode === 'navigation') {
         const shouldLoadResult = await firstValueFrom(
           runCanLoadGuards(injector, route, segments, this.urlSerializer, this.abortSignal),
         );
