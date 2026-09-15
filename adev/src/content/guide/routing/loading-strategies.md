@@ -62,7 +62,7 @@ Lazily loading routes can significantly improve the load speed of your Angular a
 
 ## Injection context lazy loading
 
-The Router executes [`loadComponent`](/api/router/Route#loadComponent) and [`loadChildren`](/api/router/Route#loadChildren) within the **injection context of the current route**, allowing you to call [`inject`](/api/core/inject)inside these loader functions to access providers declared on that route, inherited from parent routes through hierarchical dependency injection, or available globally. This enables context-aware lazy loading.
+The Router executes [`loadComponent`](/api/router/Route#loadComponent) and [`loadChildren`](/api/router/Route#loadChildren) within the **injection context of the injector the Router was created in**, which is usually the application's root injector. You can call [`inject`](/api/core/inject) inside these loader functions to access any application-wide provider. This enables context-aware lazy loading.
 
 ```ts
 import {Routes} from '@angular/router';
@@ -72,7 +72,7 @@ import {FeatureFlags} from './feature-flags';
 export const routes: Routes = [
   {
     path: 'dashboard',
-    // Runs inside the route's injection context
+    // Runs inside the Router's injection context
     loadComponent: () => {
       const flags = inject(FeatureFlags);
       return flags.isPremium
@@ -82,6 +82,8 @@ export const routes: Routes = [
   },
 ];
 ```
+
+NOTE: Loader functions cannot inject providers declared on the route itself or inherited from its parent routes. Because the Router does not create those providers before it calls the loader, it can load components and route configurations at the same time as it resolves the route's providers.
 
 ## Should I use an eager or a lazy route?
 

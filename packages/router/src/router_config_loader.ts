@@ -52,6 +52,12 @@ export class RouterConfigLoader {
   onLoadStartListener?: (r: Route) => void;
   onLoadEndListener?: (r: Route) => void;
   private readonly compiler = inject(Compiler);
+  /**
+   * The injector the router itself was created in. Lazy loading callbacks (`loadComponent` and
+   * `loadChildren`) run in this injection context rather than the injection context of the route
+   * they belong to. See the note on `Route.loadComponent` for why.
+   */
+  private readonly injector = inject(EnvironmentInjector);
 
   async loadConfig(route: Route): Promise<LoadConfigRoute> {
     if (this.configLoaders.get(route)) {
@@ -78,7 +84,7 @@ export class RouterConfigLoader {
     return loader;
   }
 
-  async loadComponent(injector: EnvironmentInjector, route: Route): Promise<Type<unknown>> {
+  async loadComponent(route: Route): Promise<Type<unknown>> {
     if (this.componentLoaders.get(route)) {
       return this.componentLoaders.get(route)!;
     } else if (route._loadedComponent) {
@@ -91,7 +97,7 @@ export class RouterConfigLoader {
     const loader = (async () => {
       try {
         const loaded = await wrapIntoPromise(
-          runInInjectionContext(injector, () => route.loadComponent!()),
+          runInInjectionContext(this.injector, () => route.loadComponent!()),
         );
         const component = await maybeResolveResources(maybeUnwrapDefaultExport(loaded));
 
@@ -127,6 +133,7 @@ export class RouterConfigLoader {
           this.compiler,
           parentInjector,
           this.onLoadEndListener,
+          this.injector,
         );
         route._loadedRoutes = result.routes;
         route._loadedInjector = result.injector;
@@ -145,6 +152,11 @@ export class RouterConfigLoader {
  * Executes a `route.loadChildren` callback and converts the result to an array of child routes and
  * an injector if that callback returned a module.
  *
+ * `parentInjector` is the injector the loaded `NgModule` is created in. `injectionContextInjector`
+ * is the injection context the `loadChildren` callback itself runs in and defaults to
+ * `parentInjector`; the router passes its own injector so that the callback does not have to wait
+ * for the route's providers to be available.
+ *
  * This function is used for the route discovery during prerendering
  * in @angular-devkit/build-angular. If there are any updates to the contract here, it will require
  * an update to the extractor.
@@ -154,9 +166,10 @@ export async function loadChildren(
   compiler: Compiler,
   parentInjector: Injector,
   onLoadEndListener?: (r: Route) => void,
+  injectionContextInjector: Injector = parentInjector,
 ): Promise<LoadedRouterConfig> {
   const loaded = await wrapIntoPromise(
-    runInInjectionContext(parentInjector, () => route.loadChildren!()),
+    runInInjectionContext(injectionContextInjector, () => route.loadChildren!()),
   );
   const t = await maybeResolveResources(maybeUnwrapDefaultExport(loaded));
 
