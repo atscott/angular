@@ -60,9 +60,15 @@ export async function matchWithChecks(
   createSnapshot: (result: MatchResult) => ActivatedRouteSnapshot,
   abortSignal: AbortSignal,
   configLoader: RouterConfigLoader,
+  preload = false,
 ): Promise<MatchResult> {
   const result = match(segmentGroup, route, segments);
-  if (!result.matched) {
+  // Preloading skips `canMatch` guards, and because `loadConfig` cannot contribute structural
+  // properties (`path`, `children`, `redirectTo`), path matching does not need the route's lazy
+  // configuration or `EnvironmentInjector`. Configurations and components are loaded in parallel
+  // after matching has determined which routes belong to the tree (or when a `loadChildren` or
+  // functional `redirectTo` boundary needs the ancestor injectors).
+  if (!result.matched || preload) {
     return result;
   }
 

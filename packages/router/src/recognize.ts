@@ -22,7 +22,12 @@ import {
 } from './router_state';
 import {Params, PRIMARY_OUTLET} from './shared';
 import {UrlSegment, UrlSegmentGroup, UrlSerializer, UrlTree} from './url_tree';
-import {getOrCreateRouteInjectorIfNeeded, getOutlet, sortByMatchingOutlets} from './utils/config';
+import {
+  getOrCreateRouteInjectorIfNeeded,
+  getOutlet,
+  isConfigLoaded,
+  sortByMatchingOutlets,
+} from './utils/config';
 import {
   createPreMatchRouteSnapshot,
   emptyPathMatch,
@@ -52,9 +57,9 @@ export async function recognize(
   urlSerializer: UrlSerializer,
   paramsInheritanceStrategy: ParamsInheritanceStrategy,
   abortSignal: AbortSignal,
-  // TODO: Remove this parameter when the deprecated `canLoad` guard is removed.
-  skipCanLoadGuards = false,
-): Promise<{state: RouterStateSnapshot; tree: UrlTree}> {
+  preload = false,
+  waitForLoadConfig = true,
+): Promise<{state: RouterStateSnapshot; tree: UrlTree; configLoadPromise?: Promise<void>}> {
   return new Recognizer(
     injector,
     configLoader,
@@ -64,7 +69,8 @@ export async function recognize(
     paramsInheritanceStrategy,
     urlSerializer,
     abortSignal,
-    skipCanLoadGuards,
+    preload,
+    waitForLoadConfig,
   ).recognize();
 }
 
@@ -73,6 +79,7 @@ export const MAX_ALLOWED_REDIRECTS = 31;
 export class Recognizer {
   private applyRedirects: ApplyRedirects;
   private absoluteRedirectCount = 0;
+  private snapshotParents = new WeakMap<ActivatedRouteSnapshot, ActivatedRouteSnapshot>();
   allowRedirects = true;
 
   constructor(
@@ -84,8 +91,8 @@ export class Recognizer {
     private paramsInheritanceStrategy: ParamsInheritanceStrategy,
     private readonly urlSerializer: UrlSerializer,
     private readonly abortSignal: AbortSignal,
-    // TODO: Remove this parameter when the deprecated `canLoad` guard is removed.
-    private readonly skipCanLoadGuards = false,
+    private readonly preload = false,
+    private readonly waitForLoadConfig = true,
   ) {
     this.applyRedirects = new ApplyRedirects(this.urlSerializer, this.urlTree);
   }
@@ -99,11 +106,19 @@ export class Recognizer {
     );
   }
 
-  async recognize(): Promise<{state: RouterStateSnapshot; tree: UrlTree}> {
+  async recognize(): Promise<{
+    state: RouterStateSnapshot;
+    tree: UrlTree;
+    configLoadPromise?: Promise<void>;
+  }> {
     const rootSegmentGroup = split(this.urlTree.root, [], [], this.config).segmentGroup;
 
     const {children, rootSnapshot} = await this.match(rootSegmentGroup);
     const rootNode = new TreeNode(rootSnapshot, children);
+    let configLoadPromise: Promise<void> | undefined;
+    if (this.preload) {
+      ({configLoadPromise} = await this.hydrateTree(rootNode));
+    }
     const routeState = new RouterStateSnapshot('', rootNode);
     const tree = createUrlTreeFromSnapshot(
       rootSnapshot,
@@ -116,7 +131,7 @@ export class Recognizer {
     // so reassign them to the original.
     tree.queryParams = this.urlTree.queryParams;
     routeState.url = this.urlSerializer.serialize(tree);
-    return {state: routeState, tree};
+    return {state: routeState, tree, configLoadPromise};
   }
 
   private async match(rootSegmentGroup: UrlSegmentGroup): Promise<{
@@ -355,6 +370,13 @@ export class Recognizer {
         this.allowRedirects = false;
       }
     }
+    // A `RedirectFunction` runs in the parent route's injection context and receives inherited
+    // `data`, both of which may come from an ancestor's `loadConfig`. When preloading, load and
+    // apply the ancestor configurations along this branch in parallel before evaluating the
+    // redirect function.
+    if (this.preload && typeof route.redirectTo === 'function') {
+      injector = await this.hydrateAncestors(parentRoute);
+    }
     const currentSnapshot = this.createSnapshot(injector, route, segments, parameters, parentRoute);
     if (this.abortSignal.aborted) {
       throw new Error(this.abortSignal.reason);
@@ -398,6 +420,7 @@ export class Recognizer {
       getResolve(route),
       injector,
     );
+    this.snapshotParents.set(snapshot, parentRoute);
     const inherited = getInherited(snapshot, parentRoute, this.paramsInheritanceStrategy);
     snapshot.params = Object.freeze(inherited.params);
     snapshot.data = Object.freeze(inherited.data);
@@ -427,6 +450,7 @@ export class Recognizer {
       createSnapshot,
       this.abortSignal,
       this.configLoader,
+      this.preload,
     );
     if (route.path === '**') {
       // Prior versions of the route matching algorithm would stop matching at the wildcard route.
@@ -440,9 +464,13 @@ export class Recognizer {
       throw new NoMatch(rawSegment);
     }
 
-    // If the route has an injector created from providers, we should start using that.
-    injector = getOrCreateRouteInjectorIfNeeded(route, injector);
-    const {routes: childConfig} = await this.getChildConfig(injector, route, segments);
+    // When preloading, defer creating route injectors until ancestor `loadConfig` providers are
+    // loaded (`hydrateTree` / `hydrateAncestors`), so an eager route injector is never cached
+    // before its parent's lazy providers are in place.
+    if (!this.preload) {
+      injector = getOrCreateRouteInjectorIfNeeded(route, injector);
+    }
+    const {routes: childConfig} = await this.getChildConfig(injector, route, segments, parentRoute);
     const childInjector = route._loadedInjector ?? injector;
 
     const {parameters, consumedSegments, remainingSegments} = result;
@@ -500,6 +528,7 @@ export class Recognizer {
     injector: EnvironmentInjector,
     route: Route,
     segments: UrlSegment[],
+    parentRoute: ActivatedRouteSnapshot,
   ): Promise<LoadedRouterConfig> {
     if (route.children) {
       // The children belong to the same module
@@ -507,6 +536,9 @@ export class Recognizer {
     }
 
     if (route.loadChildren) {
+      if (this.preload && !route._loadedInjector) {
+        injector = await this.hydrateAncestors(parentRoute, route);
+      }
       // lazy children belong to the loaded module
       if (route._loadedRoutes !== undefined) {
         const ngModuleFactory = route._loadedNgModuleFactory;
@@ -519,7 +551,9 @@ export class Recognizer {
       if (this.abortSignal.aborted) {
         throw new Error(this.abortSignal.reason);
       }
-      if (!this.skipCanLoadGuards) {
+
+      // TODO: Remove this check when the deprecated `canLoad` guard is removed.
+      if (!this.preload) {
         const shouldLoadResult = await firstValueFrom(
           runCanLoadGuards(injector, route, segments, this.urlSerializer, this.abortSignal),
         );
@@ -535,6 +569,115 @@ export class Recognizer {
     }
 
     return {routes: [], injector};
+  }
+
+  private async loadRouteConfigs(routes: Iterable<Route>): Promise<void> {
+    const loads: Promise<unknown>[] = [];
+    for (const route of routes) {
+      if (route.loadComponent && !route._loadedComponent) {
+        this.configLoader.loadComponent(route).catch(() => {});
+      }
+      if (route.loadConfig && !isConfigLoaded(route)) {
+        loads.push(this.configLoader.loadConfig(route));
+      }
+    }
+    if (loads.length > 0) {
+      await Promise.all(loads);
+      if (this.abortSignal.aborted) {
+        throw new Error(this.abortSignal.reason);
+      }
+    }
+  }
+
+  private hydrateSnapshot(
+    snapshot: ActivatedRouteSnapshot,
+    parent: ActivatedRouteSnapshot | null,
+  ): EnvironmentInjector {
+    const route = snapshot.routeConfig;
+    const parentInjector = parent
+      ? (parent.routeConfig?._loadedInjector ?? parent._environmentInjector)
+      : this.injector;
+    const injector = route
+      ? getOrCreateRouteInjectorIfNeeded(route, parentInjector)
+      : parentInjector;
+    (snapshot as {_environmentInjector: EnvironmentInjector})._environmentInjector = injector;
+    if (route) {
+      snapshot.component = route.component ?? route._loadedComponent ?? null;
+      snapshot.data = getData(route);
+      snapshot._resolve = getResolve(route);
+    }
+    if (parent) {
+      const inherited = getInherited(snapshot, parent, this.paramsInheritanceStrategy);
+      snapshot.params = Object.freeze(inherited.params);
+      snapshot.data = Object.freeze(inherited.data);
+    }
+    return route?._loadedInjector ?? injector;
+  }
+
+  private async hydrateAncestors(
+    parentRoute: ActivatedRouteSnapshot,
+    currentRoute?: Route,
+  ): Promise<EnvironmentInjector> {
+    const ancestors: ActivatedRouteSnapshot[] = [];
+    for (
+      let curr: ActivatedRouteSnapshot | undefined = parentRoute;
+      curr;
+      curr = this.snapshotParents.get(curr)
+    ) {
+      ancestors.push(curr);
+    }
+    ancestors.reverse();
+
+    const routesToLoad: Route[] = [];
+    for (const s of ancestors) {
+      if (s.routeConfig) {
+        routesToLoad.push(s.routeConfig);
+      }
+    }
+    if (currentRoute) {
+      routesToLoad.push(currentRoute);
+    }
+    await this.loadRouteConfigs(routesToLoad);
+
+    let injector = this.injector;
+    for (let i = 0; i < ancestors.length; i++) {
+      injector = this.hydrateSnapshot(ancestors[i], i > 0 ? ancestors[i - 1] : null);
+    }
+    return currentRoute ? getOrCreateRouteInjectorIfNeeded(currentRoute, injector) : injector;
+  }
+
+  private async hydrateTree(
+    rootNode: TreeNode<ActivatedRouteSnapshot>,
+  ): Promise<{configLoadPromise?: Promise<void>}> {
+    const routes: Route[] = [];
+    const collectRoutes = (node: TreeNode<ActivatedRouteSnapshot>) => {
+      if (node.value.routeConfig) {
+        routes.push(node.value.routeConfig);
+      }
+      for (const child of node.children) {
+        collectRoutes(child);
+      }
+    };
+    collectRoutes(rootNode);
+
+    const hydrateNode = (
+      node: TreeNode<ActivatedRouteSnapshot>,
+      parent: ActivatedRouteSnapshot | null,
+    ) => {
+      this.hydrateSnapshot(node.value, parent);
+      for (const child of node.children) {
+        hydrateNode(child, node.value);
+      }
+    };
+
+    if (!this.waitForLoadConfig) {
+      hydrateNode(rootNode, null);
+      return {configLoadPromise: this.loadRouteConfigs(routes)};
+    }
+
+    await this.loadRouteConfigs(routes);
+    hydrateNode(rootNode, null);
+    return {};
   }
 }
 

@@ -610,6 +610,11 @@ export type PreloadRouteFn = (url: string | UrlTree, options?: PreloadRouteOptio
 
 // @public
 export interface PreloadRouteOptions {
+    downstreamDeps?: {
+        loadConfig?: boolean;
+        resolvers?: boolean;
+    };
+    includeData?: boolean;
     signal?: AbortSignal;
 }
 

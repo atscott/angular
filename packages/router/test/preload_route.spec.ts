@@ -11,6 +11,7 @@ import {
   DestroyRef,
   EnvironmentInjector,
   inject,
+  InjectionToken,
   resource,
   runInInjectionContext,
 } from '@angular/core';
@@ -54,7 +55,7 @@ describe('injectPreloadRoute', () => {
     const injector = TestBed.inject(EnvironmentInjector);
     const preloadRoute = runInInjectionContext(injector, () => injectPreloadRoute());
     const preload = (url: string | ReturnType<Router['parseUrl']>, signal?: AbortSignal) =>
-      preloadRoute(url, {signal});
+      preloadRoute(url, {signal, includeData: true});
     return {harness, router, preload, preloadRoute, injector};
   }
 
@@ -78,6 +79,128 @@ describe('injectPreloadRoute', () => {
 
     expect(loaderCalled).toBeTrue();
     expect((router.config[0] as any)._loadedComponent).toBe(ComponentA);
+  });
+
+  it('loads the configurations and components along the URL in parallel and runs resolvers without waiting for components', async () => {
+    let parentConfigStarted = false;
+    let parentConfigLoaded = false;
+    let childConfigStarted = false;
+    let parentComponentStarted = false;
+    let childComponentStarted = false;
+    let resolverCalled = false;
+
+    let resolveComponents!: () => void;
+    const componentPromise = new Promise<void>((resolve) => (resolveComponents = resolve));
+
+    const routes: Route[] = [
+      {
+        path: 'parent',
+        loadConfig: async () => {
+          parentConfigStarted = true;
+          await timeout(10);
+          parentConfigLoaded = true;
+          return {};
+        },
+        loadComponent: () => {
+          parentComponentStarted = true;
+          return componentPromise.then(() => ComponentA);
+        },
+        children: [
+          {
+            path: 'child',
+            loadConfig: async () => {
+              // Nothing below the parent waits for the parent's configuration to arrive.
+              expect(parentConfigLoaded).toBeFalse();
+              childConfigStarted = true;
+              return {
+                resolve: {
+                  item: () => {
+                    resolverCalled = true;
+                    return 'resolved';
+                  },
+                },
+              };
+            },
+            loadComponent: () => {
+              childComponentStarted = true;
+              return componentPromise.then(() => ComponentB);
+            },
+          },
+        ],
+      },
+    ];
+    const {router, preload} = await setup(routes);
+
+    const preloaded = preload('/parent/child');
+    await timeout(0);
+
+    expect(parentConfigStarted).toBeTrue();
+    expect(childConfigStarted).toBeTrue();
+    expect(parentComponentStarted).toBeTrue();
+    expect(childComponentStarted).toBeTrue();
+
+    // Once configs finish (at 10ms), resolvers run immediately even though component chunks are
+    // still in flight.
+    await timeout(10);
+    expect(resolverCalled).toBeTrue();
+    expect((router.config[0] as any)._loadedComponent).toBeUndefined();
+
+    resolveComponents();
+    await preloaded;
+
+    expect((router.config[0] as any)._loadedComponent).toBe(ComponentA);
+    expect((router.config[0].children![0] as any)._loadedComponent).toBe(ComponentB);
+  });
+
+  it('does not load configurations or components for branches that fail to match child segments, and parallelizes loadConfig inside loadChildren', async () => {
+    let wrongParentLoaded = false;
+    let innerParentLoaded = false;
+    let innerChildStartedBeforeParentFinished = false;
+
+    const routes: Route[] = [
+      {
+        path: 'a',
+        loadConfig: async () => {
+          wrongParentLoaded = true;
+          return {};
+        },
+        loadComponent: () => {
+          wrongParentLoaded = true;
+          return Promise.resolve(ComponentA);
+        },
+        children: [{path: 'other', component: ComponentA}],
+      },
+      {
+        path: 'a',
+        loadChildren: () =>
+          Promise.resolve([
+            {
+              path: 'b',
+              loadConfig: async () => {
+                await timeout(10);
+                innerParentLoaded = true;
+                return {};
+              },
+              children: [
+                {
+                  path: 'c',
+                  loadConfig: async () => {
+                    innerChildStartedBeforeParentFinished = !innerParentLoaded;
+                    return {};
+                  },
+                  component: ComponentB,
+                },
+              ],
+            },
+          ]),
+      },
+    ];
+    const {preload} = await setup(routes);
+
+    await preload('/a/b/c');
+
+    expect(wrongParentLoaded).toBeFalse();
+    expect(innerChildStartedBeforeParentFinished).toBeTrue();
   });
 
   it('returns a function that can be called outside of an injection context', async () => {
@@ -151,101 +274,6 @@ describe('injectPreloadRoute', () => {
     expect((router.config[0] as any)._loadedRoutes).toBeDefined();
   });
 
-  it('executes canMatch guards during preloading', async () => {
-    let canMatchACalled = false;
-    let canMatchBCalled = false;
-    let resolverBCalled = false;
-
-    const routes: Route[] = [
-      {
-        path: 'feature',
-        canMatch: [
-          () => {
-            canMatchACalled = true;
-            return false;
-          },
-        ],
-        component: ComponentA,
-      },
-      {
-        path: 'feature',
-        canMatch: [
-          () => {
-            canMatchBCalled = true;
-            return true;
-          },
-        ],
-        resolve: {
-          data: () => {
-            resolverBCalled = true;
-            return 'b-data';
-          },
-        },
-        component: ComponentB,
-      },
-    ];
-    const {preload} = await setup(routes);
-
-    await preload('/feature');
-
-    expect(canMatchACalled).toBeTrue();
-    expect(canMatchBCalled).toBeTrue();
-    expect(resolverBCalled).toBeTrue();
-  });
-
-  it('follows canMatch redirects (UrlTree)', async () => {
-    let targetResolved = false;
-
-    const routes: Route[] = [
-      {
-        path: 'source',
-        canMatch: [
-          () => {
-            const router = inject(Router);
-            return router.parseUrl('/target');
-          },
-        ],
-        component: ComponentA,
-      },
-      {
-        path: 'target',
-        resolve: {
-          data: () => {
-            targetResolved = true;
-            return 'target-data';
-          },
-        },
-        component: ComponentB,
-      },
-    ];
-    const {preload} = await setup(routes);
-
-    await preload('/source');
-
-    expect(targetResolved).toBeTrue();
-  });
-
-  it('gives up (without throwing) when redirects never settle', async () => {
-    const warnSpy = spyOn(console, 'warn');
-    const routes: Route[] = [
-      {
-        path: 'ping',
-        canMatch: [() => inject(Router).parseUrl('/pong')],
-        component: ComponentA,
-      },
-      {
-        path: 'pong',
-        canMatch: [() => inject(Router).parseUrl('/ping')],
-        component: ComponentB,
-      },
-    ];
-    const {preload} = await setup(routes);
-
-    await expectAsync(preload('/ping')).toBeResolved();
-    expect(warnSpy).toHaveBeenCalled();
-    expect(warnSpy.calls.mostRecent().args[0]).toContain('redirects');
-  });
-
   it('follows route config redirectTo', async () => {
     let targetComponentLoaded = false;
 
@@ -267,6 +295,47 @@ describe('injectPreloadRoute', () => {
 
     await preload('/old-path');
 
+    expect(targetComponentLoaded).toBeTrue();
+  });
+
+  it('evaluates functional redirectTo after ancestor loadConfig resolves so parent providers and data are available', async () => {
+    const LAZY_TOKEN = new InjectionToken<string>('LAZY_TOKEN');
+    let redirectCalls = 0;
+    let targetComponentLoaded = false;
+
+    const routes: Route[] = [
+      {
+        path: 'parent',
+        loadConfig: async () => {
+          await timeout(10);
+          return {
+            data: {prefix: 'new'},
+            providers: [{provide: LAZY_TOKEN, useValue: 'target'}],
+          };
+        },
+        children: [
+          {
+            path: 'old',
+            redirectTo: ({data}) => {
+              redirectCalls++;
+              return `/${data['prefix']}-${inject(LAZY_TOKEN)}`;
+            },
+          },
+        ],
+      },
+      {
+        path: 'new-target',
+        loadComponent: () => {
+          targetComponentLoaded = true;
+          return Promise.resolve(ComponentB);
+        },
+      },
+    ];
+    const {preload} = await setup(routes);
+
+    await preload('/parent/old');
+
+    expect(redirectCalls).toBe(1);
     expect(targetComponentLoaded).toBeTrue();
   });
 
@@ -578,9 +647,9 @@ describe('injectPreloadRoute', () => {
     const routes: Route[] = [
       {
         path: 'aborted',
-        loadComponent: async () => {
+        loadConfig: async () => {
           controller.abort();
-          return ComponentA;
+          return {component: ComponentA};
         },
         resolve: {
           data: () => {
@@ -603,9 +672,9 @@ describe('injectPreloadRoute', () => {
     const routes: Route[] = [
       {
         path: 'shared',
-        loadComponent: async () => {
+        loadConfig: async () => {
           controller.abort();
-          return ComponentA;
+          return {component: ComponentA};
         },
         resolve: {
           data: () => {
@@ -718,9 +787,9 @@ describe('injectPreloadRoute', () => {
     const routes: Route[] = [
       {
         path: 'slow-load',
-        loadComponent: async () => {
+        loadConfig: async () => {
           await timeout(20);
-          return ComponentA;
+          return {component: ComponentA};
         },
         resolve: {
           data: () => {
@@ -738,5 +807,89 @@ describe('injectPreloadRoute', () => {
     await preloading;
 
     expect(resolverCalled).toBeFalse();
+  });
+
+  it('only preloads code (loadConfig, loadComponent, loadChildren) by default when includeData is omitted', async () => {
+    let configLoaded = false;
+    let componentLoaded = false;
+    let resolverCalled = false;
+    let resourceCalled = false;
+
+    const routes: Route[] = [
+      {
+        path: 'code-only',
+        loadConfig: async () => {
+          configLoaded = true;
+          return {};
+        },
+        loadComponent: async () => {
+          componentLoaded = true;
+          return ComponentA;
+        },
+        resolve: {
+          data: () => {
+            resolverCalled = true;
+            return 'resolved';
+          },
+        },
+        resources: () => ({
+          item: resource({
+            loader: async () => {
+              resourceCalled = true;
+              return 'res';
+            },
+          }),
+        }),
+      },
+    ];
+    const {preloadRoute} = await setup(routes, true);
+
+    await preloadRoute('/code-only');
+
+    expect(configLoaded).toBeTrue();
+    expect(componentLoaded).toBeTrue();
+    expect(resolverCalled).toBeFalse();
+    expect(resourceCalled).toBeFalse();
+  });
+
+  it('runs upfront resolvers and resources in parallel with loadConfig when downstreamDeps.loadConfig is false', async () => {
+    let configFinished = false;
+    let resolverRanBeforeConfigFinished = false;
+    let resourceRanBeforeConfigFinished = false;
+
+    const routes: Route[] = [
+      {
+        path: 'parallel-data',
+        loadConfig: async () => {
+          await timeout(20);
+          configFinished = true;
+          return {component: ComponentA};
+        },
+        resolve: {
+          data: () => {
+            resolverRanBeforeConfigFinished = !configFinished;
+            return 'resolved';
+          },
+        },
+        resources: () => ({
+          item: resource({
+            loader: async () => {
+              resourceRanBeforeConfigFinished = !configFinished;
+              return 'res';
+            },
+          }),
+        }),
+      },
+    ];
+    const {preloadRoute} = await setup(routes, true);
+
+    await preloadRoute('/parallel-data', {
+      includeData: true,
+      downstreamDeps: {loadConfig: false, resolvers: false},
+    });
+
+    expect(configFinished).toBeTrue();
+    expect(resolverRanBeforeConfigFinished).toBeTrue();
+    expect(resourceRanBeforeConfigFinished).toBeTrue();
   });
 });

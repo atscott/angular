@@ -30,6 +30,44 @@ export interface PreloadRouteOptions {
    * aborted once every caller of that URL has aborted.
    */
   signal?: AbortSignal;
+
+  /**
+   * Whether to also execute matched `resolve` resolvers and `resources` (when
+   * `withRouterResources()` is configured) to warm the application's data cache.
+   *
+   * Defaults to `false` because Angular does not cache resolver or `resource()` results across
+   * navigations out of the box (unlike code chunks, which the router caches on `Route`). Set to
+   * `true` when your resolvers and resources read through a deduplicating cache (such as TanStack
+   * Query or an application-level cache service).
+   *
+   * @default false
+   */
+  includeData?: boolean;
+
+  /**
+   * Controls whether downstream data stages wait for upstream stages when `includeData` is `true`.
+   */
+  downstreamDeps?: {
+    /**
+     * Whether resolvers and `resources` wait for `loadConfig` chunks to resolve before running.
+     *
+     * Set to `false` to assert that upfront resolvers and `resources` do not depend on `providers`,
+     * `data`, or ancestor resolvers/`resources` defined inside `loadConfig`. This allows upfront
+     * resolvers and `resources` on the static `Route` tree to run at `t = 0` in parallel with
+     * `loadConfig` and `loadComponent` downloads.
+     *
+     * @default true
+     */
+    loadConfig?: boolean;
+
+    /**
+     * Whether `resources` wait for `resolve` resolvers to finish so that `ctx.data()` includes
+     * resolver results. When `false`, `resolve` and `resources` start concurrently.
+     *
+     * @default true
+     */
+    resolvers?: boolean;
+  };
 }
 
 /**
@@ -50,9 +88,11 @@ export type PreloadRouteFn = (
  *
  * Preloading performs the work that can be done ahead of time for a URL:
  *
- * 1. loads the dynamic imports needed to render the route (`loadChildren` and `loadComponent`)
- * 2. executes the route's resolvers
- * 3. executes the route's resources, when `withRouterResources()` is configured
+ * 1. loads the dynamic imports needed to render the route (`loadConfig`, `loadChildren`, and
+ *    `loadComponent`). The configurations and components along the URL are loaded together rather
+ *    than one route at a time.
+ * 2. when `includeData: true` is passed, executes the route's resolvers and `resources` (when
+ *    `withRouterResources()` is configured).
  *
  * Preloading never activates the route, never emits `Router` events, and does not affect
  * `Router.url`, the current `RouterState`, or an in-flight navigation. Concurrent preloads do not
@@ -72,16 +112,15 @@ export type PreloadRouteFn = (
  *
  * Note the following about how preloading behaves:
  *
- * * **No router state is retained.** Resolver results and resource values are discarded once
- *   preloading finishes, so the subsequent navigation runs them again. The benefit of preloading
- *   comes from the lazy chunks that stay loaded and from the caches that sit underneath the data
- *   loading (an HTTP cache, a service worker, or a cache in the application's own data layer).
- *   Preloading a resolver or resource that does not read through such a cache only costs an extra
- *   request.
- * * **Guards are not executed**, aside from `canMatch`, because guards such as `canActivate` can
- *   prompt the user and would stall the preload. As a result, resolvers and resources run for
- *   routes that the user may not be allowed to activate. Do not preload routes whose data loading
- *   has side effects or whose requests would fail authorization.
+ * * **No router state is retained.** Loaded configurations and components are cached on the
+ *   `Route` definitions by the router. When `includeData: true` is enabled, resolver results and
+ *   resource values are discarded once preloading finishes, so the subsequent navigation runs them
+ *   again; only enable `includeData: true` when your data layer caches and deduplicates requests.
+ * * **Guards are not executed.** Guards such as `canActivate` can prompt the user and would stall
+ *   the preload, and `canMatch` is skipped as well so that preloading runs no guard code at all.
+ *   Preloading therefore loads routes that a `canMatch` guard would have rejected, does not follow
+ *   the redirects such a guard would have issued, and (when `includeData: true`) runs resolvers and
+ *   resources for routes that the user may not be allowed to activate.
  * * **Failures are ignored.** The returned promise resolves when preloading completes and never
  *   rejects; a failure to preload (an unmatched URL, a failing resolver, etc.) is reported with a
  *   warning in development mode only.
@@ -93,7 +132,7 @@ export type PreloadRouteFn = (
  */
 export function injectPreloadRoute(): PreloadRouteFn {
   const runner = inject(RoutePreloadRunner);
-  return (url, options) => runner.preload(url, options?.signal);
+  return (url, options) => runner.preload(url, options);
 }
 
 /** A preload that is currently in progress, shared by all callers that requested the same URL. */
@@ -132,49 +171,76 @@ export class RoutePreloadRunner {
     });
   }
 
-  preload(url: string | UrlTree, signal?: AbortSignal): Promise<void> {
+  preload(url: string | UrlTree, options?: PreloadRouteOptions): Promise<void> {
+    const signal = options?.signal;
     if (signal?.aborted) {
       return Promise.resolve();
     }
 
+    const includeData = options?.includeData ?? false;
+    const waitForLoadConfig = !includeData || (options?.downstreamDeps?.loadConfig ?? true);
+    const waitForResolvers = options?.downstreamDeps?.resolvers ?? true;
+
     const urlTree = typeof url === 'string' ? this.urlSerializer.parse(url) : url;
-    const key = this.urlSerializer.serialize(urlTree);
+    const key = `${this.urlSerializer.serialize(urlTree)}|${includeData ? 1 : 0}:${waitForLoadConfig ? 1 : 0}:${waitForResolvers ? 1 : 0}`;
 
     let entry = this.inFlight.get(key);
+    const isNewEntry = entry === undefined;
     if (entry === undefined) {
-      const abortController = new AbortController();
-      const newEntry: InFlightPreload = {
-        abortController,
+      entry = {
+        abortController: new AbortController(),
         consumers: 0,
         promise: Promise.resolve(),
       };
-      newEntry.promise = this.runPreload(urlTree, abortController.signal).finally(() => {
-        if (this.inFlight.get(key) === newEntry) {
-          this.inFlight.delete(key);
-        }
-      });
-      this.inFlight.set(key, newEntry);
-      entry = newEntry;
+      this.inFlight.set(key, entry);
     }
 
     // The in-flight preload is shared, so it may only be aborted once _all_ of the callers that
     // are waiting on it have aborted. Callers that did not provide a signal never abort.
     const currentEntry = entry;
     currentEntry.consumers++;
+    const release = () => {
+      if (--currentEntry.consumers === 0) {
+        currentEntry.abortController.abort();
+      }
+    };
+    signal?.addEventListener('abort', release, {once: true});
+
+    // Start the work in a microtask rather than synchronously. Preloading runs synchronously until
+    // it reaches its first pending request, which is far enough to load a component and to observe
+    // an abort. Waiting gives every caller made in this task the chance to register above, so that
+    // one caller aborting cannot discard work the others are still waiting for.
+    if (isNewEntry) {
+      currentEntry.promise = Promise.resolve()
+        .then(() =>
+          this.runPreload(
+            urlTree,
+            currentEntry.abortController.signal,
+            includeData,
+            waitForLoadConfig,
+            waitForResolvers,
+          ),
+        )
+        .finally(() => {
+          if (this.inFlight.get(key) === currentEntry) {
+            this.inFlight.delete(key);
+          }
+        });
+    }
     if (signal) {
-      const release = () => {
-        if (--currentEntry.consumers === 0) {
-          currentEntry.abortController.abort();
-        }
-      };
-      signal.addEventListener('abort', release, {once: true});
       void currentEntry.promise.then(() => signal.removeEventListener('abort', release));
     }
 
     return currentEntry.promise;
   }
 
-  private async runPreload(urlTree: UrlTree, abortSignal: AbortSignal): Promise<void> {
+  private async runPreload(
+    urlTree: UrlTree,
+    abortSignal: AbortSignal,
+    includeData: boolean,
+    waitForLoadConfig: boolean,
+    waitForResolvers: boolean,
+  ): Promise<void> {
     let currentTree = urlTree;
 
     for (let redirects = 0; redirects <= MAX_ALLOWED_REDIRECTS; redirects++) {
@@ -183,8 +249,9 @@ export class RoutePreloadRunner {
       }
 
       try {
-        // Route matching also loads the lazy `loadChildren` configs of the matched routes.
-        const {state: targetSnapshot} = await recognize(
+        // Route matching also loads the lazy `loadConfig` and `loadChildren` configs of the
+        // matched routes in parallel.
+        const {state: targetSnapshot, configLoadPromise} = await recognize(
           this.injector,
           this.configLoader,
           this.navigationTransitions.rootComponentType,
@@ -193,25 +260,36 @@ export class RoutePreloadRunner {
           this.urlSerializer,
           this.paramsInheritanceStrategy,
           abortSignal,
-          // `canLoad` is deprecated and pending removal. Unlike `canMatch`, it cannot affect which
-          // route matches, so preloading always loads the config without running it.
-          /* skipCanLoadGuards */ true,
+          true,
+          waitForLoadConfig,
         );
         if (abortSignal.aborted) {
           return;
         }
 
-        await loadComponents(targetSnapshot.root, this.configLoader);
-        if (abortSignal.aborted) {
-          return;
-        }
+        const runData = async () => {
+          if (!includeData) {
+            return;
+          }
+          if (!waitForResolvers) {
+            await Promise.all([
+              resolveAllData(targetSnapshot, this.paramsInheritanceStrategy, abortSignal),
+              this.resourcesFeature?.preloadResources(targetSnapshot, abortSignal),
+            ]);
+            return;
+          }
+          await resolveAllData(targetSnapshot, this.paramsInheritanceStrategy, abortSignal);
+          if (abortSignal.aborted) {
+            return;
+          }
+          await this.resourcesFeature?.preloadResources(targetSnapshot, abortSignal);
+        };
 
-        await resolveAllData(targetSnapshot, this.paramsInheritanceStrategy, abortSignal);
-        if (abortSignal.aborted) {
-          return;
-        }
-
-        await this.resourcesFeature?.preloadResources(targetSnapshot, abortSignal);
+        await Promise.all([
+          configLoadPromise,
+          loadComponents(targetSnapshot.root, this.configLoader),
+          runData(),
+        ]);
         return;
       } catch (e: unknown) {
         // `canMatch` guards and resolvers can redirect. Restart the preload with the new URL.
