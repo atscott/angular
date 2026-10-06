@@ -311,13 +311,14 @@ describe('Error Boundary Runtime Interception', () => {
         @defer (when isVisible) {
           @boundary {
             <child-cmp-defer></child-cmp-defer>
-          } @error (let err) {
-            <div id="fallback">Fallback: {{err.message}}</div>
+          }
+          @error (let err) {
+            <div id="fallback">Fallback: {{ err.message }}</div>
           }
         } @loading {
           <div id="loading">Loading...</div>
         }
-    `,
+      `,
       imports: [ChildCmpDefer],
     })
     class AppDeferTest {
@@ -353,7 +354,8 @@ describe('Error Boundary Runtime Interception', () => {
       template: `
         @boundary {
           <ng-content></ng-content>
-        } @error {
+        }
+        @error {
           <div id="fallback">Fallback</div>
         }
       `,
@@ -375,6 +377,45 @@ describe('Error Boundary Runtime Interception', () => {
     expect(() => fixture.detectChanges()).toThrow();
   });
 
+  it('should catch errors from projected content when the boundary wraps the receiving component', async () => {
+    @Component({
+      selector: 'throws-error',
+      template: '<div>Throws</div>',
+    })
+    class ThrowsError {
+      ngOnInit() {
+        throw new Error('Projected Error');
+      }
+    }
+
+    @Component({
+      selector: 'wrapper',
+      template: '<ng-content />',
+    })
+    class Wrapper {}
+
+    @Component({
+      template: `
+        @boundary {
+          <wrapper>
+            <throws-error />
+          </wrapper>
+        }
+        @error {
+          <p>Fallback: {{ $error.message }}</p>
+        }
+      `,
+      imports: [Wrapper, ThrowsError],
+    })
+    class App {}
+
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+
+    expect(fixture.nativeElement.textContent).toContain('Fallback: Projected Error');
+    expect(fixture.nativeElement.querySelectorAll('wrapper').length).toBe(0);
+  });
+
   it('should support nested boundaries and fallback cascading', async () => {
     @Component({
       selector: 'nested-throwing-cmp',
@@ -393,11 +434,13 @@ describe('Error Boundary Runtime Interception', () => {
             @if (show()) {
               <nested-throwing-cmp />
             }
-          } @error {
+          }
+          @error {
             Inner Fallback
             {{ maybeThrow() }}
           }
-        } @error {
+        }
+        @error {
           Outer Fallback
         }
       `,
@@ -450,7 +493,8 @@ describe('Error Boundary Runtime Interception', () => {
       template: `
         @boundary {
           <ng-container #vcr></ng-container>
-        } @error {
+        }
+        @error {
           Fallback
         }
       `,
@@ -479,10 +523,11 @@ describe('Error Boundary Runtime Interception', () => {
         @boundary {
           <ul>
             @for (item of items(); track trackFn(item)) {
-              <li>{{item}}</li>
+              <li>{{ item }}</li>
             }
           </ul>
-        } @error {
+        }
+        @error {
           Fallback
         }
       `,
@@ -542,8 +587,9 @@ describe('@boundary runtime instructions (JIT)', () => {
         @boundary {
           <throwing-ctor></throwing-ctor>
           Main Content
-        } @error (let err) {
-          Error: {{err.message}}
+        }
+        @error (let err) {
+          Error: {{ err.message }}
         }
       `,
       imports: [ThrowingCtor],
@@ -563,8 +609,9 @@ describe('@boundary runtime instructions (JIT)', () => {
         @boundary {
           <throwing-hook [shouldThrow]="triggerError()"></throwing-hook>
           Main Content
-        } @error (let err) {
-          Error: {{err.message}}
+        }
+        @error (let err) {
+          Error: {{ err.message }}
         }
       `,
       imports: [ThrowingHook],
@@ -590,8 +637,9 @@ describe('@boundary runtime instructions (JIT)', () => {
         @boundary {
           {{ throwInBinding() }}
           Main Content
-        } @error (let err) {
-          Error: {{err.message}}
+        }
+        @error (let err) {
+          Error: {{ err.message }}
         }
       `,
     })
@@ -623,8 +671,9 @@ describe('@boundary runtime instructions (JIT)', () => {
             <throwing-ctor></throwing-ctor>
           }
           Main Content
-        } @error (let err) {
-          Error: {{err.message}}
+        }
+        @error (let err) {
+          Error: {{ err.message }}
         }
       `,
       imports: [ThrowingCtor],
@@ -656,7 +705,8 @@ describe('@boundary runtime instructions (JIT)', () => {
       template: `
         @boundary {
           {{ throwInBinding() }}
-        } @error (let err) {
+        }
+        @error (let err) {
           {{ throwInErrorBlock() }}
         }
       `,
@@ -700,7 +750,8 @@ describe('@boundary runtime instructions (JIT)', () => {
           } @else {
             Main Content
           }
-        } @error (let err, r = $reset) {
+        }
+        @error (let err, r = $reset) {
           Error Content
           {{ captureReset(r) }}
         }
@@ -748,8 +799,9 @@ describe('@boundary runtime instructions (JIT)', () => {
           } @else {
             Main Content
           }
-        } @error (let err, r = $reset) {
-          Error: {{err.message}}
+        }
+        @error (let err, r = $reset) {
+          Error: {{ err.message }}
           <button (click)="r()">Reset</button>
         }
       `,
@@ -783,8 +835,9 @@ describe('@boundary runtime instructions (JIT)', () => {
       template: `
         @boundary {
           {{ throwError() }}
-        } @error (let err) {
-          Error: {{err.message}}
+        }
+        @error (let err) {
+          Error: {{ err.message }}
           <button (click)="$reset()">Reset</button>
         }
       `,
@@ -827,8 +880,9 @@ describe('@boundary runtime instructions (JIT)', () => {
           } @else {
             Main Content
           }
-        } @error {
-          Error: {{$error.message}}
+        }
+        @error {
+          Error: {{ $error.message }}
         }
       `,
     })
@@ -854,8 +908,9 @@ describe('@boundary runtime instructions (JIT)', () => {
           } @else {
             Main Content
           }
-        } @error (let err, r = $reset) {
-          Error: {{err.message}}
+        }
+        @error (let err, r = $reset) {
+          Error: {{ err.message }}
           <button (click)="handleReset(r)">Reset Later</button>
         }
       `,
@@ -905,11 +960,12 @@ describe('@boundary runtime instructions (JIT)', () => {
           } @else {
             Main Content
           }
-        } @error (let err; r = $reset; when isChartError(err)) {
-          Chart Error: {{err.message}}
+        }
+        @error (let err; r = $reset; when isChartError(err)) {
+          Chart Error: {{ err.message }}
           <button id="reset-chart" (click)="r()">Reset</button>
         } @error (let error; r = $reset) {
-          Generic Error: {{error.message}}
+          Generic Error: {{ error.message }}
           <button id="reset-generic" (click)="r()">Reset</button>
         }
       `,
@@ -963,8 +1019,9 @@ describe('@boundary runtime instructions (JIT)', () => {
           @if (doThrow()) {
             {{ throwError() }}
           }
-        } @error (let err; when isChartError(err)) {
-          Chart Error: {{err.message}}
+        }
+        @error (let err; when isChartError(err)) {
+          Chart Error: {{ err.message }}
         }
       `,
     })
@@ -1001,10 +1058,11 @@ describe('@boundary runtime instructions (JIT)', () => {
     @Component({
       template: `
         @boundary {
-          <throwing-effect/>
+          <throwing-effect />
           Main Content
-        } @error (let err) {
-          Error: {{err.message}}
+        }
+        @error (let err) {
+          Error: {{ err.message }}
         }
       `,
       imports: [ThrowingEffect],
@@ -1043,7 +1101,8 @@ describe('@boundary runtime instructions (JIT)', () => {
       template: `
         @boundary {
           <throwing-cmp />
-        } @error {
+        }
+        @error {
           <p>Fallback</p>
         }
       `,

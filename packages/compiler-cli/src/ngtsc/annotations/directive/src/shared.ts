@@ -10,6 +10,7 @@ import {
   ArrowFunctionExpr,
   ClassPropertyMapping,
   createMayBeForwardRefExpression,
+  DYNAMIC_TYPE,
   emitDistinctChangesOnlyDefaultValue,
   Expression,
   ExpressionType,
@@ -900,7 +901,8 @@ export function parseDirectiveStyles(
     let unresolvedNode: ts.Node | null = null;
     if (Array.isArray(value)) {
       const entry = value.find((e) => e instanceof DynamicValue && e.isFromUnknownIdentifier()) as
-        DynamicValue | undefined;
+        | DynamicValue
+        | undefined;
       unresolvedNode = entry?.node ?? null;
     } else if (value instanceof DynamicValue && value.isFromUnknownIdentifier()) {
       unresolvedNode = value.node;
@@ -1069,7 +1071,7 @@ function memberMetadataFromSignalQuery(call: ts.CallExpression): LiteralArrayExp
         // on the query initializer, because it executes after the class is initialized, whereas
         // `setClassMetadata` runs immediately.
         new ExternalExpr(R3Identifiers.forwardRef).callFn([
-          new ArrowFunctionExpr([], new WrappedNodeExpr(firstArg)),
+          new ArrowFunctionExpr([], new WrappedNodeExpr(firstArg), DYNAMIC_TYPE),
         ]);
 
   const entries: Expression[] = [

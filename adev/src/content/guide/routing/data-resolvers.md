@@ -151,9 +151,8 @@ The [`withNavigationErrorHandler`](api/router/withNavigationErrorHandler) featur
 
 ```ts
 import {bootstrapApplication} from '@angular/platform-browser';
-import {provideRouter, withNavigationErrorHandler} from '@angular/router';
+import {provideRouter, Router, withNavigationErrorHandler} from '@angular/router';
 import {inject} from '@angular/core';
-import {Router} from '@angular/router';
 import {routes} from './app.routes';
 
 bootstrapApplication(App, {
@@ -163,8 +162,8 @@ bootstrapApplication(App, {
       withNavigationErrorHandler((error) => {
         const router = inject(Router);
 
-        if (error?.message) {
-          console.error('Navigation error occurred:', error.message);
+        if (error.error?.message) {
+          console.error('Navigation error occurred:', error.error.message);
         }
 
         router.navigate(['/error']);
@@ -281,7 +280,7 @@ TIP: To avoid blocking navigation and render components immediately with skeleto
 To improve user experience during resolver execution, you can listen to router events and show loading indicators:
 
 ```angular-ts
-import {Component, inject} from '@angular/core';
+import {Component, computed, inject} from '@angular/core';
 import {Router} from '@angular/router';
 
 @Component({
@@ -317,17 +316,17 @@ Resolvers execute sequentially from parent to child. When a parent route defines
 NOTE: Because resolvers execute sequentially from parent to child, each nested level adds to the total navigation wait time (a network waterfall). If your child routes do not depend on parent data, consider [route resources](/guide/routing/data-fetching-with-resources), which execute concurrently across all routes.
 
 ```ts
-import { inject } from '@angular/core';
-import { provideRouter , ActivatedRouteSnapshot } from '@angular/router';
-import { userResolver } from './resolvers';
-import { UserPosts } from './pages';
-import { PostService } from './services',
-import type { User } from './types';
+import {inject} from '@angular/core';
+import {provideRouter, ActivatedRouteSnapshot} from '@angular/router';
+import {userResolver} from './resolvers';
+import {UserPosts} from './pages';
+import {PostService} from './services';
+import type {User} from './types';
 
 provideRouter([
   {
     path: 'users/:id',
-    resolve: { user: userResolver }, // user resolver in the parent route
+    resolve: {user: userResolver}, // user resolver in the parent route
     children: [
       {
         path: 'posts',

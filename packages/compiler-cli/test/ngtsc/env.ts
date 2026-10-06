@@ -6,6 +6,7 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 
+import type {IndexedComponent} from '@angular/compiler';
 import ts from 'typescript';
 import {
   createCompilerHost,
@@ -27,7 +28,6 @@ import {
   relativeFrom,
 } from '../../src/ngtsc/file_system';
 import {Folder, MockFileSystem} from '../../src/ngtsc/file_system/testing';
-import {IndexedComponent} from '../../src/ngtsc/indexer';
 import {NgtscProgram} from '../../src/ngtsc/program';
 import {DeclarationNode} from '../../src/ngtsc/reflection';
 import {NgtscTestCompilerHost} from '../../src/ngtsc/testing';
@@ -35,7 +35,12 @@ import {TemplateTypeChecker} from '../../src/ngtsc/typecheck/api';
 import {setWrapHostForTest} from '../../src/transformers/compiler_host';
 
 type TsConfigOptionsValue =
-  string | boolean | number | null | TsConfigOptionsValue[] | {[key: string]: TsConfigOptionsValue};
+  | string
+  | boolean
+  | number
+  | null
+  | TsConfigOptionsValue[]
+  | {[key: string]: TsConfigOptionsValue};
 
 export type TsConfigOptions = {
   [key: string]: TsConfigOptionsValue;
@@ -329,7 +334,7 @@ export class NgtscTestEnvironment {
     };
   }
 
-  driveIndexer(): Map<DeclarationNode, IndexedComponent> {
+  driveIndexer(): Map<DeclarationNode, IndexedComponent<DeclarationNode>> {
     const {rootNames, options} = readNgcCommandLineAndConfiguration(this.commandLineArgs);
     const host = createCompilerHost({options});
     const program = createProgram({rootNames, host, options});

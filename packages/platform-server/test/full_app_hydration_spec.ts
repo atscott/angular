@@ -6382,9 +6382,10 @@ describe('platform-server full application hydration integration', () => {
           } catch (e: unknown) {
             const error = e as Error;
             // This is the fixed behavior: a coded NG0502 RuntimeError, not a raw
-            // TypeError.
+            // TypeError. The descriptive message (naming the enclosing host element) is
+            // dev-mode only, so in production the error carries just the error code.
             expect(error instanceof TypeError).toBe(false);
-            expect(error.message).toBe('NG0502: <i>');
+            expect(error.message).toBe('NG0502');
             expect(error.message).not.toContain("reading 'nodeType'");
           } finally {
             (globalThis as any).ngDevMode = previousNgDevMode;
@@ -8047,7 +8048,8 @@ describe('platform-server full application hydration integration', () => {
           template: `
             @boundary {
               Hello, {{ name }}
-            } @error {
+            }
+            @error {
               Error occurred!
             }
           `,
@@ -8101,7 +8103,8 @@ describe('platform-server full application hydration integration', () => {
           template: `
             @boundary {
               <child [fail]="fail" />
-            } @error {
+            }
+            @error {
               Error occurred on server!
             }
           `,
@@ -8153,7 +8156,8 @@ describe('platform-server full application hydration integration', () => {
           template: `
             @boundary {
               <child [fail]="true" />
-            } @error {
+            }
+            @error {
               Error occurred on server and client!
             }
           `,

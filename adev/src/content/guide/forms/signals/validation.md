@@ -140,7 +140,7 @@ registrationForm = form(this.registrationModel, (schemaPath) => {
 
 The validation rule only runs when the `when` function returns `true`.
 
-Note: `required` treats an empty array as present (valid), so use [`minLength()`](#minlength-and-maxlength) to enforce a minimum number of array items.
+NOTE: `required` treats an empty array as present (valid), so use [`minLength()`](#minlength-and-maxlength) to enforce a minimum number of array items.
 
 ### email()
 
@@ -492,7 +492,7 @@ The validator function receives a `FieldContext` object with:
 | --------------- | ---------- | ------------------------------------------- |
 | `value`         | Signal     | Signal containing the current field value   |
 | `state`         | FieldState | The field state reference                   |
-| `field`         | FieldTree  | The field tree reference                    |
+| `fieldTree`     | FieldTree  | The field tree reference                    |
 | `valueOf()`     | Method     | Get the value of another field by path      |
 | `stateOf()`     | Method     | Get the state of another field by path      |
 | `fieldTreeOf()` | Method     | Get the field tree of another field by path |
@@ -668,7 +668,7 @@ import {Component, signal} from '@angular/core';
 import {form, FormField, required, validateHttp} from '@angular/forms/signals';
 
 @Component({
-  selector: 'app-username-form',|
+  selector: 'app-username-form',
   imports: [FormField],
   template: `
     <form novalidate>

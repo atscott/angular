@@ -34,6 +34,7 @@ When you want to run code during specific navigation lifecycle events, you can d
 // Example of subscribing to router events
 import {Component, inject, signal, effect} from '@angular/core';
 import {Event, Router, NavigationStart, NavigationEnd} from '@angular/router';
+import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
 
 @Component(/* ... */)
 export class RouterEvents {
@@ -64,7 +65,7 @@ Debugging router navigation issues can be challenging without visibility into th
 When you need to inspect a Router event sequence, you can enable logging for internal navigation events for debugging. You can configure this by passing a configuration option (`withDebugTracing()`) that enables detailed console logging of all routing events.
 
 ```ts
-import {provideRouter, withDebugTracing} from '@angular/router';
+import {provideRouter, Routes, withDebugTracing} from '@angular/router';
 
 const appRoutes: Routes = [];
 bootstrapApplication(App, {
@@ -83,7 +84,7 @@ Router events enable many practical features in real-world applications. Here ar
 Show loading indicators during navigation:
 
 ```angular-ts
-import {Component, inject} from '@angular/core';
+import {Component, computed, inject} from '@angular/core';
 import {Router} from '@angular/router';
 
 @Component({

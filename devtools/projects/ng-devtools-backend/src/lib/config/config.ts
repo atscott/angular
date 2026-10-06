@@ -17,6 +17,8 @@ class DevtoolsConfigState {
     hydrationOverlays: false,
     cdHighlighting: false,
     cdDataStream: false,
+    deferBlocks: false,
+    forBlocks: false,
   };
   private readonly listeners = new Map<keyof DevtoolsConfig, ((v: any) => void)[]>();
 
@@ -66,6 +68,17 @@ class DevtoolsConfigState {
         propListeners.splice(idx, 1);
       }
     };
+  }
+
+  /** Emit the current value of a property and then listen for changes. */
+  onValue<T extends keyof DevtoolsConfig = keyof DevtoolsConfig>(
+    prop: T,
+    cb: (value: DevtoolsConfig[T]) => void,
+  ): () => void {
+    const unsubscribe = this.onChange(prop, cb);
+    cb(this.config[prop]);
+
+    return unsubscribe;
   }
 }
 

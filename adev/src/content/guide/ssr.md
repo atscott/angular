@@ -241,7 +241,7 @@ Some common browser APIs and capabilities might not be available on the server. 
 In general, code which relies on browser-specific symbols should only be executed in the browser, not on the server. This can be enforced through the `afterEveryRender` and `afterNextRender` lifecycle hooks. These are only executed on the browser and skipped on the server.
 
 ```angular-ts
-import {Component, viewChild, afterNextRender} from '@angular/core';
+import {Component, ElementRef, viewChild, afterNextRender} from '@angular/core';
 
 @Component({
   selector: 'my-cmp',
@@ -454,8 +454,11 @@ This configuration is provided globally using `withHttpTransferCacheOptions` ins
 By default, `HttpClient` caches all `HEAD` and `GET` requests which don't contain `Authorization`, `Proxy-Authorization`, or `Cookie` headers and are not sent with `withCredentials` or Fetch API `credentials` modes that can send credentials. Angular also skips transfer cache when a request or response includes `Cache-Control` directives that forbid caching (`no-store`, `no-cache`, or `private`), or when the Fetch API `cache` option is set to `no-store` or `no-cache`. Responses that carry a `Set-Cookie` header are also skipped. You can override the request filtering settings by using `withHttpTransferCacheOptions` in the hydration configuration.
 
 ```ts
-import {bootstrapApplication} from '@angular/platform-browser';
-import {provideClientHydration, withHttpTransferCacheOptions} from '@angular/platform-browser';
+import {
+  bootstrapApplication,
+  provideClientHydration,
+  withHttpTransferCacheOptions,
+} from '@angular/platform-browser';
 
 bootstrapApplication(App, {
   providers: [

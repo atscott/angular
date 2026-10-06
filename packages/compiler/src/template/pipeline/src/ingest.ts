@@ -32,7 +32,12 @@ import {
   type CompilationJob,
   type ViewCompilationUnit,
 } from './compilation';
-import {BINARY_OPERATORS, namespaceForKey, prefixWithNamespace} from './conversion';
+import {
+  BINARY_OPERATORS,
+  UNARY_OPERATORS,
+  namespaceForKey,
+  prefixWithNamespace,
+} from './conversion';
 import {MATH_ML_NAMESPACE, SVG_NAMESPACE} from './namespaces';
 
 // Schema containing DOM elements and their properties.
@@ -1308,24 +1313,18 @@ function convertAst(
   } else if (ast instanceof e.LiteralPrimitive) {
     return o.literal(ast.value, undefined, convertSourceSpan(ast.span, baseSourceSpan));
   } else if (ast instanceof e.Unary) {
-    switch (ast.operator) {
-      case '+':
-        return new o.UnaryOperatorExpr(
-          o.UnaryOperator.Plus,
-          convertAst(ast.expr, job, baseSourceSpan),
-          undefined,
-          convertSourceSpan(ast.span, baseSourceSpan),
-        );
-      case '-':
-        return new o.UnaryOperatorExpr(
-          o.UnaryOperator.Minus,
-          convertAst(ast.expr, job, baseSourceSpan),
-          undefined,
-          convertSourceSpan(ast.span, baseSourceSpan),
-        );
-      default:
-        throw new Error(`AssertionError: unknown unary operator ${ast.operator}`);
+    if (!UNARY_OPERATORS.has(ast.operator)) {
+      throw new Error(`AssertionError: unknown unary operator ${ast.operator}`);
     }
+    return new o.UnaryOperatorExpr(
+      UNARY_OPERATORS.get(ast.operator)!,
+      convertAst(ast.expr, job, baseSourceSpan),
+      undefined,
+      convertSourceSpan(ast.span, baseSourceSpan),
+      undefined,
+      undefined,
+      ast.isPrefix,
+    );
   } else if (ast instanceof e.Binary) {
     const operator = BINARY_OPERATORS.get(ast.operation);
     if (operator === undefined) {
@@ -1442,6 +1441,7 @@ function convertAst(
       o.arrowFn(
         ast.parameters.map((arg) => new o.FnParam(arg.name, o.DYNAMIC_TYPE)),
         convertAst(ast.body, job, baseSourceSpan),
+        o.DYNAMIC_TYPE,
       ),
     );
   } else {
@@ -2165,7 +2165,10 @@ function ingestControlFlowInsertionPoint(
       }
     }
 
-    const tagName = root instanceof t.Element ? root.name : root.tagName;
+    // Strip the namespace (e.g. `:svg:svg`), because content projection matches against the
+    // plain tag name.
+    const rawTagName = root instanceof t.Element ? root.name : root.tagName;
+    const tagName = rawTagName ? splitNsName(rawTagName)[1] : null;
 
     // Don't pass along `ng-template` tag name since it enables directive matching.
     return tagName === NG_TEMPLATE_TAG_NAME ? null : tagName;

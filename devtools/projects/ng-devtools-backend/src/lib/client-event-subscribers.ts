@@ -7,7 +7,7 @@
  */
 
 import {ɵDebugSignalGraph as InternalDebugSignalGraph} from '@angular/core';
-import {debounceTime} from 'rxjs/operators';
+import {debounceTime} from 'rxjs';
 import {
   ComponentExplorerViewQuery,
   ComponentType,
@@ -155,6 +155,9 @@ export const subscribeToClientEvents = (
         .changeDetection$.pipe(debounceTime(250))
         .subscribe(() => messageBus.emit('componentTreeDirty'));
     });
+
+    getConfig().onChange('deferBlocks', () => messageBus.emit('componentTreeDirty'));
+    getConfig().onChange('forBlocks', () => messageBus.emit('componentTreeDirty'));
   }
 };
 
@@ -418,10 +421,8 @@ export interface SerializableComponentInstanceType extends ComponentType {
   id: number;
 }
 
-export interface SerializableComponentTreeNode extends DevToolsNode<
-  SerializableDirectiveInstanceType,
-  SerializableComponentInstanceType
-> {
+export interface SerializableComponentTreeNode
+  extends DevToolsNode<SerializableDirectiveInstanceType, SerializableComponentInstanceType> {
   children: SerializableComponentTreeNode[];
   nativeElement?: never;
   // Since the nativeElement is not serializable, we will use this boolean as backup
@@ -627,7 +628,9 @@ const getTransferStateCallback = (messageBus: MessageBus<Events>) => () => {
     if (!injector) continue;
 
     const rootData = ng.ɵgetTransferState?.(injector) as
-      Record<string, TransferStateValue> | null | undefined;
+      | Record<string, TransferStateValue>
+      | null
+      | undefined;
     if (rootData && typeof rootData === 'object') {
       Object.assign(merged, rootData);
       collected = true;

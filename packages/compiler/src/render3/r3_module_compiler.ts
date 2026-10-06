@@ -415,7 +415,11 @@ function generateSetNgModuleScopeCall(meta: R3NgModuleMetadata): o.Statement | n
   const guardedCall = jitOnlyGuardedExpression(fnCall);
 
   // function() { (ngJitMode guard) && setNgModuleScope(...); }
-  const iife = new o.FunctionExpr(/* params */ [], /* statements */ [guardedCall.toStmt()]);
+  const iife = new o.FunctionExpr(
+    /* params */ [],
+    /* statements */ [guardedCall.toStmt()],
+    o.DYNAMIC_TYPE,
+  );
 
   // (function() { (ngJitMode guard) && setNgModuleScope(...); })()
   const iifeCall = new o.InvokeFunctionExpr(/* fn */ iife, /* args */ []);

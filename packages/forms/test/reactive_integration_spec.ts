@@ -15,6 +15,7 @@ import {
   forwardRef,
   Input,
   OnDestroy,
+  OnInit,
   Type,
   ViewChild,
 } from '@angular/core';
@@ -66,7 +67,7 @@ import {
   ValueChangeEvent,
 } from '../src/model/abstract_model';
 
-import {MyInput, MyInputForm} from './value_accessor_integration_spec';
+import {MyInputForm} from './value_accessor_integration_spec';
 
 // Produces a new @Directive (with a given selector) that represents a validator class.
 function createValidatorClass(selector: string) {
@@ -820,7 +821,7 @@ describe('reactive forms integration tests', () => {
       });
 
       it('should not add disabled attribute to custom controls when disable() is called', async () => {
-        const fixture = initTest(MyInputForm, MyInput);
+        const fixture = TestBed.createComponent(MyInputForm);
         const control = new FormControl('some value');
         fixture.componentInstance.form = new FormGroup({login: control});
         await fixture.whenStable();
@@ -4225,6 +4226,59 @@ describe('reactive forms integration tests', () => {
       await expectAsync(fixture.whenStable()).toBeRejectedWithError(
         new RegExp(`formGroup expects a FormGroup instance`),
       );
+    });
+
+    it("should throw a coded error, instead of crashing, if a form isn't passed into formGroup in production mode", async () => {
+      const _global: {ngDevMode: any} = global as any;
+      const originalNgDevMode = _global.ngDevMode;
+      try {
+        _global.ngDevMode = false;
+        const fixture = initTest(FormGroupComp);
+        const error = await getRenderError(fixture);
+        // `FORM_GROUP_MISSING_INSTANCE`
+        expect((error as any).code).toBe(1052);
+      } finally {
+        _global.ngDevMode = originalNgDevMode;
+      }
+    });
+
+    it('reports a coded error (not an opaque TypeError) when an async-loaded form has not arrived yet in a production build', async () => {
+      @Component({
+        selector: 'async-form-app',
+        standalone: true,
+        imports: [ReactiveFormsModule],
+        template: `
+          <form [formGroup]="form">
+            <input formControlName="login" />
+          </form>
+        `,
+      })
+      class AsyncFormApp implements OnInit {
+        form!: FormGroup;
+
+        ngOnInit(): void {
+          Promise.resolve().then(() => {
+            this.form = new FormGroup({login: new FormControl('')});
+          });
+        }
+      }
+
+      const _global: {ngDevMode: any} = global as any;
+      const originalNgDevMode = _global.ngDevMode;
+      try {
+        _global.ngDevMode = false;
+
+        TestBed.configureTestingModule({imports: [AsyncFormApp]});
+        const fixture = TestBed.createComponent(AsyncFormApp);
+
+        const error = await getRenderError(fixture);
+        expect((error as any).code).toBe(1052);
+        expect(error.message).toContain('NG01052');
+        expect(error.message).not.toContain('validator');
+        expect(error.message).not.toContain('formGroup expects a FormGroup instance');
+      } finally {
+        _global.ngDevMode = originalNgDevMode;
+      }
     });
 
     it('should throw if formControlName is used without a control container', async () => {

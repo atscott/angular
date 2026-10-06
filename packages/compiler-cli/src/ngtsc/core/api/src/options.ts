@@ -14,8 +14,8 @@ import {
   I18nOptions,
   LegacyNgcOptions,
   MiscOptions,
-  TypeCheckingOptions,
   TargetOptions,
+  TypeCheckingOptions,
 } from './public_options';
 
 /**
@@ -129,8 +129,7 @@ export interface InternalOptions {
  * Also includes a few miscellaneous options.
  */
 export interface NgCompilerOptions
-  extends
-    ts.CompilerOptions,
+  extends ts.CompilerOptions,
     LegacyNgcOptions,
     BazelAndG3Options,
     DiagnosticOptions,

@@ -320,8 +320,15 @@ export class NavigationStateManager extends StateManager {
     this.currentNavigation.rejectNavigateEvent?.();
     const clearedState = {}; // Marker to detect if a new navigation started during async ops.
     this.currentNavigation = clearedState;
-    // Do not reset state if we're redirecting or navigation is superseded by a new one.
+    // Do not reset browser history if we're redirecting or navigation is superseded by a new one.
     if (isRedirectingEvent(cause)) {
+      if (
+        cause instanceof NavigationCancel &&
+        cause.code === NavigationCancellationCode.Redirect &&
+        this.routerState === transition.targetRouterState
+      ) {
+        this.resetInternalState(transition.finalUrl, false);
+      }
       return;
     }
     // Determine if the rollback should be a traversal to a specific previous entry
@@ -434,7 +441,7 @@ export class NavigationStateManager extends StateManager {
     const abortHandler = () => {
       this.currentNavigation.routerTransition?.abort();
     };
-    event.signal.addEventListener('abort', abortHandler);
+    event.signal.addEventListener('abort', abortHandler, {once: true});
     this.currentNavigation.removeAbortListener = () =>
       event.signal.removeEventListener('abort', abortHandler);
 

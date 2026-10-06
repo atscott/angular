@@ -53,7 +53,13 @@ const jsDoclinkRegexGlobal = new RegExp(jsDoclinkRegex.source, 'g');
  *
  * Keep in sync with `templates/section-*.tsx` and the inline `<SectionHeading name="...">` usages.
  */
-const KNOWN_API_SECTION_ANCHORS = new Set(['description', 'usage-notes', 'api', 'pipe-usage']);
+const KNOWN_API_SECTION_ANCHORS = new Set([
+  'description',
+  'usage-notes',
+  'api',
+  'pipe-usage',
+  'exported-by',
+]);
 
 /** Given an entity with a description, gets the entity augmented with an `htmlDescription`. */
 export function addHtmlDescription<T extends HasDescription & HasModuleName & MaybeJsDocTags>(
@@ -253,8 +259,12 @@ function getHtmlAdditionalLinks<T extends HasJsDocTags>(entry: T): LinkEntryRend
     .filter((tag) => tag.name === JS_DOC_SEE_TAG)
     .map((tag) => tag.comment)
     .map((comment): LinkEntryRenderable | undefined => {
-      // TODO: Throw when the comment is an absolute link.
-      // With TS 5.9 this is not possible as the ts api that extracts comments from tags strips the "http" part of links.
+      if (isExternalLink(comment.trim())) {
+        throw new Error(
+          `Invalid @see tag: "${comment}". Absolute links must be written as a ` +
+            `markdown link with a label, e.g. @see [Label](${comment.trim()})`,
+        );
+      }
 
       const markdownLinkMatch = comment.match(markdownLinkRule);
 

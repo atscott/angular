@@ -371,7 +371,7 @@ In the template, each control is displayed as a separate input field.
 
 <docs-step title="Display the form array in the template">
 
-To attach the aliases from your form model, you must add it to the template. Similar to the `formGroupName` input provided by `FormGroupNameDirective`, `formArrayName` binds communication from the form array instance to the template with `FormArrayNameDirective`.
+To attach the aliases from your form model, you must add it to the template. Similar to the `formGroupName` input provided by `FormGroupName`, `formArrayName` binds communication from the form array instance to the template with `FormArrayName`.
 
 Add the following template HTML after the `<div>` closing the `formGroupName` element.
 
@@ -520,7 +520,7 @@ control.events
 **Before**
 
 ```ts
-import {combineLatest} from 'rxjs/operators';
+import {combineLatest} from 'rxjs';
 
 combineLatest([control.valueChanges, control.statusChanges]).subscribe(([value, status]) => {
   /* ... */
@@ -685,7 +685,7 @@ export function positiveValues(control: AbstractControl) {
 ## Reactive forms API summary
 
 The following table lists the base classes and services used to create and manage reactive form controls.
-For complete syntax details, see the API reference documentation for the [Forms package](api#forms 'API reference').
+For complete syntax details, see the API reference documentation for the [Forms package](api#angular_forms 'API reference').
 
 ### Classes
 

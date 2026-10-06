@@ -13,6 +13,7 @@ import {
   compileDeclareNgModuleFromMetadata,
   compileInjector,
   compileNgModule,
+  DYNAMIC_TYPE,
   Expression,
   ExternalExpr,
   FactoryTarget,
@@ -267,12 +268,9 @@ export class NgModuleSymbol extends SemanticSymbol {
 /**
  * Compiles @NgModule annotations to ngModuleDef fields.
  */
-export class NgModuleDecoratorHandler implements DecoratorHandler<
-  Decorator,
-  NgModuleAnalysis,
-  NgModuleSymbol,
-  NgModuleResolution
-> {
+export class NgModuleDecoratorHandler
+  implements DecoratorHandler<Decorator, NgModuleAnalysis, NgModuleSymbol, NgModuleResolution>
+{
   constructor(
     private reflector: ReflectionHost,
     private evaluator: PartialEvaluator,
@@ -1046,11 +1044,11 @@ export class NgModuleDecoratorHandler implements DecoratorHandler<
 
         const directiveExpr =
           remoteScopesMayRequireCycleProtection && directives.length > 0
-            ? new FunctionExpr([], [new ReturnStatement(directiveArray)])
+            ? new FunctionExpr([], [new ReturnStatement(directiveArray)], DYNAMIC_TYPE)
             : directiveArray;
         const pipesExpr =
           remoteScopesMayRequireCycleProtection && pipes.length > 0
-            ? new FunctionExpr([], [new ReturnStatement(pipesArray)])
+            ? new FunctionExpr([], [new ReturnStatement(pipesArray)], DYNAMIC_TYPE)
             : pipesArray;
         const componentType = this.refEmitter.emit(decl, context);
         assertSuccessfulReferenceEmit(componentType, node, 'component');
