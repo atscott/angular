@@ -57,3 +57,6 @@ baseline.json
 
 # pnpm store
 .pnpm-store
+
+# Cargo target directory
+target/
