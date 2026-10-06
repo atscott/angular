@@ -3,10 +3,19 @@ load("//tools:defaults.bzl", "jasmine_test", "ts_project")
 ts_project(
     name = "test_lib",
     testonly = True,
-    srcs = glob(["**/*_spec.ts"]),
+    srcs = glob(
+        [
+            "**/*_spec.ts",
+            "*.ts",
+        ],
+        exclude = ["golden/**"],
+    ),
     deps = [
         "//:node_modules/@types/jasmine",
         "//:node_modules/@types/node",
+        "//:node_modules/diff",
+        "//:node_modules/prettier",
+        "//:node_modules/typescript",
         "//packages/compiler",
         "//packages/ngp",
     ],
@@ -14,5 +23,9 @@ ts_project(
 
 jasmine_test(
     name = "test",
-    data = [":test_lib"],
+    data = [
+        ":test_lib",
+        "//packages/core:npm_package",
+        "//packages/ngp/ng-analyze:ng_analyze_wasm",
+    ] + glob(["golden/**"]),
 )

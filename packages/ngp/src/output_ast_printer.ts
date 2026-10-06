@@ -233,6 +233,57 @@ class EmitterVisitor extends AbstractEmitterVisitor {
     ctx.print(ast, '`');
   }
 
+  override visitFunctionExpr(ast: o.FunctionExpr, ctx: EmitterVisitorContext): void {
+    this.printLeadingComments(ast, ctx);
+    ctx.print(ast, `function${ast.name ? ' ' + ast.name : ''}(`);
+    this.visitParams(ast.params, ctx);
+    ctx.print(ast, `) {`);
+    ctx.println(ast);
+    ctx.incIndent();
+    this.visitAllStatements(ast.statements, ctx);
+    ctx.decIndent();
+    ctx.println(ast, `}`);
+  }
+
+  override visitArrowFunctionExpr(ast: o.ArrowFunctionExpr, ctx: EmitterVisitorContext): void {
+    this.printLeadingComments(ast, ctx);
+    ctx.print(ast, '(');
+    this.visitParams(ast.params, ctx);
+    ctx.print(ast, ') => ');
+
+    if (Array.isArray(ast.body)) {
+      ctx.print(ast, `{`);
+      ctx.println(ast);
+      ctx.incIndent();
+      this.visitAllStatements(ast.body, ctx);
+      ctx.decIndent();
+      ctx.println(ast, `}`);
+    } else {
+      const shouldParenthesize = this.shouldParenthesize(ast.body, ast);
+
+      if (shouldParenthesize) {
+        ctx.print(ast, '(');
+      }
+
+      ast.body.visitExpression(this, ctx);
+
+      if (shouldParenthesize) {
+        ctx.print(ast, ')');
+      }
+    }
+  }
+
+  override visitDeclareFunctionStmt(stmt: o.DeclareFunctionStmt, ctx: EmitterVisitorContext): void {
+    this.printLeadingComments(stmt, ctx);
+    ctx.print(stmt, `function ${stmt.name}(`);
+    this.visitParams(stmt.params, ctx);
+    ctx.println(stmt, `) {`);
+    ctx.incIndent();
+    this.visitAllStatements(stmt.statements, ctx);
+    ctx.decIndent();
+    ctx.println(stmt, `}`);
+  }
+
   override visitLiteralArrayExpr(ast: o.LiteralArrayExpr, ctx: EmitterVisitorContext): void {
     this.printLeadingComments(ast, ctx);
     ctx.print(ast, '[');

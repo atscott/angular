@@ -47,3 +47,6 @@ adev/src/content/examples/schematics-for-libraries/projects/my-lib/package.json
 
 CHANGELOG.md
 CHANGELOG_ARCHIVE.md
+
+# Ignore NGP test fixture markdown files
+packages/ngp/test/golden/**
