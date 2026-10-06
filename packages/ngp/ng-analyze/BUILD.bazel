@@ -1,5 +1,5 @@
 load("@aspect_rules_js//js:defs.bzl", "js_library")
-load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_shared_library")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_shared_library", "rust_test")
 load("@rules_rust_wasm_bindgen//:defs.bzl", "rust_wasm_bindgen")
 
 package(default_visibility = ["//visibility:public"])
@@ -90,5 +90,13 @@ rust_binary(
         "@crates//:futures",
         "@crates//:serde",
         "@crates//:serde_json",
+    ],
+)
+
+rust_test(
+    name = "test",
+    crate = ":ng_analyze",
+    deps = [
+        "@crates//:tempfile",
     ],
 )

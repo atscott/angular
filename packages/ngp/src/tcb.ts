@@ -118,7 +118,7 @@ export function buildTypeCheckingConfig(
   if (strictTemplates) {
     typeCheckingConfig = {
       applyTemplateContextGuards: true,
-      checkQueries: false,
+      checkUnknownElements: false,
       checkTemplateBodies: true,
       alwaysCheckSchemaInTemplateBodies: true,
       checkTypeOfInputBindings: true,
@@ -155,7 +155,7 @@ export function buildTypeCheckingConfig(
   } else {
     typeCheckingConfig = {
       applyTemplateContextGuards: false,
-      checkQueries: false,
+      checkUnknownElements: false,
       checkTemplateBodies: false,
       checkControlFlowBodies: false,
       alwaysCheckSchemaInTemplateBodies: !!options.annotateForClosureCompiler,

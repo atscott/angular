@@ -25,9 +25,7 @@ pub mod tsconfig_resolution;
 pub mod types;
 pub mod utils;
 
-#[cfg(feature = "napi")]
 pub mod test_analyzer;
-#[cfg(feature = "napi")]
 pub use test_analyzer::{TestAnalyzer, TestAnalyzerOptions};
 
 #[cfg(target_arch = "wasm32")]

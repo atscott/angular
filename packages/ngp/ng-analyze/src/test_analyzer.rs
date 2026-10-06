@@ -1,12 +1,12 @@
-#![cfg(feature = "napi")]
+#[cfg(feature = "napi")]
+use napi_derive::napi;
 
 use crate::compiler::{AnalysisIterator, Analyzer};
 use crate::types::{AnalysisResult, AnalyzerOptions, FileInvalidation, FileUpdate};
-use napi_derive::napi;
 use std::collections::HashMap;
 
 /// Options for creating a test analyzer
-#[napi(object)]
+#[cfg_attr(feature = "napi", napi(object))]
 #[derive(Default, Clone, Debug)]
 pub struct TestAnalyzerOptions {
     /// Virtual files to use for analysis
@@ -24,13 +24,14 @@ pub struct TestAnalyzerOptions {
 }
 
 /// Test analyzer that uses virtual filesystem for in-memory testing
-#[napi]
+#[cfg_attr(feature = "napi", napi)]
 pub struct TestAnalyzer {
     analyzer: Analyzer,
 }
 
-#[napi]
+#[cfg_attr(feature = "napi", napi)]
 impl TestAnalyzer {
+    #[cfg(feature = "napi")]
     #[napi(constructor)]
     pub fn new(options: TestAnalyzerOptions) -> napi::Result<Self> {
         let analyzer = Analyzer::new(AnalyzerOptions {
@@ -46,17 +47,38 @@ impl TestAnalyzer {
         Ok(TestAnalyzer { analyzer })
     }
 
-    #[napi]
+    #[cfg(not(feature = "napi"))]
+    pub fn new(options: TestAnalyzerOptions) -> Result<Self, String> {
+        let analyzer = Analyzer::new(AnalyzerOptions {
+            tsconfig_path: options.tsconfig_path,
+            optimize: options.optimize,
+            virtual_files: Some(options.virtual_files),
+            node_modules_path_override: options.node_modules_path_override,
+            allowed_sources: None,
+            workspace_name: options.workspace_name,
+            root_dirs: options.root_dirs,
+        })?;
+
+        Ok(TestAnalyzer { analyzer })
+    }
+
+    #[cfg_attr(feature = "napi", napi)]
     pub fn get_metadata_for_file(&self, file_path: String) -> Option<AnalysisResult> {
         self.analyzer.get_metadata_for_file(file_path)
     }
 
+    #[cfg(feature = "napi")]
     #[napi]
     pub fn get_file_content(&self, file_path: String) -> napi::Result<String> {
         self.analyzer.get_file_content(file_path)
     }
 
-    #[napi]
+    #[cfg(not(feature = "napi"))]
+    pub fn get_file_content(&self, file_path: String) -> Result<String, String> {
+        self.analyzer.get_file_content(file_path)
+    }
+
+    #[cfg_attr(feature = "napi", napi)]
     pub fn get_ts_file_for_template(
         &self,
         template_path: String,
@@ -64,33 +86,69 @@ impl TestAnalyzer {
         self.analyzer.get_ts_file_for_template(template_path)
     }
 
+    #[cfg(feature = "napi")]
     #[napi]
     pub fn update_file_content(&self, updates: Vec<FileUpdate>) -> napi::Result<Vec<String>> {
         self.analyzer.update_file_content(updates)
     }
 
+    #[cfg(not(feature = "napi"))]
+    pub fn update_file_content(&self, updates: Vec<FileUpdate>) -> Result<Vec<String>, String> {
+        self.analyzer.update_file_content(updates)
+    }
+
+    #[cfg(feature = "napi")]
     #[napi]
     pub fn invalidate_files(&self, updates: Vec<FileInvalidation>) -> napi::Result<Vec<String>> {
         self.analyzer.invalidate_files(updates)
     }
 
+    #[cfg(not(feature = "napi"))]
+    pub fn invalidate_files(&self, updates: Vec<FileInvalidation>) -> Result<Vec<String>, String> {
+        self.analyzer.invalidate_files(updates)
+    }
+
+    #[cfg(feature = "napi")]
     #[napi]
     pub fn analyze(&self) -> napi::Result<AnalysisIterator> {
         self.analyzer.analyze()
     }
 
+    #[cfg(not(feature = "napi"))]
+    pub fn analyze(&self) -> Result<AnalysisIterator, String> {
+        self.analyzer.analyze()
+    }
+
+    #[cfg(feature = "napi")]
     #[napi]
     pub fn analyze_optimized(&self) -> napi::Result<AnalysisIterator> {
         self.analyzer.analyze_optimized()
     }
 
+    #[cfg(not(feature = "napi"))]
+    pub fn analyze_optimized(&self) -> Result<AnalysisIterator, String> {
+        self.analyzer.analyze_optimized()
+    }
+
+    #[cfg(feature = "napi")]
     #[napi]
     pub fn analyze_delta(&self) -> napi::Result<AnalysisIterator> {
         self.analyzer.analyze_delta()
     }
 
+    #[cfg(not(feature = "napi"))]
+    pub fn analyze_delta(&self) -> Result<AnalysisIterator, String> {
+        self.analyzer.analyze_delta()
+    }
+
+    #[cfg(feature = "napi")]
     #[napi]
     pub fn analyze_optimized_delta(&self) -> napi::Result<AnalysisIterator> {
+        self.analyzer.analyze_optimized_delta()
+    }
+
+    #[cfg(not(feature = "napi"))]
+    pub fn analyze_optimized_delta(&self) -> Result<AnalysisIterator, String> {
         self.analyzer.analyze_optimized_delta()
     }
 }

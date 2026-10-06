@@ -742,13 +742,16 @@ mod tests {
     #[test]
     fn test_fallback_to_real_fs() {
         let fs = OverlayFileSystem::new_with_overlay();
-        let cargo_toml_path = std::fs::canonicalize(Path::new("Cargo.toml")).unwrap();
+        let mut temp_file = tempfile::NamedTempFile::new().unwrap();
+        use std::io::Write;
+        writeln!(temp_file, "package test;").unwrap();
+        let real_path = std::fs::canonicalize(temp_file.path()).unwrap();
 
-        // Cargo.toml should NOT be in virtual files
-        assert!(!fs.is_virtual(&cargo_toml_path));
+        // Should NOT be in virtual files
+        assert!(!fs.is_virtual(&real_path));
 
         // But we should be able to read it
-        let result = fs.read_to_string(&cargo_toml_path);
+        let result = fs.read_to_string(&real_path);
         assert!(result.is_ok());
         let content = result.unwrap();
         assert!(content.contains("package"));
@@ -757,16 +760,19 @@ mod tests {
     #[test]
     fn test_virtual_shadowing() {
         let fs = OverlayFileSystem::new_with_overlay();
-        let cargo_toml_path = std::fs::canonicalize(Path::new("Cargo.toml")).unwrap();
+        let mut temp_file = tempfile::NamedTempFile::new().unwrap();
+        use std::io::Write;
+        writeln!(temp_file, "real content").unwrap();
+        let real_path = std::fs::canonicalize(temp_file.path()).unwrap();
 
-        // Add a virtual file shadowing Cargo.toml
-        fs.upsert_file(cargo_toml_path.clone(), "virtual content".to_string());
+        // Add a virtual file shadowing the real file
+        fs.upsert_file(real_path.clone(), "virtual content".to_string());
 
         // Now it should be virtual
-        assert!(fs.is_virtual(&cargo_toml_path));
+        assert!(fs.is_virtual(&real_path));
 
         // Reading it should return virtual content
-        let content = fs.read_to_string(&cargo_toml_path).unwrap();
+        let content = fs.read_to_string(&real_path).unwrap();
         assert_eq!(content, "virtual content");
     }
 
@@ -796,9 +802,11 @@ mod tests {
     fn test_resolve_fallback_to_real_fs() {
         let fs = OverlayFileSystem::new_with_overlay();
 
-        // We need a real file to resolve to. Let's use Cargo.toml in the project root.
-        let cargo_toml_path = std::fs::canonicalize(Path::new("Cargo.toml")).unwrap();
-        let project_root = cargo_toml_path.parent().unwrap();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let real_file_path = temp_dir.path().join("real_file.ts");
+        std::fs::write(&real_file_path, "export const x = 1;").unwrap();
+        let real_path = std::fs::canonicalize(&real_file_path).unwrap();
+        let project_root = real_path.parent().unwrap();
 
         // Add a virtual file in the same directory
         fs.upsert_file(project_root.join("virtual.ts"), "".to_string());
@@ -812,12 +820,12 @@ mod tests {
             },
         );
 
-        // Resolve "./Cargo.toml" from project_root
+        // Resolve "./real_file.ts" from project_root
         // The resolver will check virtual files first (via fs), then fall back to real FS.
-        let result = resolver.resolve(project_root, "./Cargo.toml");
+        let result = resolver.resolve(project_root, "./real_file");
         assert!(result.is_ok());
         let resolution = result.unwrap();
-        assert_eq!(resolution.path(), cargo_toml_path);
+        assert_eq!(resolution.path(), real_path);
 
         // Also verify that the virtual file itself can be resolved!
         let result = resolver.resolve(project_root, "./virtual.ts");

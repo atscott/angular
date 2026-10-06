@@ -486,6 +486,11 @@ impl Analyzer {
         Self::new_core(options).map_err(napi::Error::from_reason)
     }
 
+    #[cfg(not(feature = "napi"))]
+    pub fn new(options: AnalyzerOptions) -> Result<Self, String> {
+        Self::new_core(options)
+    }
+
     #[cfg_attr(feature = "napi", napi)]
     pub fn get_ts_file_for_template(
         &self,
@@ -501,11 +506,21 @@ impl Analyzer {
             .map_err(napi::Error::from_reason)
     }
 
+    #[cfg(not(feature = "napi"))]
+    pub fn update_file_content(&self, updates: Vec<FileUpdate>) -> Result<Vec<String>, String> {
+        self.update_file_content_core(updates)
+    }
+
     #[cfg(feature = "napi")]
     #[napi]
     pub fn invalidate_files(&self, updates: Vec<FileInvalidation>) -> napi::Result<Vec<String>> {
         self.invalidate_files_core(updates)
             .map_err(napi::Error::from_reason)
+    }
+
+    #[cfg(not(feature = "napi"))]
+    pub fn invalidate_files(&self, updates: Vec<FileInvalidation>) -> Result<Vec<String>, String> {
+        self.invalidate_files_core(updates)
     }
 
     #[cfg(feature = "napi")]
@@ -519,6 +534,17 @@ impl Analyzer {
         let rx = self
             .analyze_core(spawner)
             .map_err(napi::Error::from_reason)?;
+        Ok(crate::AnalysisIterator::new(rx))
+    }
+
+    #[cfg(not(feature = "napi"))]
+    pub fn analyze(&self) -> Result<crate::AnalysisIterator, String> {
+        #[cfg(not(target_arch = "wasm32"))]
+        let spawner = get_global_pool().clone();
+        #[cfg(target_arch = "wasm32")]
+        let spawner = get_local_spawner();
+
+        let rx = self.analyze_core(spawner)?;
         Ok(crate::AnalysisIterator::new(rx))
     }
 
@@ -536,6 +562,17 @@ impl Analyzer {
         Ok(crate::AnalysisIterator::new(rx))
     }
 
+    #[cfg(not(feature = "napi"))]
+    pub fn analyze_optimized(&self) -> Result<crate::AnalysisIterator, String> {
+        #[cfg(not(target_arch = "wasm32"))]
+        let spawner = get_global_pool().clone();
+        #[cfg(target_arch = "wasm32")]
+        let spawner = get_local_spawner();
+
+        let rx = self.analyze_optimized_core(spawner)?;
+        Ok(crate::AnalysisIterator::new(rx))
+    }
+
     #[cfg(feature = "napi")]
     #[napi]
     pub fn analyze_delta(&self) -> napi::Result<crate::AnalysisIterator> {
@@ -550,6 +587,17 @@ impl Analyzer {
         Ok(crate::AnalysisIterator::new(rx))
     }
 
+    #[cfg(not(feature = "napi"))]
+    pub fn analyze_delta(&self) -> Result<crate::AnalysisIterator, String> {
+        #[cfg(not(target_arch = "wasm32"))]
+        let spawner = get_global_pool().clone();
+        #[cfg(target_arch = "wasm32")]
+        let spawner = get_local_spawner();
+
+        let rx = self.analyze_delta_core(spawner)?;
+        Ok(crate::AnalysisIterator::new(rx))
+    }
+
     #[cfg(feature = "napi")]
     #[napi]
     pub fn analyze_optimized_delta(&self) -> napi::Result<crate::AnalysisIterator> {
@@ -561,6 +609,17 @@ impl Analyzer {
         let rx = self
             .analyze_optimized_delta_core(spawner)
             .map_err(napi::Error::from_reason)?;
+        Ok(crate::AnalysisIterator::new(rx))
+    }
+
+    #[cfg(not(feature = "napi"))]
+    pub fn analyze_optimized_delta(&self) -> Result<crate::AnalysisIterator, String> {
+        #[cfg(not(target_arch = "wasm32"))]
+        let spawner = get_global_pool().clone();
+        #[cfg(target_arch = "wasm32")]
+        let spawner = get_local_spawner();
+
+        let rx = self.analyze_optimized_delta_core(spawner)?;
         Ok(crate::AnalysisIterator::new(rx))
     }
 
@@ -611,6 +670,11 @@ impl Analyzer {
     pub fn get_file_content(&self, file_path: String) -> napi::Result<String> {
         self.get_file_content_core(file_path)
             .map_err(napi::Error::from_reason)
+    }
+
+    #[cfg(not(feature = "napi"))]
+    pub fn get_file_content(&self, file_path: String) -> Result<String, String> {
+        self.get_file_content_core(file_path)
     }
 
     fn run_coordinator_helper<S: Spawner>(
