@@ -1,13 +1,16 @@
 import * as fs from 'node:fs/promises';
 import {readConfiguration} from '@angular/compiler-cli';
 import {API, Snapshot} from '@typescript/native-preview/unstable/async';
-import {HybridCompiler} from '../../../packages/ngp/src/hybrid_compiler.js';
-import {NapiAnalyzer} from '../../../packages/ngp/src/analyzer_napi.js';
-import {buildTypeCheckingConfig} from '../../../packages/ngp/src/tcb';
-import {LanguageService} from '../../../packages/ngp/language-service/src/language_service';
-import {TsGoFacade} from '../../../packages/ngp/language-service/src/facade';
-import {FileInvalidation, FileUpdateType} from '../../../packages/ngp/src/types.js';
-import {canonicalizePath as normalizePath} from '../../../packages/ngp/language-service/src/utils.js';
+import {HybridCompiler} from '../../../packages/compiler-cli/preprocessor/src/hybrid_compiler.js';
+import {NapiAnalyzer} from '../../../packages/compiler-cli/preprocessor/src/analyzer_napi.js';
+import {buildTypeCheckingConfig} from '../../../packages/compiler-cli/preprocessor/src/tcb';
+import {LanguageService} from '../../../packages/compiler-cli/preprocessor/language-service/src/language_service';
+import {TsGoFacade} from '../../../packages/compiler-cli/preprocessor/language-service/src/facade';
+import {
+  FileInvalidation,
+  FileUpdateType,
+} from '../../../packages/compiler-cli/preprocessor/src/types.js';
+import {canonicalizePath as normalizePath} from '../../../packages/compiler-cli/preprocessor/language-service/src/utils.js';
 
 export interface ProjectInstance {
   tsconfigPath: string;

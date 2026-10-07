@@ -19,9 +19,9 @@ export function resolveGoldenRoot(): string {
   const runfilesDir = process.env['JS_BINARY__RUNFILES'] || process.env['RUNFILES_DIR'];
   if (runfilesDir) {
     const candidates = [
-      path.join(runfilesDir, '_main/packages/ngp/test/golden'),
-      path.join(runfilesDir, 'angular/packages/ngp/test/golden'),
-      path.join(runfilesDir, 'packages/ngp/test/golden'),
+      path.join(runfilesDir, '_main/packages/compiler-cli/preprocessor/test/golden'),
+      path.join(runfilesDir, 'angular/packages/compiler-cli/preprocessor/test/golden'),
+      path.join(runfilesDir, 'packages/compiler-cli/preprocessor/test/golden'),
     ];
     for (const c of candidates) {
       if (fsSync.existsSync(c)) {
@@ -30,7 +30,7 @@ export function resolveGoldenRoot(): string {
     }
   }
   const relativeCandidates = [
-    path.resolve(process.cwd(), 'packages/ngp/test/golden'),
+    path.resolve(process.cwd(), 'packages/compiler-cli/preprocessor/test/golden'),
     path.resolve(process.cwd(), 'golden'),
     path.resolve(import.meta.dirname, 'golden'),
   ];

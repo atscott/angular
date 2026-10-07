@@ -20,9 +20,9 @@ import {
   SignatureHelp,
   SignatureHelpContext,
 } from 'vscode-languageserver';
-import {TestFileManager} from '../../packages/ngp/language-service/tests/test_file_manager';
-import {startTsgo} from '../../packages/ngp/language-service/tests/test_helpers';
-import {canonicalizePath as normalizePath} from '../../packages/ngp/language-service/src/utils.js';
+import {TestFileManager} from '../../packages/compiler-cli/preprocessor/language-service/tests/test_file_manager';
+import {startTsgo} from '../../packages/compiler-cli/preprocessor/language-service/tests/test_helpers';
+import {canonicalizePath as normalizePath} from '../../packages/compiler-cli/preprocessor/language-service/src/utils.js';
 
 export async function startTestServer(workspacePath: string) {
   console.log('[LSP TEST DEBUG] Starting tsgo...');

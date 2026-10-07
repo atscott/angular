@@ -198,7 +198,7 @@ async function wasmCandidates(options: LoadAnalyzerOptions): Promise<Candidate[]
       ? existingPath(path.join(options.ngAnalyzeDir, '..', 'ng-analyze-wasm', 'ng_analyze.js'))
       : null,
     !IS_INSTALLED
-      ? (await walkUpFor(path.join('packages/ngp/ng-analyze-wasm', 'ng_analyze.js'))) ||
+      ? (await walkUpFor(path.join('packages/compiler-cli/preprocessor/ng-analyze-wasm', 'ng_analyze.js'))) ||
         (await walkUpFor(path.join('ng-analyze-wasm', 'ng_analyze.js')))
       : null,
   ]);

@@ -80,8 +80,8 @@ try {
       '@typescript/native-preview',
       '@typescript/native-preview/*',
       'jasmine',
-      path.join(repoRoot, 'packages/ngp/ng-analyze-wasm/ng_analyze.js'),
-      path.join(repoRoot, 'packages/ngp/ng-analyze/index.js'),
+      path.join(repoRoot, 'packages/compiler-cli/preprocessor/ng-analyze-wasm/ng_analyze.js'),
+      path.join(repoRoot, 'packages/compiler-cli/preprocessor/ng-analyze/index.js'),
     ],
     alias: {
       '@angular/compiler-cli/private/hybrid_analysis': path.join(

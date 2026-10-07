@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "packages/ngp/ng-analyze",
+    "packages/compiler-cli/preprocessor/ng-analyze",
     "tools/rust/example",
 ]
 resolver = "3"

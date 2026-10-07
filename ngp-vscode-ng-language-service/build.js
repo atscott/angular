@@ -41,8 +41,8 @@ async function build() {
     nodePaths: [path.join(__dirname, 'node_modules')],
     outfile: path.join(__dirname, 'dist/server/server.js'),
     external: [
-      path.join(__dirname, '../packages/ngp/ng-analyze/index.js'),
-      path.join(__dirname, '../packages/ngp/ng-analyze-wasm/ng_analyze.js'),
+      path.join(__dirname, '../packages/compiler-cli/preprocessor/ng-analyze/index.js'),
+      path.join(__dirname, '../packages/compiler-cli/preprocessor/ng-analyze-wasm/ng_analyze.js'),
       'typescript',
     ],
     alias: {

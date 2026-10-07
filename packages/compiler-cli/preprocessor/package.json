@@ -27,7 +27,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/angular/angular.git",
-    "directory": "packages/ngp"
+    "directory": "packages/compiler-cli/preprocessor"
   },
   "keywords": [
     "angular",
@@ -42,5 +42,5 @@
   "bugs": {
     "url": "https://github.com/angular/angular/issues"
   },
-  "homepage": "https://github.com/angular/angular/tree/main/packages/ngp"
+  "homepage": "https://github.com/angular/angular/tree/main/packages/compiler-cli/preprocessor"
 }

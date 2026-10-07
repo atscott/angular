@@ -17,7 +17,7 @@ ts_project(
         "//:node_modules/prettier",
         "//:node_modules/typescript",
         "//packages/compiler",
-        "//packages/ngp",
+        "//packages/compiler-cli/preprocessor",
     ],
 )
 
@@ -26,6 +26,6 @@ jasmine_test(
     data = [
         ":test_lib",
         "//packages/core:npm_package",
-        "//packages/ngp/ng-analyze:ng_analyze_wasm",
+        "//packages/compiler-cli/preprocessor/ng-analyze:ng_analyze_wasm",
     ] + glob(["golden/**"]),
 )

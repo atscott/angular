@@ -43,9 +43,18 @@ export function resolveWasmBinding(): string {
   const runfilesDir = process.env['JS_BINARY__RUNFILES'] || process.env['RUNFILES_DIR'];
   if (runfilesDir) {
     const candidates = [
-      path.join(runfilesDir, '_main/packages/ngp/ng-analyze/ng_analyze_wasm/ng_analyze_wasm.js'),
-      path.join(runfilesDir, 'angular/packages/ngp/ng-analyze/ng_analyze_wasm/ng_analyze_wasm.js'),
-      path.join(runfilesDir, 'packages/ngp/ng-analyze/ng_analyze_wasm/ng_analyze_wasm.js'),
+      path.join(
+        runfilesDir,
+        '_main/packages/compiler-cli/preprocessor/ng-analyze/ng_analyze_wasm/ng_analyze_wasm.js',
+      ),
+      path.join(
+        runfilesDir,
+        'angular/packages/compiler-cli/preprocessor/ng-analyze/ng_analyze_wasm/ng_analyze_wasm.js',
+      ),
+      path.join(
+        runfilesDir,
+        'packages/compiler-cli/preprocessor/ng-analyze/ng_analyze_wasm/ng_analyze_wasm.js',
+      ),
     ];
     for (const c of candidates) {
       if (fsSync.existsSync(c)) {
@@ -54,10 +63,13 @@ export function resolveWasmBinding(): string {
     }
   }
   const relativeCandidates = [
-    path.resolve(process.cwd(), '../../packages/ngp/ng-analyze/ng_analyze_wasm/ng_analyze_wasm.js'),
     path.resolve(
       process.cwd(),
-      'dist/bin/packages/ngp/ng-analyze/ng_analyze_wasm/ng_analyze_wasm.js',
+      '../../packages/compiler-cli/preprocessor/ng-analyze/ng_analyze_wasm/ng_analyze_wasm.js',
+    ),
+    path.resolve(
+      process.cwd(),
+      'dist/bin/packages/compiler-cli/preprocessor/ng-analyze/ng_analyze_wasm/ng_analyze_wasm.js',
     ),
   ];
   for (const c of relativeCandidates) {

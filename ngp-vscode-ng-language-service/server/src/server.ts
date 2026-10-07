@@ -36,13 +36,16 @@ import * as fs from 'node:fs/promises';
 import * as rpc from 'vscode-jsonrpc/node';
 
 import {API} from '@typescript/native-preview/unstable/async';
-import {TsGoFacade} from '../../../packages/ngp/language-service/src/facade';
+import {TsGoFacade} from '../../../packages/compiler-cli/preprocessor/language-service/src/facade';
 import {fileURLToPath} from 'node:url';
-import {getTcbPath} from '../../../packages/ngp/src/tcb_ls_util.js';
-import {FileInvalidation, FileUpdateType} from '../../../packages/ngp/src/types.js';
+import {getTcbPath} from '../../../packages/compiler-cli/preprocessor/src/tcb_ls_util.js';
+import {
+  FileInvalidation,
+  FileUpdateType,
+} from '../../../packages/compiler-cli/preprocessor/src/types.js';
 import {ProjectManager} from './project_manager';
 import {DiagnosticPublisher} from './diagnostic_publisher';
-import {canonicalizePath as normalizePath} from '../../../packages/ngp/language-service/src/utils.js';
+import {canonicalizePath as normalizePath} from '../../../packages/compiler-cli/preprocessor/language-service/src/utils.js';
 
 let workspaceRoot: string = '';
 let facade: TsGoFacade | null = null;

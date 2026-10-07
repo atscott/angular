@@ -2,7 +2,7 @@ import * as path from 'path';
 import * as rpc from 'vscode-jsonrpc/node';
 import {URI} from 'vscode-uri';
 import {TestEnv, startTestServer} from './test_helpers';
-import {TestFileManager} from '../../packages/ngp/language-service/tests/test_file_manager';
+import {TestFileManager} from '../../packages/compiler-cli/preprocessor/language-service/tests/test_file_manager';
 
 const testWorkspacePath = path.join(__dirname, 'test-workspace');
 

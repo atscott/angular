@@ -11,7 +11,7 @@ ts_config(
 )
 
 ts_project(
-    name = "ngp",
+    name = "preprocessor",
     srcs = glob(
         include = [
             "*.ts",
@@ -30,14 +30,14 @@ ts_project(
         "//packages/compiler",
         "//packages/compiler-cli",
         "//packages/compiler-cli/private",
-        "//packages/ngp/ng-analyze:wasm",
+        "//packages/compiler-cli/preprocessor/ng-analyze:wasm",
     ],
 )
 
 npm_package(
     srcs = [
         "package.json",
-        ":ngp",
+        ":preprocessor",
     ],
-    package = "@angular/ngp",
+    package = "@angular/compiler-cli/preprocessor",
 )

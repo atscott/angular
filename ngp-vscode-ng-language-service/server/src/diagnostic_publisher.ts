@@ -1,7 +1,7 @@
 import {Connection} from 'vscode-languageserver/node';
 import {URI} from 'vscode-uri';
 import {fileURLToPath} from 'node:url';
-import {canonicalizePath as normalizePath} from '../../../packages/ngp/language-service/src/utils.js';
+import {canonicalizePath as normalizePath} from '../../../packages/compiler-cli/preprocessor/language-service/src/utils.js';
 
 async function normalizeUri(uri: string): Promise<string> {
   try {

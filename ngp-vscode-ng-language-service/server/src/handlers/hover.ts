@@ -1,5 +1,5 @@
 import {HandlerContext, getDocumentContext} from './utils.js';
-import {offsetToPosition} from '../../../../packages/ngp/src/tcb_ls_util.js';
+import {offsetToPosition} from '../../../../packages/compiler-cli/preprocessor/src/tcb_ls_util.js';
 
 export async function onHover(params: any, context: HandlerContext) {
   const docContext = getDocumentContext(context, params.textDocument.uri, params.position);

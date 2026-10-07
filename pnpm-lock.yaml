@@ -1056,6 +1056,28 @@ importers:
         specifier: workspace:*
         version: link:../../..
 
+  packages/compiler-cli/preprocessor/language-service:
+    dependencies:
+      '@typescript/native-preview':
+        specifier: 7.0.0-dev.20260707.2
+        version: 7.0.0-dev.20260707.2
+      vscode-jsonrpc:
+        specifier: ^9.0.1
+        version: 9.0.3
+      vscode-languageserver:
+        specifier: ^10.1.0
+        version: 10.1.2
+      vscode-languageserver-textdocument:
+        specifier: ^1.0.12
+        version: 1.0.15
+      vscode-uri:
+        specifier: ^3.1.0
+        version: 3.2.0
+    devDependencies:
+      typescript:
+        specifier: 6.0.2
+        version: 6.0.2
+
   packages/core:
     dependencies:
       '@angular/compiler':
@@ -1173,28 +1195,6 @@ importers:
       yargs:
         specifier: ^18.0.0
         version: 18.2.0
-
-  packages/ngp/language-service:
-    dependencies:
-      '@typescript/native-preview':
-        specifier: 7.0.0-dev.20260707.2
-        version: 7.0.0-dev.20260707.2
-      vscode-jsonrpc:
-        specifier: ^9.0.1
-        version: 9.0.3
-      vscode-languageserver:
-        specifier: ^10.1.0
-        version: 10.1.2
-      vscode-languageserver-textdocument:
-        specifier: ^1.0.12
-        version: 1.0.15
-      vscode-uri:
-        specifier: ^3.1.0
-        version: 3.2.0
-    devDependencies:
-      typescript:
-        specifier: 6.0.2
-        version: 6.0.2
 
   packages/platform-browser:
     dependencies:
