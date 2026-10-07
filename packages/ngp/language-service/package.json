@@ -7,7 +7,7 @@
     "compile": "tsc -p .",
     "watch": "tsc -p . -w",
     "typecheck": "tsc -p . --noEmit",
-    "test": "vitest run tests/ --fileParallelism=false --testTimeout=30000"
+    "test": "node tests/run_jasmine.mjs"
   },
   "dependencies": {
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
@@ -17,7 +17,6 @@
     "vscode-uri": "^3.1.0"
   },
   "devDependencies": {
-    "typescript": "6.0.2",
-    "vitest": "^4.1.10"
+    "typescript": "6.0.2"
   }
 }

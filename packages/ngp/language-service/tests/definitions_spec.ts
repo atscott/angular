@@ -1,4 +1,3 @@
-import {describe, afterAll, beforeAll, it, expect, beforeEach} from 'vitest';
 import {TsGoFacade} from '../src/facade';
 import * as path from 'path';
 import * as fs from 'node:fs/promises';
@@ -693,7 +692,7 @@ describe('Definitions with TS 7 binary', () => {
     });
   });
 
-  it.skip('should go to the pre-compiled style sheet', async () => {
+  xit('should go to the pre-compiled style sheet', async () => {
     const appTsContent = `
       import {Component} from '@angular/core';
 
@@ -714,7 +713,7 @@ describe('Definitions with TS 7 binary', () => {
     });
   });
 
-  it.skip('should go to the external template file', async () => {
+  xit('should go to the external template file', async () => {
     const appTsContent = `
       import {Component} from '@angular/core';
 

@@ -3,7 +3,6 @@ import * as fs from 'node:fs/promises';
 import * as cp from 'child_process';
 
 import {TextDocument} from 'vscode-languageserver-textdocument';
-import {expect} from 'vitest';
 import * as rpc from 'vscode-jsonrpc/node';
 import {URI} from 'vscode-uri';
 import {fileURLToPath} from 'node:url';
@@ -459,10 +458,11 @@ export class TestEnv {
         const found = items.some(
           (i: CompletionItem) => i.label === expected.label && matchesKind(i.kind, expected.kind),
         );
-        expect(
-          found,
-          `Expected completions to contain "${expected.label}" (kind: ${expected.kind}), but found: ${JSON.stringify(items.map((i: any) => ({label: i.label, kind: i.kind})))}`,
-        ).toBe(true);
+        expect(found)
+          .withContext(
+            `Expected completions to contain "${expected.label}" (kind: ${expected.kind}), but found: ${JSON.stringify(items.map((i: any) => ({label: i.label, kind: i.kind})))}`,
+          )
+          .toBe(true);
       }
     }
     return result;

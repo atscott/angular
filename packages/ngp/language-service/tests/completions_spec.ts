@@ -1,4 +1,3 @@
-import {describe, afterAll, beforeAll, it, expect, beforeEach} from 'vitest';
 import {TsGoFacade} from '../src/facade';
 import * as path from 'path';
 import * as fs from 'node:fs/promises';
@@ -408,7 +407,7 @@ describe('Completions with TS 7 binary', () => {
 
     // Skipped: Synthesizing quoted string/number literal values at bare unquoted expression positions
     // requires TS Program/TypeChecker contextual type inspection, which is unavailable in standard LSP without ts.Program.
-    it.skip('should return completions of string literals, number literals, true, false, null and undefined', async () => {
+    xit('should return completions of string literals, number literals, true, false, null and undefined', async () => {
       const appTs = `
         import {Component, Directive, Input} from '@angular/core';
 
@@ -438,7 +437,7 @@ describe('Completions with TS 7 binary', () => {
     });
 
     // Skipped: Modifying symbol literal completions require TS Program/TypeChecker internal APIs.
-    it.skip('should return completions of literals when user modifies symbol', async () => {
+    xit('should return completions of literals when user modifies symbol', async () => {
       const appTs = `
         import {Component, Directive, Input} from '@angular/core';
 
@@ -537,7 +536,7 @@ describe('Completions with TS 7 binary', () => {
 
     // Skipped: Synthesizing quoted string/number literal values at bare unquoted expression positions
     // requires TS Program/TypeChecker contextual type inspection, which is unavailable in standard LSP without ts.Program.
-    it.skip('should return completions of string literals, number literals, null and undefined in signal input binding', async () => {
+    xit('should return completions of string literals, number literals, null and undefined in signal input binding', async () => {
       const appTs = `
         import {Component, Directive, input} from '@angular/core';
 
@@ -567,7 +566,7 @@ describe('Completions with TS 7 binary', () => {
     });
 
     // Skipped: Modifying symbol literal completions require TS Program/TypeChecker internal APIs.
-    it.skip('should return completions of literals when modifying signal input binding', async () => {
+    xit('should return completions of literals when modifying signal input binding', async () => {
       const appTs = `
         import {Component, Directive, input} from '@angular/core';
 
@@ -766,7 +765,7 @@ describe('Completions with TS 7 binary', () => {
 
     // Skipped: Resolving generic observable payload type across RxJS library boundaries
     // requires TS Program/TypeChecker symbols, which is unavailable in standard LSP without ts.Program.
-    it.skip('should complete $event in observable output event binding', async () => {
+    xit('should complete $event in observable output event binding', async () => {
       const appTs = `
         import {Component, Directive} from '@angular/core';
         import {outputFromObservable} from '@angular/core/rxjs-interop';
@@ -1444,7 +1443,7 @@ foo\`,
       });
     });
 
-    it.skip('should return component completions not imported (requires whole-program auto-import code actions)', async () => {
+    xit('should return component completions not imported (requires whole-program auto-import code actions)', async () => {
       // In TS 7 / standard LSP, auto-import code actions for unimported standalone components require
       // workspace-level symbol indexing and AST code actions, which are handled at the editor/extension layer.
     });
@@ -2494,11 +2493,11 @@ foo\`,
       });
     });
 
-    describe.skip('element attribute out of scope (auto-import code actions)', () => {
+    xit('element attribute out of scope (auto-import code actions)', () => {
       // In TS 7 / standard LSP, auto-importing out-of-scope directives requires whole-program indexing.
     });
 
-    describe.skip('animations', () => {
+    xit('animations', () => {
       // Animation trigger metadata (animations: [trigger(...)]) is not yet parsed by ng-analyze analyzer.
     });
   });
@@ -2722,7 +2721,7 @@ foo\`,
     });
   });
 
-  describe.skip('auto-apply optional chaining', () => {
+  xit('auto-apply optional chaining', () => {
     // includeAutomaticOptionalChainCompletions requires in-process ts.TypeChecker access.
   });
 

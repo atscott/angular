@@ -1,4 +1,3 @@
-import {describe, it, beforeAll, afterAll, beforeEach, afterEach, expect} from 'vitest';
 import * as path from 'path';
 import * as rpc from 'vscode-jsonrpc/node';
 import {CompletionItemKind} from 'vscode-languageserver';

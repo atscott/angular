@@ -7,7 +7,6 @@ import {LanguageService} from '../src/language_service';
 import {buildTypeCheckingConfig} from '../../src/tcb';
 import {TsGoFacade} from '../src/facade';
 import {TextDocument} from 'vscode-languageserver-textdocument';
-import {expect} from 'vitest';
 import * as rpc from 'vscode-jsonrpc/node';
 import {TestFileManager} from './test_file_manager';
 import {AngularCompilerOptions} from '@angular/compiler-cli';
@@ -464,7 +463,9 @@ export function expectAll(
   expect(completions).toBeDefined();
   for (const [name, kind] of Object.entries(contains)) {
     const found = completions!.items.some((e) => e.label === name && matchesKind(e.kind, kind));
-    expect(found, `Expected completions to contain entry "${name}" of kind "${kind}"`).toBe(true);
+    expect(found)
+      .withContext(`Expected completions to contain entry "${name}" of kind "${kind}"`)
+      .toBe(true);
   }
   expect(completions!.items.length).toEqual(Object.keys(contains).length);
 }
@@ -477,9 +478,9 @@ export function expectDoesNotContain(
   expect(completions).toBeDefined();
   for (const name of names) {
     const found = completions!.items.some((e) => e.label === name && matchesKind(e.kind, kind));
-    expect(found, `Expected completions NOT to contain entry "${name}" of kind "${kind}"`).toBe(
-      false,
-    );
+    expect(found)
+      .withContext(`Expected completions NOT to contain entry "${name}" of kind "${kind}"`)
+      .toBe(false);
   }
 }
 

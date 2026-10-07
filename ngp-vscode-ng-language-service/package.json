@@ -148,7 +148,7 @@
   "scripts": {
     "compile": "tsc -p client --noEmit && tsc -p server --noEmit && node build.js",
     "typecheck": "tsc -p client --noEmit && tsc -p server --noEmit && tsc -p tests --noEmit",
-    "test:lsp": "pnpm run compile && vitest run tests/ --fileParallelism=false --testTimeout=30000",
+    "test:lsp": "pnpm run compile && node tests/run_jasmine.mjs",
     "test": "pnpm run compile && pnpm run test:lsp && node e2e/build-tests.js && node e2e/runTests.js",
     "watch": "pnpm --prefix client run watch & pnpm --prefix server run watch"
   },
@@ -167,7 +167,6 @@
     "@vscode/test-electron": "^3.1.0",
     "esbuild": "^0.25.0",
     "jasmine": "^7.0.0",
-    "typescript": "5.9.3",
-    "vitest": "^4.1.10"
+    "typescript": "5.9.3"
   }
 }
