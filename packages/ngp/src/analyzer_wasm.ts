@@ -259,7 +259,15 @@ export class WasmAnalyzer implements IAnalyzer {
   }
 
   async invalidateFiles(updates: FileInvalidation[]): Promise<string[]> {
-    const jsonStr = JSON.stringify(updates);
+    const stringNames = ['Created', 'Deleted', 'Changed'];
+    const mapped = updates.map((u) => ({
+      filePath: u.filePath,
+      updateType:
+        typeof u.updateType === 'number'
+          ? (stringNames[u.updateType] ?? u.updateType)
+          : u.updateType,
+    }));
+    const jsonStr = JSON.stringify(mapped);
     const fn = this.inner.invalidateFiles ?? this.inner.invalidate_files;
     if (!fn) {
       throw new Error('WasmInner does not support invalidateFiles');

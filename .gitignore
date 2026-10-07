@@ -6,6 +6,11 @@
 *.log
 node_modules/
 modules/ssr-benchmarks/node_modules/
+!packages/ngp/language-service/tests/test-workspace/node_modules/
+!packages/ngp/language-service/tests/test-workspace/node_modules/**
+!ngp-vscode-ng-language-service/tests/test-workspace/node_modules/
+!ngp-vscode-ng-language-service/tests/test-workspace/node_modules/**
+/ngp-vscode-ng-language-service/dist/
 
 # Include when developing application packages.
 pubspec.lock

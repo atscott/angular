@@ -50,3 +50,8 @@ CHANGELOG_ARCHIVE.md
 
 # Ignore NGP test fixture markdown files
 packages/ngp/test/golden/**
+
+# Ignore NGP language service test workspaces
+packages/ngp/language-service/tests/test-workspace/**
+ngp-vscode-ng-language-service/tests/test-workspace/**
+ngp-vscode-ng-language-service/e2e/test-workspace/**

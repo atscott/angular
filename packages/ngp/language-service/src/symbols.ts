@@ -1,0 +1,16 @@
+export enum SymbolKind {
+  Input,
+  Output,
+  Binding,
+  Reference,
+  Variable,
+  Directive,
+  Element,
+  Template,
+  Expression,
+  DomBinding,
+  Pipe,
+  LetDeclaration,
+  SelectorlessComponent,
+  SelectorlessDirective,
+}
