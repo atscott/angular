@@ -9,6 +9,7 @@
 import type * as nga from './types.js';
 import * as path from 'path';
 import * as fs from 'node:fs/promises';
+import * as fsSync from 'node:fs';
 import {
   OutOfBandDiagnosticCategory,
   ParsedTemplate,
@@ -263,6 +264,52 @@ export async function processFile(
   metadata?: nga.AnalysisResult,
   chunkContext?: ChunkContext,
 ): Promise<ProcessedFile> {
+  const result = metadata || (await rawCtx.analyzer.getMetadataForFile(filePath));
+  if (!result) {
+    return {magicString: new MagicString(content)};
+  }
+  let resolvedReadResource = readResource;
+  if (!resolvedReadResource) {
+    const fileAnalysis = getOrCreateFileAnalysis(rawCtx.fileCache, filePath);
+    if (!fileAnalysis.parsedTemplates) {
+      fileAnalysis.parsedTemplates = new Map<string, ParsedTemplate>();
+    }
+    const templatesByClass = fileAnalysis.parsedTemplates;
+    const cache = new Map<string, string | undefined>();
+    for (const classMeta of result.classes) {
+      if (!classMeta.component || !classMeta.className) continue;
+      const classKey = makeClassKey(classMeta.className, classMeta.span.start);
+      let parsed = templatesByClass.get(classKey);
+      if (!parsed) {
+        parsed = parseComponentTemplate(
+          classMeta.component,
+          filePath,
+          content,
+          rawCtx.templateParseOptions,
+        );
+        templatesByClass.set(classKey, parsed);
+      }
+      for (const styleUrl of parsed.styleUrls) {
+        const resolvedPath = path.resolve(path.dirname(filePath), styleUrl);
+        if (!cache.has(resolvedPath)) {
+          const fileContent = await fs.readFile(resolvedPath, 'utf8').catch(() => undefined);
+          cache.set(resolvedPath, fileContent);
+        }
+      }
+    }
+    resolvedReadResource = (p: string) => cache.get(p);
+  }
+  return processFileSync(rawCtx, filePath, content, resolvedReadResource, result, chunkContext);
+}
+
+export function processFileSync(
+  rawCtx: HybridCompilerContext,
+  filePath: string,
+  content: string,
+  readResource?: (file: string) => string | undefined,
+  metadata?: nga.AnalysisResult,
+  chunkContext?: ChunkContext,
+): ProcessedFile {
   const ctx: HybridCompilerContext & {
     remoteScopedClasses: Set<string>;
     metadataMap: Map<string, nga.AnalysisResult>;
@@ -278,7 +325,7 @@ export async function processFile(
   const printer = new ExpressionPrinter(filePath);
   const fileDiagnostics: nga.NgDiagnostic[] = [];
 
-  const result = metadata || (await ctx.analyzer.getMetadataForFile(filePath));
+  const result = metadata || ctx.analyzer.getMetadataForFileSync(filePath);
   if (!result) {
     return {magicString: s};
   }
@@ -613,7 +660,13 @@ export async function processFile(
         }
         const resolvedContent = readResource
           ? readResource(resolvedPath)
-          : await fs.readFile(resolvedPath, 'utf8').catch(() => undefined);
+          : (() => {
+              try {
+                return fsSync.readFileSync(resolvedPath, 'utf8');
+              } catch {
+                return undefined;
+              }
+            })();
 
         if (resolvedContent !== undefined) {
           allStyles.push(resolvedContent);
