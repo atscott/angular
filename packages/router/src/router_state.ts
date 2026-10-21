@@ -170,6 +170,18 @@ export class ActivatedRoute {
   _ownResources?: ResourceResult;
   /** @internal */
   _ownRawResourcesSignal?: WritableSignal<ResourceResult | undefined>;
+  /**
+   * The ancestor route that this route inherits resources from. This is a signal so that a route
+   * reattached under a different parent by a `RouteReuseStrategy` can re-point its inherited
+   * resources (both `ctx.resources` and the inherited entries of `resources`) at the new ancestor.
+   * @internal
+   */
+  _resourceParent?: WritableSignal<ActivatedRoute | null>;
+  /**
+   * Resources inherited from ancestors (excluding this route's own). Backs `ctx.resources`.
+   * @internal
+   */
+  _inheritedResourceContextSignal?: Signal<ResourceResult>;
   /** @internal */
   _resourceContextSignal?: Signal<ResourceResult>;
 

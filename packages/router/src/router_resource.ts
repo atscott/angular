@@ -98,6 +98,33 @@ export function routerResource<T>(source: Resource<T>): Resource<T> & {reload():
 }
 
 /**
+ * Creates a stable handle for a resource inherited from an ancestor route.
+ *
+ * The handle delegates to `parent().resources[key]` reactively, so a route that is detached and
+ * later reattached under a different ancestor by a `RouteReuseStrategy` keeps exposing the same
+ * object on `ActivatedRoute.resources` while its state follows whichever ancestor is now live.
+ * Consumers that captured the handle (component fields, input bindings, computeds) therefore do
+ * not need to re-read `ActivatedRoute.resources`.
+ */
+export function inheritedRouterResource(
+  parent: Signal<ActivatedRoute | null>,
+  key: string,
+): InternalRouterResource {
+  const source = () => parent()!.resources![key] as InternalRouterResource;
+  const res = resourceFromSnapshots(
+    computed(() => source().snapshot()),
+  ) as unknown as InternalRouterResource;
+
+  res.reload = () => untracked(source).reload();
+  // Blocking is a property of the route config and so does not change across reattachment.
+  res[BLOCKING_SYMBOL] = untracked(source)[BLOCKING_SYMBOL];
+  Object.defineProperty(res, SOURCE_RESOURCE_SYMBOL, {
+    get: () => untracked(source)[SOURCE_RESOURCE_SYMBOL],
+  });
+  return res;
+}
+
+/**
  * Creates a signal that tracks the resource snapshot and handles transactional behavior
  * (freezing during navigation and rollback recovery).
  */

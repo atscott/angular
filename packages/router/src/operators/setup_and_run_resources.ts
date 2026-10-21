@@ -25,6 +25,7 @@ import {ResourceContext, ResourceResult, Route} from '../models';
 import {NavigationTransition} from '../navigation_transition';
 import {
   BLOCKING_SYMBOL,
+  inheritedRouterResource,
   InternalRouterResource,
   routerResource,
   SOURCE_RESOURCE_SYMBOL,
@@ -32,6 +33,8 @@ import {
 import {ActivatedRoute, initializeActivatedRoute} from '../router_state';
 import {TreeNode} from '../utils/tree';
 import {switchTap} from './switch_tap';
+
+const EMPTY_RESOURCES: ResourceResult = {};
 
 /**
  * Initializes `_resourceContextSignal` (backing `ctx.resources` for descendants) on a route.
@@ -42,21 +45,30 @@ import {switchTap} from './switch_tap';
  */
 function initializeRouteResources(route: ActivatedRoute): void {
   if (route._resourceContextSignal !== undefined) {
+    // The route is being reused. A custom `RouteReuseStrategy` may have reattached a detached
+    // route under a different parent `ActivatedRoute` instance (the previous parent was
+    // deactivated and its resources destroyed). Re-point inherited resources at the new parent so
+    // that `ctx.resources` (and resources chained off it) and the inherited entries of
+    // `ActivatedRoute.resources` follow the live ancestor.
+    if (route._resourceParent!() !== route.parent) {
+      route._resourceParent!.set(route.parent);
+    }
     return;
   }
-  // Note: Inherited resources are bound to the parent `ActivatedRoute` at activation time.
-  // If a custom `RouteReuseStrategy` detaches a child route while an ancestor route with
-  // `resources` is deactivated, the ancestor's `_localInjector` (and its resources) will be
-  // destroyed on deactivation, which is not supported when reattaching the child under a new parent.
-  const parentContextSignal = route.parent?._resourceContextSignal;
+  const resourceParent = signal(route.parent);
+  route._resourceParent = resourceParent;
+  const inheritedResources = computed(
+    () => resourceParent()?._resourceContextSignal?.() ?? EMPTY_RESOURCES,
+  );
+  route._inheritedResourceContextSignal = inheritedResources;
   if (!route.routeConfig?.resources) {
-    route._resourceContextSignal = parentContextSignal;
+    route._resourceContextSignal = inheritedResources;
     return;
   }
   const ownRawResources = signal<ResourceResult | undefined>(undefined);
   route._ownRawResourcesSignal = ownRawResources;
   route._resourceContextSignal = computed(() => {
-    const parentResources = parentContextSignal?.();
+    const parentResources = inheritedResources();
     const ownResources = ownRawResources();
     if (ownResources === undefined) {
       if (isInParamsFunction()) {
@@ -97,6 +109,7 @@ export function setupAndRunResources(
           initializeActivatedRoute(route);
           if (
             route.routeConfig?.resources !== undefined ||
+            route._resourceContextSignal !== undefined ||
             route.parent?._resourceContextSignal !== undefined
           ) {
             initializeRouteResources(route);
@@ -130,10 +143,7 @@ function finalizeResources(
 ): void {
   const route = stateNode.value;
   if (route && route._resourceContextSignal) {
-    route.resources ??= {
-      ...route.parent?.resources,
-      ...route._ownResources,
-    };
+    route.resources ??= createResourcesMap(route);
     route._futureSnapshot.resources = route.resources;
     if (route._ownResources) {
       setupBlocking(route, route._ownResources, blockingResourcePromises, abortSignal);
@@ -142,6 +152,28 @@ function finalizeResources(
   for (const childState of stateNode.children) {
     finalizeResources(childState, blockingResourcePromises, abortSignal);
   }
+}
+
+/**
+ * Builds the `ActivatedRoute.resources` map for a route: stable forwarding handles for every
+ * resource inherited from the parent (see `inheritedRouterResource`), shadowed by the route's own
+ * resources.
+ *
+ * Note: the set of inherited keys is fixed when the map is created. Reattaching a detached route
+ * under an ancestor that exposes a different set of resource keys is not supported.
+ */
+function createResourcesMap(route: ActivatedRoute): ResourceResult {
+  const result: ResourceResult = {};
+  const resourceParent = route._resourceParent!;
+  const parentResources = resourceParent()?.resources;
+  if (parentResources) {
+    for (const key of Object.keys(parentResources)) {
+      if (route._ownResources && key in route._ownResources) continue;
+      result[key] = inheritedRouterResource(resourceParent, key);
+    }
+  }
+  Object.assign(result, route._ownResources);
+  return result;
 }
 
 function processRoute(
@@ -181,7 +213,7 @@ async function setupNewRouterResources(
     queryParams: route.queryParamsSignal,
     fragment: route.fragmentSignal,
     data: route.dataSignal,
-    resources: route.parent?._resourceContextSignal ?? signal<ResourceResult>({}).asReadonly(),
+    resources: route._inheritedResourceContextSignal!,
   };
 
   const resourceResultRaw = runInInjectionContext(childInjector, () => resourcesFn(context));

@@ -1887,6 +1887,119 @@ describe('Router resources integration', () => {
         expect(el.querySelector('#captured-res').textContent).toBe('User #2');
         expect(el.querySelector('#computed-val').textContent).toBe('User #2');
       });
+
+      it('should re-point inherited resources when a detached route is reattached under a new parent', async () => {
+        const userFetches: string[] = [];
+        const detailsFetches: string[] = [];
+
+        @Component({template: '{{ user?.value() }}|{{ details?.value() }}'})
+        class DetailsCmp {
+          readonly route = inject(ActivatedRoute);
+          // Captured at construction and never re-read.
+          readonly user = this.route.resources?.['user'];
+          readonly details = this.route.resources?.['details'];
+        }
+
+        // Detaches and reattaches only the `details` route, so it comes back under a brand new
+        // `user/:id` ActivatedRoute (the old one is deactivated and its resources destroyed).
+        class DetailsReuseStrategy implements RouteReuseStrategy {
+          handle: DetachedRouteHandle | null = null;
+          shouldDetach(route: ActivatedRouteSnapshot) {
+            return route.routeConfig?.path === 'details';
+          }
+          store(route: ActivatedRouteSnapshot, handle: DetachedRouteHandle | null) {
+            this.handle = handle;
+          }
+          shouldAttach(route: ActivatedRouteSnapshot) {
+            return route.routeConfig?.path === 'details' && this.handle !== null;
+          }
+          retrieve(route: ActivatedRouteSnapshot) {
+            return this.handle;
+          }
+          shouldReuseRoute(future: ActivatedRouteSnapshot, curr: ActivatedRouteSnapshot) {
+            return future.routeConfig === curr.routeConfig;
+          }
+        }
+
+        TestBed.configureTestingModule({
+          providers: [{provide: RouteReuseStrategy, useClass: DetailsReuseStrategy}],
+        });
+        const {harness, router} = await setupRouter([
+          {path: 'other', component: TargetCmp},
+          {
+            path: 'user/:id',
+            component: ShellCmp,
+            resources: (ctx) => ({
+              user: resource({
+                params: () => ctx.params()['id'],
+                loader: async ({params: id}) => {
+                  userFetches.push(id);
+                  return `User #${id}`;
+                },
+              }),
+            }),
+            children: [
+              {
+                path: 'details',
+                component: DetailsCmp,
+                resources: (ctx) => ({
+                  details: resource({
+                    params: ({chain}) => chain(ctx.resources()['user']),
+                    loader: async ({params: user}) => {
+                      detailsFetches.push(user as string);
+                      return `details for ${user}`;
+                    },
+                  }),
+                }),
+              },
+            ],
+          },
+        ]);
+
+        await harness.navigateByUrl('/user/1/details');
+        await harness.fixture.whenStable();
+        const cmp1 = harness.routeDebugElement!.query(
+          (d) => d.componentInstance instanceof DetailsCmp,
+        ).componentInstance as DetailsCmp;
+        const parent1 = router.routerState.root.firstChild!;
+        const detailsRoute = parent1.firstChild!;
+        const detailsResources = detailsRoute.resources!;
+        expect(cmp1.user!.value()).toBe('User #1');
+        expect(cmp1.details!.value()).toBe('details for User #1');
+        expect(harness.fixture.nativeElement.textContent).toContain('User #1|details for User #1');
+
+        // Navigate away: `user/:id` is destroyed, `details` is detached.
+        await harness.navigateByUrl('/other');
+        expect(router.routerState.root.firstChild).not.toBe(parent1);
+
+        // Navigate back: `user/:id` is a new ActivatedRoute, `details` is reattached under it.
+        await harness.navigateByUrl('/user/2/details');
+        await harness.fixture.whenStable();
+        const parent2 = router.routerState.root.firstChild!;
+        expect(parent2).not.toBe(parent1);
+        expect(parent2.firstChild).toBe(detailsRoute);
+        const cmp2 = harness.routeDebugElement!.query(
+          (d) => d.componentInstance instanceof DetailsCmp,
+        ).componentInstance as DetailsCmp;
+        expect(cmp2).toBe(cmp1);
+
+        // The map and the handles in it are stable...
+        expect(detailsRoute.resources).toBe(detailsResources);
+        expect(detailsRoute.resources!['user']).toBe(cmp1.user!);
+        expect(detailsRoute.resources!['details']).toBe(cmp1.details!);
+        // ...but the inherited handle now follows the new parent, and the chained resource
+        // re-ran off the new parent's resource.
+        expect(userFetches).toEqual(['1', '2']);
+        expect(detailsFetches).toEqual(['User #1', 'User #2']);
+        expect(cmp1.user!.value()).toBe('User #2');
+        expect(cmp1.details!.value()).toBe('details for User #2');
+        expect(harness.fixture.nativeElement.textContent).toContain('User #2|details for User #2');
+
+        // reload() on the inherited handle reloads the live parent resource.
+        expect(cmp1.user!.reload()).toBe(true);
+        await harness.fixture.whenStable();
+        expect(userFetches).toEqual(['1', '2', '2']);
+      });
     });
 
     describe('Resource reloading', () => {
