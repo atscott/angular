@@ -6,7 +6,12 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 
-import {EnvironmentInjector, Type, ɵRuntimeError as RuntimeError} from '@angular/core';
+import {
+  EnvironmentInjector,
+  Type,
+  ɵRuntimeError as RuntimeError,
+  type ɵWritable as Writable,
+} from '@angular/core';
 
 import {AbsoluteRedirect, ApplyRedirects, canLoadFails, NoMatch} from './apply_redirects';
 import {createUrlTreeFromSnapshot} from './create_url_tree';
@@ -70,6 +75,8 @@ const MAX_ALLOWED_REDIRECTS = 31;
 export class Recognizer {
   private applyRedirects: ApplyRedirects;
   private absoluteRedirectCount = 0;
+  private snapshotParents = new WeakMap<ActivatedRouteSnapshot, ActivatedRouteSnapshot>();
+  private hadUnloadedConfig = false;
   allowRedirects = true;
 
   /** Shared by every snapshot: query params belong to the URL, not to any one route. */
@@ -103,6 +110,9 @@ export class Recognizer {
 
     const {children, rootSnapshot} = await this.match(rootSegmentGroup);
     const rootNode = new TreeNode(rootSnapshot, children);
+    if (this.hadUnloadedConfig) {
+      await this.loadConfigsAndHydrateTree(rootNode);
+    }
     const routeState = new RouterStateSnapshot('', rootNode);
     const tree = createUrlTreeFromSnapshot(
       rootSnapshot,
@@ -122,6 +132,7 @@ export class Recognizer {
     children: TreeNode<ActivatedRouteSnapshot>[];
     rootSnapshot: ActivatedRouteSnapshot;
   }> {
+    this.hadUnloadedConfig = false;
     // Use Object.freeze to prevent readers of the Router state from modifying it outside
     // of a navigation, resulting in the router being out of sync with the browser.
     const rootSnapshot = new ActivatedRouteSnapshot(
@@ -400,6 +411,7 @@ export class Recognizer {
       getResolve(route),
       injector,
     );
+    this.snapshotParents.set(snapshot, parentRoute);
     const inherited = getInherited(snapshot, parentRoute, this.paramsInheritanceStrategy);
     snapshot.params = inherited.params;
     snapshot.data = inherited.data;
@@ -418,6 +430,8 @@ export class Recognizer {
       throw new Error(this.abortSignal.reason);
     }
 
+    const hasUnloadedConfig = this.hasUnloadedConfig(parentRoute, route);
+
     const createSnapshot = (result: MatchResult) =>
       this.createSnapshot(injector, route, result.consumedSegments, result.parameters, parentRoute);
     const result = await firstValueFrom(
@@ -427,10 +441,15 @@ export class Recognizer {
         segments,
         // TODO(v23): Run canMatch guards in root environment injector in 3p as well.
         // g3-only this.injector,
-        injector, // 3p-only
+        // 3p-only-start
+        hasUnloadedConfig ? this.injector : injector,
+        // 3p-only-end
         this.urlSerializer,
         createSnapshot,
         this.abortSignal,
+        // 3p-only-start
+        !hasUnloadedConfig,
+        // 3p-only-end
       ),
     );
     if (route.path === '**') {
@@ -445,17 +464,30 @@ export class Recognizer {
       throw new NoMatch(rawSegment);
     }
 
-    if (route.loadConfig && !route._configLoaded) {
-      await this.configLoader.loadConfig(route);
-      if (this.abortSignal.aborted) {
-        throw new Error(this.abortSignal.reason);
-      }
+    // If the route has an injector created from providers, we should start using that. When this
+    // route or an ancestor has an unloaded `loadConfig`, defer creating route injectors until
+    // `loadConfigsAndHydrateTree` so child injectors inherit lazy ancestor providers.
+    if (hasUnloadedConfig) {
+      this.hadUnloadedConfig = true;
+    } else {
+      injector = getOrCreateRouteInjectorIfNeeded(route, injector);
     }
-
-    // If the route has an injector created from providers, we should start using that.
-    injector = getOrCreateRouteInjectorIfNeeded(route, injector);
-    const {routes: childConfig} = await this.getChildConfig(injector, route, segments);
-    const childInjector = route._loadedInjector ?? injector;
+    const {routes: childConfig} = await this.getChildConfig(
+      hasUnloadedConfig ? this.injector : injector,
+      route,
+      segments,
+      parentRoute,
+    );
+    const stillHasUnloadedConfig = hasUnloadedConfig && this.hasUnloadedConfig(parentRoute, route);
+    if (hasUnloadedConfig && !stillHasUnloadedConfig) {
+      injector =
+        route._injector ??
+        parentRoute.routeConfig?._loadedInjector ??
+        parentRoute._environmentInjector;
+    }
+    const childInjector = stillHasUnloadedConfig
+      ? this.injector
+      : (route._loadedInjector ?? injector);
 
     const {parameters, consumedSegments, remainingSegments} = result;
     const snapshot = this.createSnapshot(
@@ -511,6 +543,7 @@ export class Recognizer {
     injector: EnvironmentInjector,
     route: Route,
     segments: UrlSegment[],
+    parentRoute: ActivatedRouteSnapshot,
   ): Promise<LoadedRouterConfig> {
     if (route.children) {
       // The children belong to the same module
@@ -518,6 +551,9 @@ export class Recognizer {
     }
 
     if (route.loadChildren) {
+      if (this.hasUnloadedConfig(parentRoute, route)) {
+        injector = await this.hydrateAncestors(parentRoute, route);
+      }
       // lazy children belong to the loaded module
       if (route._loadedRoutes !== undefined) {
         const ngModuleFactory = route._loadedNgModuleFactory;
@@ -544,6 +580,112 @@ export class Recognizer {
     }
 
     return {routes: [], injector};
+  }
+
+  private hasUnloadedConfig(parentRoute: ActivatedRouteSnapshot, route: Route): boolean {
+    if (route.loadConfig && !route._configLoaded) {
+      return true;
+    }
+    for (
+      let curr: ActivatedRouteSnapshot | undefined = parentRoute;
+      curr;
+      curr = this.snapshotParents.get(curr)
+    ) {
+      if (curr.routeConfig?.loadConfig && !curr.routeConfig._configLoaded) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private async loadRouteConfigs(routes: Route[]): Promise<void> {
+    const loads: Promise<void>[] = [];
+    for (const route of routes) {
+      if (route.loadConfig && !route._configLoaded) {
+        loads.push(this.configLoader.loadConfig(route));
+      }
+    }
+    if (loads.length > 0) {
+      await Promise.all(loads);
+      if (this.abortSignal.aborted) {
+        throw new Error(this.abortSignal.reason);
+      }
+    }
+  }
+
+  private hydrateSnapshot(
+    snapshot: ActivatedRouteSnapshot,
+    parentInjector: EnvironmentInjector,
+  ): EnvironmentInjector {
+    const route = snapshot.routeConfig;
+    if (!route) {
+      return parentInjector;
+    }
+    const injector = getOrCreateRouteInjectorIfNeeded(route, parentInjector);
+    (snapshot as Writable<ActivatedRouteSnapshot>)._environmentInjector = injector;
+    snapshot._resolve = getResolve(route);
+    if (route._loadedNgModuleFactory && !route._loadedInjector) {
+      route._loadedInjector = route._loadedNgModuleFactory.create(injector).injector;
+    }
+    return route._loadedInjector ?? injector;
+  }
+
+  private async hydrateAncestors(
+    parentRoute: ActivatedRouteSnapshot,
+    currentRoute: Route,
+  ): Promise<EnvironmentInjector> {
+    const ancestors: ActivatedRouteSnapshot[] = [];
+    for (
+      let curr: ActivatedRouteSnapshot | undefined = parentRoute;
+      curr;
+      curr = this.snapshotParents.get(curr)
+    ) {
+      ancestors.push(curr);
+    }
+    ancestors.reverse();
+
+    const routesToLoad: Route[] = [];
+    for (const s of ancestors) {
+      if (s.routeConfig) {
+        routesToLoad.push(s.routeConfig);
+      }
+    }
+    routesToLoad.push(currentRoute);
+    await this.loadRouteConfigs(routesToLoad);
+
+    let injector = this.injector;
+    for (const ancestor of ancestors) {
+      injector = this.hydrateSnapshot(ancestor, injector);
+    }
+    return getOrCreateRouteInjectorIfNeeded(currentRoute, injector);
+  }
+
+  private async loadConfigsAndHydrateTree(
+    rootNode: TreeNode<ActivatedRouteSnapshot>,
+  ): Promise<void> {
+    const routes: Route[] = [];
+    const collectRoutes = (node: TreeNode<ActivatedRouteSnapshot>) => {
+      if (node.value.routeConfig) {
+        routes.push(node.value.routeConfig);
+      }
+      for (const child of node.children) {
+        collectRoutes(child);
+      }
+    };
+    collectRoutes(rootNode);
+
+    await this.loadRouteConfigs(routes);
+
+    const hydrateNode = (
+      node: TreeNode<ActivatedRouteSnapshot>,
+      parentInjector: EnvironmentInjector,
+    ) => {
+      const nextInjector = this.hydrateSnapshot(node.value, parentInjector);
+      for (const child of node.children) {
+        hydrateNode(child, nextInjector);
+      }
+    };
+    hydrateNode(rootNode, this.injector);
   }
 }
 
