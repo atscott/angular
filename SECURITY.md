@@ -25,6 +25,9 @@ The following defines some team policies around what does and does not constitut
 - **Circumventing router guards/safety checks in CSR or SSR is not a security vulnerability.**
   - Attackers can trivially circumvent these guards in CSR via dev tooling.
   - Developers should not rely upon these guards in SSR either, they are purely convenience.
+- **Router URL matching and route parameters are not authorization or input-validation boundaries.**
+  - `@angular/router` uses its own client-side routing syntax and is not guaranteed to match how an HTTP server or proxy parses paths.
+  - Route parameters always represent untrusted user input, even when a route uses guards or custom matchers.
 - **Circumventing form validity checks is not a security vulnerability.**
   - Attackers can trivially circumvent these checks via dev tooling.
 
